@@ -1,0 +1,28 @@
+repos:
+-   repo: https://github.com/PyCQA/isort
+    rev: 5.8.0
+    hooks:
+    -   id: isort
+
+-   repo: https://github.com/ambv/black
+    rev:  20.8b1
+    hooks:
+    -   id: black
+        language_version: python3.8
+
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v3.2.0
+    hooks:
+    -   id: check-added-large-files
+        args: ['--maxkb=5120']
+    -   id: trailing-whitespace
+        files: (\.py|\.rst|\.yaml|)$
+    -   id: check-merge-conflict
+
+-   repo: https://gitlab.com/pycqa/flake8
+    rev: 3.9.0
+    hooks:
+    -   id: flake8
+        # To turn this into an error, remove --exit-zero below
+        args: ['--config', '.flake8.config','--exit-zero']
+        verbose: true
