@@ -6,11 +6,11 @@ import jax.numpy as jnp
 import numpy as np
 from jax.interpreters.xla import DeviceArray
 
-import pgmax.node_classes
+import pgmax.contrib.interface.node_classes as node_classes
 
 
 def run_mp_belief_prop_and_compute_map(
-    fg: pgmax.node_classes.FactorGraph,
+    fg: node_classes.FactorGraph,
     evidence: dict,
     num_iters: int,
     damping_factor: float,
@@ -35,9 +35,10 @@ def run_mp_belief_prop_and_compute_map(
         msgs_arr,
         evidence_arr,
         neighbors_vtof_arr,
-        neighbors_ftov_arr,
+        _,
         neighbor_vars_valid_configs_arr,
         var_neighbors_arr,
+        edges_to_var_arr,
         var_to_indices_dict,
     ) = compile_jax_data_structures(fg, evidence)
     end_time = timer()
@@ -47,23 +48,25 @@ def run_mp_belief_prop_and_compute_map(
     msgs_arr = jnp.array(msgs_arr)
     evidence_arr = jnp.array(evidence_arr)
 
-    @jax.partial(jax.jit, static_argnums=(5))
+    @jax.partial(jax.jit, static_argnums=(6))
     def run_mpbp_update_loop(
         msgs_arr,
         evidence_arr,
         neighbors_vtof_arr,
-        neighbors_ftov_arr,
         neighbor_vars_valid_configs_arr,
+        var_neighbors_arr,
+        edges_to_var_arr,
         num_iters,
     ):
         "Function wrapper that leverages jax.lax.scan to efficiently perform BP"
 
         def mpbp_update_step(msgs_arr, x):
-            # TODO: Need to speedup existing BP iterations via VMAP and JIT
-
             # Variable to Factor messages update
             updated_vtof_msgs = pass_var_to_fac_messages_jnp(
-                msgs_arr, evidence_arr, neighbors_ftov_arr
+                msgs_arr,
+                evidence_arr,
+                var_neighbors_arr,
+                edges_to_var_arr,
             )
             # Factor to Variable messages update
             updated_ftov_msgs = pass_fac_to_var_messages_jnp(
@@ -83,8 +86,9 @@ def run_mp_belief_prop_and_compute_map(
         msgs_arr,
         evidence_arr,
         neighbors_vtof_arr,
-        neighbors_ftov_arr,
         neighbor_vars_valid_configs_arr,
+        var_neighbors_arr,
+        edges_to_var_arr,
         num_iters,
     ).block_until_ready()
     msg_update_end_time = timer()
@@ -105,9 +109,7 @@ def run_mp_belief_prop_and_compute_map(
     return var_map_estimate
 
 
-def compile_jax_data_structures(
-    fg: pgmax.node_classes.FactorGraph, evidence: dict
-) -> tuple:
+def compile_jax_data_structures(fg: node_classes.FactorGraph, evidence: dict) -> tuple:
     """Creates data-structures that can be efficiently used with JAX for MPBP.
 
     Args:
@@ -136,7 +138,9 @@ def compile_jax_data_structures(
                 contains an array of valid states such that whatever variable corresponds to msgs_arr[0,x,:] is
                 in state 0. In order to make this a regularly-sized array, we pad the innermost 2x2 matrix with -1's
             var_neighbors_arr (np.array of size (num_variables x max_num_var_neighbors)): var_neighbors_arr[i,:] represent
-                all the indices into msgs_arr[0,:,:] that correspond to neighboring f-> messages
+                all the indices into msgs_arr[0,:,:] that correspond to neighboring f->v messages for a particular var_node
+            edges_to_var_arr (np.array of len num_edges): the ith entry is an integer corresponding to the index into
+                var_node_neighboring_indices that represents the variable connected to this edge
             var_to_indices_dict ({VariableNode: int}): for a particular var_node key, var_to_indices_dict[var_node]
                 contains the row index into var_neighbors_arr that corresponds to var_node
     """
@@ -149,13 +153,19 @@ def compile_jax_data_structures(
     msgs_arr = np.zeros((2, num_edges + 1, msg_size))
     evidence_arr = np.zeros((num_edges, msg_size))
 
-    # Make a mapping from (fac_node,var_node) and (var_node, fac_node) as keys to
-    # indices in the msgs_arr by looping thru all edges. Simultaneously populate the evidence
-    # Also make a list that contains an entry for every variable node corresponding to all indices in msgs_arr
-    # that will correspond to this node's neighbors. Finally, make a dict that goes from a VariableNode object
-    # to the index in the list at which its neighbors are contained.
+    # The below loop does the following:
+    # - Makes a mapping from (fac_node,var_node) and (var_node, fac_node) as keys to
+    #   indices in the msgs_arr by looping thru all edges (fac_to_var_msg_to_index_dict)
+    # - Populates the evidence
+    # - Makes a list that contains an entry for every variable node corresponding to all
+    #   indices in msgs_arr that will correspond to this node's neighbors (var_node_neighboring_indices)
+    # - Makes an array of len num_edges, where the ith entry is an integer corresponding to the index into
+    #   var_node_neighboring_indices that represents the variable connected to this edge
+    # - Makes a dict that goes from a VariableNode object to the index in the list at which its
+    #   neighbors are contained.
     fac_to_var_msg_to_index_dict = {}
     var_neighbors_list = [None for _ in range(len(fg.variable_nodes))]
+    edges_to_var_arr = np.zeros(num_edges, dtype=int)
     var_to_indices_dict = {}
     edge_counter = 0
     for var_index, var_node in enumerate(fg.variable_nodes):
@@ -164,6 +174,7 @@ def compile_jax_data_structures(
             fac_to_var_msg_to_index_dict[(fac_node_neighbor, var_node)] = edge_counter
             evidence_arr[edge_counter, :] = evidence[var_node]
             var_node_neighboring_indices.append(edge_counter)
+            edges_to_var_arr[edge_counter] = var_index
             edge_counter += 1
         var_neighbors_list[var_index] = var_node_neighboring_indices
         var_to_indices_dict[var_node] = var_index
@@ -250,6 +261,7 @@ def compile_jax_data_structures(
         neighbors_ftov_arr,
         neighbor_vars_valid_configs_arr,
         var_neighbors_arr,
+        edges_to_var_arr,
         var_to_indices_dict,
     )
 
@@ -258,7 +270,8 @@ def compile_jax_data_structures(
 def pass_var_to_fac_messages_jnp(
     msgs_arr: DeviceArray,
     evidence_arr: DeviceArray,
-    neighbors_ftov_arr: np.array,
+    var_neighbors_arr: np.array,
+    edges_to_var_arr: np.array,
 ) -> DeviceArray:
     """
     passes messages from VariableNodes to FactorNodes and computes a new updated set of messages using JAX
@@ -270,25 +283,33 @@ def pass_var_to_fac_messages_jnp(
             be updated.
         evidence_arr (DeviceArray of shape (num_edges, msg_size)): evidence_arr[x,:] corresponds to the evidence
             needed to compute the message contained in msgs_arr[1,x,:]
-        neighbors_ftov_arr (DeviceArray of shape (num_edges x max_num_var_neighbors)): neighbors_ftov_list[x,:] is an
-            array of integers that represent the indices into the 1st axis of msgs_arr[0,:,:] that correspond to the
-            messages needed to update the message for msgs_arr[1,x,:]. In order to make this a regularly-sized array,
-            we pad each row with -1's to refer to the "null message".
+        var_neighbors_arr (np.array of size (num_variables x max_num_var_neighbors)): var_neighbors_arr[i,:] represent
+                all the indices into msgs_arr[0,:,:] that correspond to neighboring f->v messages for a particular var_node
+        edges_to_var_arr (np.array of size (num_edges, 1)): the ith entry is an integer corresponding to the index into
+                var_node_neighboring_indices that represents the variable connected to this edge
     Returns:
         (DeviceArray of shape (num_edges, msg_size)): This corresponds to the updated v->f messages after normalization
             and clipping
     """
     _, num_edges, _ = msgs_arr.shape
     num_edges -= 1  # account for the extra null message row
-    indices_arr = jnp.arange(num_edges)  # make an array to index into the correct rows
+    msgs_indices_arr = jnp.arange(
+        num_edges
+    )  # make an array to index into the correct rows
+    num_vars = var_neighbors_arr.shape[0]
+    vars_indices_arr = jnp.arange(num_vars)
 
-    # For every row, neighbors_ftov_arr contains the indices of the neighboring fac to var messages
-    # Use indices_arr to obtain these indices, then index into msgs_arr[0] using these.
-    # Finally, sum these neighboring messages and the evidence to get the final answer!
-    expanded_evidence = jnp.expand_dims(evidence_arr[indices_arr, :], 1)
-    neighboring_ftov_msgs = msgs_arr[0, neighbors_ftov_arr[indices_arr, :], :]
-    updated_vtof_msgs = jnp.sum(
-        jnp.concatenate((expanded_evidence, neighboring_ftov_msgs), 1), axis=1
+    # For each variable, sum the neighboring factor to variable messages and the evidence.
+    # For any var_index, we know that evidence_arr[var_neighbors_arr[var_index,:]] will be an array of the same
+    # evidence messages (since all messages connected to the same var_node must have the same evidence).
+    # Thus, to get only one of these messages, we can do evidence_arr[var_neighbors_arr[var_index,0]]
+    var_sums_arr = (
+        msgs_arr[0, var_neighbors_arr[vars_indices_arr, :], :].sum(1)
+        + evidence_arr[var_neighbors_arr[vars_indices_arr, 0]]
+    )
+    updated_vtof_msgs = (
+        var_sums_arr[edges_to_var_arr[msgs_indices_arr], :]
+        - msgs_arr[0, msgs_indices_arr, :]
     )
 
     # Normalize and clip messages (between -1000 and 1000) before returning
