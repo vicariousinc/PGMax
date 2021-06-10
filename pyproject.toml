@@ -6,15 +6,17 @@ authors = ["Nishanth Kumar <nkumar@vicarious.com>"]
 
 [tool.poetry.dependencies]
 python = "^3.8"
-numpy = "^1.20.3"
 jupyter = "^1.0.0"
 matplotlib = "^3.4.2"
-jax = "0.2.5"
+numpy = "1.19.5"
+jax = "^0.2.13"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"
 Sphinx = "^4.0.2"
 pre-commit = "^2.13.0"
+tensorflow = "^2.5.0"
+tbp-nightly = "^2.5.0-alpha.20210511"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

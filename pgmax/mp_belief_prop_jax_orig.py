@@ -47,7 +47,6 @@ def run_mp_belief_prop_and_compute_map(
     msgs_arr = jnp.array(msgs_arr)
     evidence_arr = jnp.array(evidence_arr)
 
-    # NOTE: Cannot jax.partial this because args 1-4 are not hashable.
     @jax.partial(jax.jit, static_argnums=(5))
     def run_mpbp_update_loop(
         msgs_arr,
@@ -80,6 +79,7 @@ def run_mp_belief_prop_and_compute_map(
         return msgs_arr
 
     msg_update_start_time = timer()
+    jax.profiler.start_trace("/tmp/tensorboard")
     msgs_arr = run_mpbp_update_loop(
         msgs_arr,
         evidence_arr,
@@ -88,6 +88,7 @@ def run_mp_belief_prop_and_compute_map(
         neighbor_vars_valid_configs_arr,
         num_iters,
     ).block_until_ready()
+    jax.profiler.stop_trace()
     msg_update_end_time = timer()
     print(
         f"Message Passing completed in: {msg_update_end_time - msg_update_start_time}s"
