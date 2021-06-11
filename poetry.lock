@@ -320,7 +320,7 @@ test = ["pytest (>=3.6.0)", "pytest-cov", "mock"]
 
 [[package]]
 name = "jax"
-version = "0.2.5"
+version = "0.2.13"
 description = "Differentiate, compile, and transform Numpy code."
 category = "main"
 optional = false
@@ -330,6 +330,15 @@ python-versions = ">=3.6"
 absl-py = "*"
 numpy = ">=1.12"
 opt_einsum = "*"
+
+[package.extras]
+cpu = ["jaxlib (>=0.1.65)"]
+cuda101 = ["jaxlib (==0.1.65+cuda101)"]
+cuda102 = ["jaxlib (==0.1.65+cuda102)"]
+cuda110 = ["jaxlib (==0.1.65+cuda110)"]
+cuda111 = ["jaxlib (==0.1.65+cuda111)"]
+cuda112 = ["jaxlib (==0.1.65+cuda112)"]
+minimum-jaxlib = ["jaxlib (==0.1.65)"]
 
 [[package]]
 name = "jedi"
@@ -947,7 +956,7 @@ python-versions = "*"
 
 [[package]]
 name = "six"
-version = "1.16.0"
+version = "1.15.0"
 description = "Python 2 and 3 compatibility utilities"
 category = "main"
 optional = false
@@ -1181,7 +1190,7 @@ notebook = ">=4.4.1"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "0d0748e6f25d431d6d73186bab9c29d6f634f24d6bfaea2926b49ac17d7b2f0c"
+content-hash = "a87970fe1b4f368ef2ea884cbb167f3ec5ecce16d1857e29f960156f6fa38f60"
 
 [metadata.files]
 absl-py = [
@@ -1372,7 +1381,7 @@ ipywidgets = [
     {file = "ipywidgets-7.6.3.tar.gz", hash = "sha256:9f1a43e620530f9e570e4a493677d25f08310118d315b00e25a18f12913c41f0"},
 ]
 jax = [
-    {file = "jax-0.2.5.tar.gz", hash = "sha256:383e0793196f73031131c334eea4a9d0d347a9cdd00fe0e97327957afbb99fce"},
+    {file = "jax-0.2.13.tar.gz", hash = "sha256:800dba0fe35fb8b6ac36ecd5bd399663b7df109e901987113c16c8281ecde2a8"},
 ]
 jedi = [
     {file = "jedi-0.18.0-py2.py3-none-any.whl", hash = "sha256:18456d83f65f400ab0c2d3319e48520420ef43b23a086fdc05dff34132f0fb93"},
@@ -1775,8 +1784,8 @@ send2trash = [
     {file = "Send2Trash-1.5.0.tar.gz", hash = "sha256:60001cc07d707fe247c94f74ca6ac0d3255aabcb930529690897ca2a39db28b2"},
 ]
 six = [
-    {file = "six-1.16.0-py2.py3-none-any.whl", hash = "sha256:8abb2f1d86890a2dfb989f9a77cfcfd3e47c2a354b01111771326f8aa26e0254"},
-    {file = "six-1.16.0.tar.gz", hash = "sha256:1e61c37477a1626458e36f7b1d82aa5c9b094fa4802892072e49de9c60c4c926"},
+    {file = "six-1.15.0-py2.py3-none-any.whl", hash = "sha256:8b74bedcbbbaca38ff6d7491d76f2b06b3592611af620f8426e82dddb04a5ced"},
+    {file = "six-1.15.0.tar.gz", hash = "sha256:30639c035cdb23534cd4aa2dd52c3bf48f06e5f4a941509c8bafd8ce11080259"},
 ]
 snowballstemmer = [
     {file = "snowballstemmer-2.1.0-py2.py3-none-any.whl", hash = "sha256:b51b447bea85f9968c13b650126a888aabd4cb4463fca868ec596826325dedc2"},

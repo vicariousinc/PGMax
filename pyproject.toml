@@ -6,10 +6,10 @@ authors = ["Nishanth Kumar <nkumar@vicarious.com>"]
 
 [tool.poetry.dependencies]
 python = "^3.8"
-numpy = "^1.20.3"
 jupyter = "^1.0.0"
 matplotlib = "^3.4.2"
-jax = "0.2.5"
+jax = "^0.2.13"
+numpy = "^1.20.3"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"
