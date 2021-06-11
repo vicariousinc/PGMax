@@ -1,5 +1,5 @@
 # PGMax
-Temporary Placeholder Repository for the PGMax Library, which aims to implement Factor Graphs and efficient inference on these in JAX!
+Repository for the PGMax Library, which aims to implement Factor Graphs and efficient inference on these in JAX!
 
 ## Developer Installation Instructions
 ### Prerequisites
