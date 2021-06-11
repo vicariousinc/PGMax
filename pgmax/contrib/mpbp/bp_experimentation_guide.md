@@ -39,6 +39,7 @@ Our current overarching goal is to explore different implementation choices for 
                 f"Message Passing completed in: {msg_update_end_time - msg_update_start_time}s"
             )
             ```
+        1. Be sure to run the entire BP loop once before timing to allow JAX to compile all the functions. This way, you can measure the execution time independent of the compilation time!
     1. To perform memory usage analysis, simply run `nvidia-smi` in a separate terminal on your workstation in polling mode (eg `watch -n 0.5 nvidia-smi`, which polls every 0.5s). Record the maximum `GPU Memory Usage` you see.
 
 1. Record the timing and memory usage, along with relevant implementation changes made, at the following Confluence page: [https://vicarious.atlassian.net/l/c/8MegBH2a](https://vicarious.atlassian.net/l/c/8MegBH2a)
