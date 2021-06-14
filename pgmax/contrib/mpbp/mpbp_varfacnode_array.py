@@ -36,102 +36,115 @@ def run_mp_belief_prop_and_compute_map(
         evidence_arr,
         neighbors_vtof_arr,
         _,
-        neighbor_vars_valid_configs_arr,
         var_neighbors_arr,
         edges_to_var_arr,
+        edges_to_fac_arr,
+        fac_neighbor_valid_conf_arr,
         var_to_indices_dict,
     ) = compile_jax_data_structures(fg, evidence)
     end_time = timer()
     print(f"Data structures compiled in: {end_time - start_time}s")
 
+    from IPython import embed
+
+    embed()
     # Convert all arrays to jnp.ndarrays for use in BP
-    msgs_arr = jax.device_put(msgs_arr)
-    evidence_arr = jax.device_put(evidence_arr)
-    neighbors_vtof_arr = jax.device_put(neighbors_vtof_arr)
-    neighbor_vars_valid_configs_arr = jax.device_put(neighbor_vars_valid_configs_arr)
-    var_neighbors_arr = jax.device_put(var_neighbors_arr)
-    edges_to_var_arr = jax.device_put(edges_to_var_arr)
+    # (Comments on the right show cumulative memory usage as each of these lines execute)
+    msgs_arr = jax.device_put(msgs_arr) # 69 MiB
+    evidence_arr = jax.device_put(evidence_arr) # 85 MiB
+    neighbors_vtof_arr = jax.device_put(neighbors_vtof_arr) # 85 MiB
+    edges_to_fac_arr = jax.device_put(edges_to_fac_arr) # 117 MiB
+    fac_neighbor_valid_conf_arr = jax.device_put(fac_neighbor_valid_conf_arr) # 245 MiB
+    var_neighbors_arr = jax.device_put(var_neighbors_arr) # 245 MiB
+    edges_to_var_arr = jax.device_put(edges_to_var_arr) # 245 MiB
 
-    @jax.partial(jax.jit, static_argnames=("num_iters"))
-    def run_mpbp_update_loop(
-        msgs_arr,
-        evidence_arr,
-        neighbors_vtof_arr,
-        neighbor_vars_valid_configs_arr,
-        var_neighbors_arr,
-        edges_to_var_arr,
-        num_iters,
-    ):
-        "Function wrapper that leverages jax.lax.scan to efficiently perform BP"
+    from IPython import embed
 
-        def mpbp_update_step(msgs_arr, x):
-            # Variable to Factor messages update
-            updated_vtof_msgs = pass_var_to_fac_messages_jnp(
-                msgs_arr,
-                evidence_arr,
-                var_neighbors_arr,
-                edges_to_var_arr,
-            )
-            # Factor to Variable messages update
-            updated_ftov_msgs = pass_fac_to_var_messages_jnp(
-                msgs_arr, neighbor_vars_valid_configs_arr, neighbors_vtof_arr
-            )
-            # Damping before final message update
-            msgs_arr = damp_and_update_messages(
-                updated_vtof_msgs, updated_ftov_msgs, msgs_arr, damping_factor
-            )
-            return msgs_arr, None
+    embed()
 
-        msgs_arr, _ = jax.lax.scan(mpbp_update_step, msgs_arr, None, num_iters)
-        return msgs_arr
+    return {}
 
-    # Run the entire BP loop once to allow JAX to compile
-    msg_comp_start_time = timer()
-    msgs_arr = run_mpbp_update_loop(
-        msgs_arr,
-        evidence_arr,
-        neighbors_vtof_arr,
-        neighbor_vars_valid_configs_arr,
-        var_neighbors_arr,
-        edges_to_var_arr,
-        num_iters,
-    ).block_until_ready()
-    msg_comp_end_time = timer()
-    print(
-        f"First Time Message Passing completed in: {msg_comp_end_time - msg_comp_start_time}s"
-    )
+    # @jax.partial(jax.jit, static_argnames=("num_iters"))
+    # def run_mpbp_update_loop(
+    #     msgs_arr,
+    #     evidence_arr,
+    #     neighbors_vtof_arr,
+    #     neighbor_vars_valid_configs_arr,
+    #     var_neighbors_arr,
+    #     edges_to_var_arr,
+    #     num_iters,
+    # ):
+    #     "Function wrapper that leverages jax.lax.scan to efficiently perform BP"
 
-    msg_update_start_time = timer()
-    msgs_arr = run_mpbp_update_loop(
-        msgs_arr,
-        evidence_arr,
-        neighbors_vtof_arr,
-        neighbor_vars_valid_configs_arr,
-        var_neighbors_arr,
-        edges_to_var_arr,
-        num_iters,
-    ).block_until_ready()
-    msg_update_end_time = timer()
-    print(
-        f"Second Time Message Passing completed in: {msg_update_end_time - msg_update_start_time}s"
-    )
+    #     def mpbp_update_step(msgs_arr, x):
+    #         # Variable to Factor messages update
+    #         updated_vtof_msgs = pass_var_to_fac_messages_jnp(
+    #             msgs_arr,
+    #             evidence_arr,
+    #             var_neighbors_arr,
+    #             edges_to_var_arr,
+    #         )
+    #         # Factor to Variable messages update
+    #         updated_ftov_msgs = pass_fac_to_var_messages_jnp(
+    #             msgs_arr, neighbor_vars_valid_configs_arr, neighbors_vtof_arr
+    #         )
+    #         # Damping before final message update
+    #         msgs_arr = damp_and_update_messages(
+    #             updated_vtof_msgs, updated_ftov_msgs, msgs_arr, damping_factor
+    #         )
+    #         return msgs_arr, None
 
-    map_start_time = timer()
-    map_arr = compute_map_estimate_jax(msgs_arr, evidence_arr, var_neighbors_arr)
-    map_end_time = timer()
-    print(f"MAP inference took {map_end_time - map_start_time}s")
+    #     msgs_arr, _ = jax.lax.scan(mpbp_update_step, msgs_arr, None, num_iters)
+    #     return msgs_arr
 
-    map_conversion_start = timer()
-    var_map_estimate = convert_map_to_dict(map_arr, var_to_indices_dict)
-    map_conversion_end = timer()
-    print(f"MAP conversion to dict took {map_conversion_end - map_conversion_start}")
+    # # Run the entire BP loop once to allow JAX to compile
+    # msg_comp_start_time = timer()
+    # msgs_arr = run_mpbp_update_loop(
+    #     msgs_arr,
+    #     evidence_arr,
+    #     neighbors_vtof_arr,
+    #     neighbor_vars_valid_configs_arr,
+    #     var_neighbors_arr,
+    #     edges_to_var_arr,
+    #     num_iters,
+    # ).block_until_ready()
+    # msg_comp_end_time = timer()
+    # print(
+    #     f"First Time Message Passing completed in: {msg_comp_end_time - msg_comp_start_time}s"
+    # )
 
-    return var_map_estimate
+    # msg_update_start_time = timer()
+    # msgs_arr = run_mpbp_update_loop(
+    #     msgs_arr,
+    #     evidence_arr,
+    #     neighbors_vtof_arr,
+    #     neighbor_vars_valid_configs_arr,
+    #     var_neighbors_arr,
+    #     edges_to_var_arr,
+    #     num_iters,
+    # ).block_until_ready()
+    # msg_update_end_time = timer()
+    # print(
+    #     f"Second Time Message Passing completed in: {msg_update_end_time - msg_update_start_time}s"
+    # )
+
+    # map_start_time = timer()
+    # map_arr = compute_map_estimate_jax(msgs_arr, evidence_arr, var_neighbors_arr)
+    # map_end_time = timer()
+    # print(f"MAP inference took {map_end_time - map_start_time}s")
+
+    # map_conversion_start = timer()
+    # var_map_estimate = convert_map_to_dict(map_arr, var_to_indices_dict)
+    # map_conversion_end = timer()
+    # print(f"MAP conversion to dict took {map_conversion_end - map_conversion_start}")
+
+    # return var_map_estimate
 
 
 def compile_jax_data_structures(
     fg: node_classes.FactorGraph, evidence: Dict[node_classes.VariableNode, np.ndarray]
 ) -> Tuple[
+    np.ndarray,
     np.ndarray,
     np.ndarray,
     np.ndarray,
@@ -164,14 +177,20 @@ def compile_jax_data_structures(
                 array of integers that represent the indices into the 1st axis of msgs_arr[0,:,:] that correspond to the
                 messages needed to update the message for msgs_arr[1,x,:]. In order to make this a regularly-sized array,
                 we pad each row with -1's to refer to the "null message".
-            neighbor_vars_valid_configs_arr: Array shape is (num_edges x msg_size x max_num_valid_configs x max_num_fac_neighbors))
-                neighboring_vars_valid_configs[x,:,:] contains an array of arrays, such that the 0th array
-                contains an array of valid states such that whatever variable corresponds to msgs_arr[0,x,:] is
-                in state 0. In order to make this a regularly-sized array, we pad the innermost 2x2 matrix with -1's
-            var_neighbors_arr: Array shape is (num_variables x max_num_var_neighbors). var_neighbors_arr[i,:] represent
+            var_neighbors_arr: Array shape is (num_variables x max_num_var_neighbors). var_neighbors_arr[i,:] represents
                 all the indices into msgs_arr[0,:,:] that correspond to neighboring f->v messages
             edges_to_var_arr: Array len is num_edges. The ith entry is an integer corresponding to the index into
                 var_node_neighboring_indices that represents the variable connected to this edge
+            edges_to_fac_arr: Array shape is (num_edges,2). edges_to_fac_arr[i,0] is an integer corresponding to the index into
+                fac_node_neighboring_indices that represents the factor connected to this edge. edges_to_fac_arr[i,1]
+                is an integer corresponding to the column index of the current edge within the array of valid neighbor
+                configurations (see below data-structure doc paragraph for more details and example).
+            fac_neighbor_valid_conf_arr: Array shape is (num_factors x max_num_valid_configs x max_num_fac_neighbors).
+                fac_neighbor_valid_conf_arr[x,:,:] is a matrix of all the valid configurations of the variables surrounding the
+                factor corresponding to index x. Thus, for some edge e, neighbors_vtof_arr[e,:] give the indices into
+                msgs_arr[1,:,:] that represent the v->f message neighbors of the f->v message at msgs_arr[0,e,:], and the valid
+                configurations of those v->f messages are at fac_neighbor_valid_conf_arr[edges_to_fac_arr[e,0], :, :], once
+                the column edges_to_fac_arr[e,1] is deleted.
             var_to_indices_dict: for a particular var_node key, var_to_indices_dict[var_node]
                 contains the row index into var_neighbors_arr that corresponds to var_node
     """
@@ -191,20 +210,31 @@ def compile_jax_data_structures(
     #   indices in msgs_arr that will correspond to this node's neighbors (var_node_neighboring_indices)
     # - Makes an array of len num_edges, where the ith entry is an integer corresponding to the index into
     #   var_node_neighboring_indices that represents the variable connected to this edge
+    # - Populates edges_to_fac_arr
     # - Makes a dict that goes from a VariableNode object to the index in the list at which its
     #   neighbors are contained.
     fac_to_var_msg_to_index_dict = {}
-    var_neighbors_list = [None for _ in range(len(fg.variable_nodes))]
     evidence_arr = np.zeros((len(fg.variable_nodes), msg_size))
+    var_neighbors_list = [None for _ in range(len(fg.variable_nodes))]
     edges_to_var_arr = np.zeros(num_edges, dtype=int)
+    edges_to_fac_arr = np.zeros((num_edges, 2), dtype=int)
     var_to_indices_dict = {}
+    tmp_fac_to_index_dict: Dict[node_classes.FactorNode, int] = {}
     edge_counter = 0
+    fac_index = 0
     for var_index, var_node in enumerate(fg.variable_nodes):
         var_node_neighboring_indices = []
         for fac_node_neighbor in var_node.neighbors:
             fac_to_var_msg_to_index_dict[(fac_node_neighbor, var_node)] = edge_counter
             var_node_neighboring_indices.append(edge_counter)
             edges_to_var_arr[edge_counter] = var_index
+            if tmp_fac_to_index_dict.get(fac_node_neighbor) is None:
+                tmp_fac_to_index_dict[fac_node_neighbor] = fac_index
+                fac_index += 1
+            edges_to_fac_arr[edge_counter, 0] = tmp_fac_to_index_dict[fac_node_neighbor]
+            edges_to_fac_arr[
+                edge_counter, 1
+            ] = fac_node_neighbor.neighbor_to_index_mapping[var_node]
             edge_counter += 1
         var_neighbors_list[var_index] = var_node_neighboring_indices  # type: ignore
         evidence_arr[var_index, :] = evidence[var_node]
@@ -249,50 +279,37 @@ def compile_jax_data_structures(
         list(itertools.zip_longest(*neighbors_ftov_list, fillvalue=-1))  # type: ignore
     ).T
 
-    # Get the maximum number of neighbors for any factor
-    max_num_valid_configs = fg.find_max_num_valid_configs()
-    max_num_fac_neighbors = neighbors_vtof_arr.shape[1]
-    neighbor_vars_valid_configs_arr = (
-        np.ones((num_edges, msg_size, max_num_valid_configs, max_num_fac_neighbors))
-        * -1
-    )
-
-    for k in fac_to_var_msg_to_index_dict.keys():
-        index_to_insert_at = fac_to_var_msg_to_index_dict[k]
-        curr_fac_node = k[0]
-        curr_var_node = k[1]
-        # Populate the list of valid configurations for the edge curr_fac_node - curr_var_node
-        # by looping thru all possible states curr_var_node might take
-        curr_var_node_index = curr_fac_node.neighbor_to_index_mapping[curr_var_node]
-        for var_state in range(msg_size):
-            valid_configs = curr_fac_node.neighbor_config_list[
-                curr_fac_node.neighbor_config_list[:, curr_var_node_index] == var_state
-            ]
-            # Now, get the valid configs and neighboring msgs such that the curr_var's index is excluded
-            valid_configs_without_curr_var = np.delete(
-                valid_configs, curr_var_node_index, axis=1
-            )
-
-            # Insert valid_configs_without_curr_var into the top left of the right location of
-            # neighbor_vars_valid_configs_arr. All other vals are already -1 because of init.
-            ins_row_len, ins_col_len = valid_configs_without_curr_var.shape
-            neighbor_vars_valid_configs_arr[
-                index_to_insert_at, var_state, :ins_row_len, :ins_col_len
-            ] = valid_configs_without_curr_var
-
     # Make sure all the neighbor arrays are int types
     neighbors_vtof_arr = neighbors_vtof_arr.astype(int)
     neighbors_ftov_arr = neighbors_ftov_arr.astype(int)
-    neighbor_vars_valid_configs_arr = neighbor_vars_valid_configs_arr.astype(int)
+
+    # Loop thru all factors and populate a list of all neighbors' valid configurations
+    max_num_valid_configs = fg.find_max_num_valid_configs()
+    # We need the +1 because we're also storing the config value all neighbors of a factor node,
+    # not all neighbors of a particular edge
+    max_num_fac_neighbors = neighbors_vtof_arr.shape[1]+1 
+    fac_neighbor_valid_conf_arr = (
+        np.ones(
+            (len(fg.factor_nodes), max_num_valid_configs, max_num_fac_neighbors),
+            dtype=int,
+        )
+        * -1
+    )
+    for fac_node, fac_index in tmp_fac_to_index_dict.items():
+        conf_num_rows, conf_num_cols = fac_node.neighbor_config_list.shape
+        fac_neighbor_valid_conf_arr[
+            fac_index, :conf_num_rows, :conf_num_cols
+        ] = fac_node.neighbor_config_list
 
     return (
         msgs_arr,
         evidence_arr,
         neighbors_vtof_arr,
         neighbors_ftov_arr,
-        neighbor_vars_valid_configs_arr,
         var_neighbors_arr,
         edges_to_var_arr,
+        edges_to_fac_arr,
+        fac_neighbor_valid_conf_arr,
         var_to_indices_dict,
     )
 

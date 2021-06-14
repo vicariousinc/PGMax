@@ -77,6 +77,13 @@ class FactorGraph(object):
             num_edges += fac_node.num_neighbors()
         return num_edges
 
+    def find_max_msg_size(self):
+        max_msg_size = 0
+        for var_node in self.variable_nodes:
+            if var_node.num_states > max_msg_size:
+                max_msg_size = var_node.num_states
+        return max_msg_size
+
     def find_max_num_valid_configs(self):
         max_configs = 0
         for fac_node in self.factor_nodes:
