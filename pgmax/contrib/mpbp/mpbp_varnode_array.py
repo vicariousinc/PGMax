@@ -45,12 +45,15 @@ def run_mp_belief_prop_and_compute_map(
     print(f"Data structures compiled in: {end_time - start_time}s")
 
     # Convert all arrays to jnp.ndarrays for use in BP
-    msgs_arr = jax.device_put(msgs_arr)
-    evidence_arr = jax.device_put(evidence_arr)
-    neighbors_vtof_arr = jax.device_put(neighbors_vtof_arr)
-    neighbor_vars_valid_configs_arr = jax.device_put(neighbor_vars_valid_configs_arr)
-    var_neighbors_arr = jax.device_put(var_neighbors_arr)
-    edges_to_var_arr = jax.device_put(edges_to_var_arr)
+    # (Comments on the right show cumulative memory usage as each of these lines execute)
+    msgs_arr = jax.device_put(msgs_arr)  # 69 MiB
+    evidence_arr = jax.device_put(evidence_arr)  # 85 MiB
+    neighbors_vtof_arr = jax.device_put(neighbors_vtof_arr)  # 85 MiB
+    neighbor_vars_valid_configs_arr = jax.device_put(
+        neighbor_vars_valid_configs_arr
+    )  # 2133 MiB
+    var_neighbors_arr = jax.device_put(var_neighbors_arr)  # 2133 MiB
+    edges_to_var_arr = jax.device_put(edges_to_var_arr)  # 2133 MiB
 
     @jax.partial(jax.jit, static_argnames=("num_iters"))
     def run_mpbp_update_loop(
@@ -167,7 +170,10 @@ def compile_jax_data_structures(
             neighbor_vars_valid_configs_arr: Array shape is (num_edges x msg_size x max_num_valid_configs x max_num_fac_neighbors))
                 neighboring_vars_valid_configs[x,:,:] contains an array of arrays, such that the 0th array
                 contains an array of valid states such that whatever variable corresponds to msgs_arr[0,x,:] is
-                in state 0. In order to make this a regularly-sized array, we pad the innermost 2x2 matrix with -1's
+                in state 0. In order to make this a regularly-sized array, we pad the max_num_fac_neighbors dimension with
+                -1s, and the max_num_valid_configs dimension with a repetition of the last row of valid configs (so that
+                there will be multiple copies of the same configuration, which won't affect the max operation in max-product
+                belief propagation)
             var_neighbors_arr: Array shape is (num_variables x max_num_var_neighbors). var_neighbors_arr[i,:] represent
                 all the indices into msgs_arr[0,:,:] that correspond to neighboring f->v messages
             edges_to_var_arr: Array len is num_edges. The ith entry is an integer corresponding to the index into
@@ -273,12 +279,22 @@ def compile_jax_data_structures(
                 valid_configs, curr_var_node_index, axis=1
             )
 
-            # Insert valid_configs_without_curr_var into the top left of the right location of
+            # We now need to pad this array to have max_num_valid_configs rows. To do this, we'll simply
+            # copy the last row and append it to the array
+            num_config_rows, num_config_cols = valid_configs_without_curr_var.shape
+            pad_arr = np.tile(
+                valid_configs_without_curr_var[-1],
+                max_num_valid_configs - num_config_rows,
+            ).reshape(-1, num_config_cols)
+            padded_valid_configs_without_curr_var = np.vstack(
+                [valid_configs_without_curr_var, pad_arr]
+            )
+
+            # Insert valid_configs_without_curr_var into the left of the correct location of
             # neighbor_vars_valid_configs_arr. All other vals are already -1 because of init.
-            ins_row_len, ins_col_len = valid_configs_without_curr_var.shape
             neighbor_vars_valid_configs_arr[
-                index_to_insert_at, var_state, :ins_row_len, :ins_col_len
-            ] = valid_configs_without_curr_var
+                index_to_insert_at, var_state, :, :num_config_cols
+            ] = padded_valid_configs_without_curr_var
 
     # Make sure all the neighbor arrays are int types
     neighbors_vtof_arr = neighbors_vtof_arr.astype(int)
@@ -362,13 +378,16 @@ def pass_fac_to_var_messages_jnp(
             msgs. The last row is just an extra row of 0's that represents a "null message" which will never
             be updated.
         neighbor_vars_valid_configs_arr: Array shape is (num_edges x msg_size x max_num_valid_configs x max_num_fac_neighbors))
-                neighboring_vars_valid_configs[x,:,:] contains an array of arrays, such that the 0th array
-                contains an array of valid states such that whatever variable corresponds to msgs_arr[0,x,:] is
-                in state 0. In order to make this a regularly-sized array, we pad the innermost 2x2 matrix with -1's
+            neighboring_vars_valid_configs[x,:,:] contains an array of arrays, such that the 0th array
+            contains an array of valid states such that whatever variable corresponds to msgs_arr[0,x,:] is
+            in state 0. In order to make this a regularly-sized array, we pad the max_num_fac_neighbors dimension with
+            -1s, and the max_num_valid_configs dimension with a repetition of the last row of valid configs (so that
+            there will be multiple copies of the same configuration, which won't affect the max operation in max-product
+            belief propagation)
         neighbors_vtof_arr: Array shape is (num_edges x max_num_fac_neighbors). neighbors_vtof_list[x,:] is an
-                array of integers that represent the indices into the 1st axis of msgs_arr[1,:,:] that correspond to
-                the messages needed to update the message for msgs_arr[0,x,:]. In order to make this a regularly-sized
-                array, we pad each row with -1's to refer to the "null message".
+            array of integers that represent the indices into the 1st axis of msgs_arr[1,:,:] that correspond to
+            the messages needed to update the message for msgs_arr[0,x,:]. In order to make this a regularly-sized
+            array, we pad each row with -1's to refer to the "null message".
 
     Returns:
         Array of shape (num_edges, msg_size) corresponding to the updated f->v messages after normalization and clipping

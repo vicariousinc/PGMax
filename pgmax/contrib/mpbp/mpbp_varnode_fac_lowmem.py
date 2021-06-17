@@ -8,6 +8,10 @@ import numpy as np
 
 import pgmax.contrib.interface.node_classes as node_classes
 
+NEG_INF = (
+    -100000.0
+)  # A large negative value to use as -inf for numerical stability reasons
+
 
 def run_mp_belief_prop_and_compute_map(
     fg: node_classes.FactorGraph,
@@ -38,107 +42,106 @@ def run_mp_belief_prop_and_compute_map(
         _,
         var_neighbors_arr,
         edges_to_var_arr,
-        edges_to_fac_arr,
-        fac_neighbor_valid_conf_arr,
+        valid_confs_curr_edge,
+        valid_confs_without_curr_edge,
         var_to_indices_dict,
     ) = compile_jax_data_structures(fg, evidence)
     end_time = timer()
     print(f"Data structures compiled in: {end_time - start_time}s")
 
-    from IPython import embed
-
-    embed()
     # Convert all arrays to jnp.ndarrays for use in BP
     # (Comments on the right show cumulative memory usage as each of these lines execute)
-    msgs_arr = jax.device_put(msgs_arr) # 69 MiB
-    evidence_arr = jax.device_put(evidence_arr) # 85 MiB
-    neighbors_vtof_arr = jax.device_put(neighbors_vtof_arr) # 85 MiB
-    edges_to_fac_arr = jax.device_put(edges_to_fac_arr) # 117 MiB
-    fac_neighbor_valid_conf_arr = jax.device_put(fac_neighbor_valid_conf_arr) # 245 MiB
-    var_neighbors_arr = jax.device_put(var_neighbors_arr) # 245 MiB
-    edges_to_var_arr = jax.device_put(edges_to_var_arr) # 245 MiB
+    msgs_arr = jax.device_put(msgs_arr)  # 69 MiB
+    evidence_arr = jax.device_put(evidence_arr)  # 85 MiB
+    neighbors_vtof_arr = jax.device_put(neighbors_vtof_arr)  # 85 MiB
+    valid_confs_curr_edge = jax.device_put(valid_confs_curr_edge)  # 149 MiB
+    valid_confs_without_curr_edge = jax.device_put(
+        valid_confs_without_curr_edge
+    )  # 661 MiB
+    var_neighbors_arr = jax.device_put(var_neighbors_arr)  # 1173 MiB
+    edges_to_var_arr = jax.device_put(edges_to_var_arr)  # 1173 MiB
 
-    from IPython import embed
+    @jax.partial(jax.jit, static_argnames=("num_iters"))
+    def run_mpbp_update_loop(
+        msgs_arr,
+        evidence_arr,
+        neighbors_vtof_arr,
+        valid_confs_curr_edge,
+        valid_confs_without_curr_edge,
+        var_neighbors_arr,
+        edges_to_var_arr,
+        num_iters,
+    ):
+        "Function wrapper that leverages jax.lax.scan to efficiently perform BP"
 
-    embed()
+        def mpbp_update_step(msgs_arr, x):
+            # Variable to Factor messages update
+            updated_vtof_msgs = pass_var_to_fac_messages_jnp(
+                msgs_arr,
+                evidence_arr,
+                var_neighbors_arr,
+                edges_to_var_arr,
+            )
+            # Factor to Variable messages update
+            updated_ftov_msgs = pass_fac_to_var_messages_jnp(
+                msgs_arr,
+                valid_confs_curr_edge,
+                valid_confs_without_curr_edge,
+                neighbors_vtof_arr,
+            )
+            # Damping before final message update
+            msgs_arr = damp_and_update_messages(
+                updated_vtof_msgs, updated_ftov_msgs, msgs_arr, damping_factor
+            )
+            return msgs_arr, None
 
-    return {}
+        msgs_arr, _ = jax.lax.scan(mpbp_update_step, msgs_arr, None, num_iters)
+        return msgs_arr
 
-    # @jax.partial(jax.jit, static_argnames=("num_iters"))
-    # def run_mpbp_update_loop(
-    #     msgs_arr,
-    #     evidence_arr,
-    #     neighbors_vtof_arr,
-    #     neighbor_vars_valid_configs_arr,
-    #     var_neighbors_arr,
-    #     edges_to_var_arr,
-    #     num_iters,
-    # ):
-    #     "Function wrapper that leverages jax.lax.scan to efficiently perform BP"
+    # Run the entire BP loop once to allow JAX to compile
+    msg_comp_start_time = timer()
+    msgs_arr = run_mpbp_update_loop(
+        msgs_arr,
+        evidence_arr,
+        neighbors_vtof_arr,
+        valid_confs_curr_edge,
+        valid_confs_without_curr_edge,
+        var_neighbors_arr,
+        edges_to_var_arr,
+        num_iters,
+    ).block_until_ready()
+    msg_comp_end_time = timer()
+    print(
+        f"First Time Message Passing completed in: {msg_comp_end_time - msg_comp_start_time}s"
+    )
 
-    #     def mpbp_update_step(msgs_arr, x):
-    #         # Variable to Factor messages update
-    #         updated_vtof_msgs = pass_var_to_fac_messages_jnp(
-    #             msgs_arr,
-    #             evidence_arr,
-    #             var_neighbors_arr,
-    #             edges_to_var_arr,
-    #         )
-    #         # Factor to Variable messages update
-    #         updated_ftov_msgs = pass_fac_to_var_messages_jnp(
-    #             msgs_arr, neighbor_vars_valid_configs_arr, neighbors_vtof_arr
-    #         )
-    #         # Damping before final message update
-    #         msgs_arr = damp_and_update_messages(
-    #             updated_vtof_msgs, updated_ftov_msgs, msgs_arr, damping_factor
-    #         )
-    #         return msgs_arr, None
+    msg_update_start_time = timer()
+    msgs_arr = run_mpbp_update_loop(
+        msgs_arr,
+        evidence_arr,
+        neighbors_vtof_arr,
+        valid_confs_curr_edge,
+        valid_confs_without_curr_edge,
+        var_neighbors_arr,
+        edges_to_var_arr,
+        num_iters,
+    ).block_until_ready()
+    msg_update_end_time = timer()
+    print(
+        f"Second Time Message Passing completed in: {msg_update_end_time - msg_update_start_time}s"
+    )
 
-    #     msgs_arr, _ = jax.lax.scan(mpbp_update_step, msgs_arr, None, num_iters)
-    #     return msgs_arr
+    map_start_time = timer()
+    map_arr = compute_map_estimate_jax(msgs_arr, evidence_arr, var_neighbors_arr)
+    map_end_time = timer()
+    print(f"MAP inference took {map_end_time - map_start_time}s")
 
-    # # Run the entire BP loop once to allow JAX to compile
-    # msg_comp_start_time = timer()
-    # msgs_arr = run_mpbp_update_loop(
-    #     msgs_arr,
-    #     evidence_arr,
-    #     neighbors_vtof_arr,
-    #     neighbor_vars_valid_configs_arr,
-    #     var_neighbors_arr,
-    #     edges_to_var_arr,
-    #     num_iters,
-    # ).block_until_ready()
-    # msg_comp_end_time = timer()
-    # print(
-    #     f"First Time Message Passing completed in: {msg_comp_end_time - msg_comp_start_time}s"
-    # )
+    map_conversion_start = timer()
+    var_map_estimate = convert_map_to_dict(map_arr, var_to_indices_dict)
+    map_conversion_end = timer()
+    print(f"MAP conversion to dict took {map_conversion_end - map_conversion_start}")
 
-    # msg_update_start_time = timer()
-    # msgs_arr = run_mpbp_update_loop(
-    #     msgs_arr,
-    #     evidence_arr,
-    #     neighbors_vtof_arr,
-    #     neighbor_vars_valid_configs_arr,
-    #     var_neighbors_arr,
-    #     edges_to_var_arr,
-    #     num_iters,
-    # ).block_until_ready()
-    # msg_update_end_time = timer()
-    # print(
-    #     f"Second Time Message Passing completed in: {msg_update_end_time - msg_update_start_time}s"
-    # )
-
-    # map_start_time = timer()
-    # map_arr = compute_map_estimate_jax(msgs_arr, evidence_arr, var_neighbors_arr)
-    # map_end_time = timer()
-    # print(f"MAP inference took {map_end_time - map_start_time}s")
-
-    # map_conversion_start = timer()
-    # var_map_estimate = convert_map_to_dict(map_arr, var_to_indices_dict)
-    # map_conversion_end = timer()
-    # print(f"MAP conversion to dict took {map_conversion_end - map_conversion_start}")
-
-    # return var_map_estimate
+    return var_map_estimate
 
 
 def compile_jax_data_structures(
@@ -181,16 +184,11 @@ def compile_jax_data_structures(
                 all the indices into msgs_arr[0,:,:] that correspond to neighboring f->v messages
             edges_to_var_arr: Array len is num_edges. The ith entry is an integer corresponding to the index into
                 var_node_neighboring_indices that represents the variable connected to this edge
-            edges_to_fac_arr: Array shape is (num_edges,2). edges_to_fac_arr[i,0] is an integer corresponding to the index into
-                fac_node_neighboring_indices that represents the factor connected to this edge. edges_to_fac_arr[i,1]
-                is an integer corresponding to the column index of the current edge within the array of valid neighbor
-                configurations (see below data-structure doc paragraph for more details and example).
-            fac_neighbor_valid_conf_arr: Array shape is (num_factors x max_num_valid_configs x max_num_fac_neighbors).
-                fac_neighbor_valid_conf_arr[x,:,:] is a matrix of all the valid configurations of the variables surrounding the
-                factor corresponding to index x. Thus, for some edge e, neighbors_vtof_arr[e,:] give the indices into
-                msgs_arr[1,:,:] that represent the v->f message neighbors of the f->v message at msgs_arr[0,e,:], and the valid
-                configurations of those v->f messages are at fac_neighbor_valid_conf_arr[edges_to_fac_arr[e,0], :, :], once
-                the column edges_to_fac_arr[e,1] is deleted.
+            valid_confs_curr_edge: Array shape is (num_edges x max_num_valid_configurations).
+                valid_confs_curr_edge[e,:] is an array of all the valid config values taken by the variable at edge e.
+            valid_confs_without_curr_edge: Array shape is (num_edges x max_num_valid_configurations x max_num_fac_neighbors - 1)
+                valid_confs_curr_edge[e,:,:] is an array of all the valid config values taken by all the variables surrounding
+                edge e.
             var_to_indices_dict: for a particular var_node key, var_to_indices_dict[var_node]
                 contains the row index into var_neighbors_arr that corresponds to var_node
     """
@@ -287,7 +285,7 @@ def compile_jax_data_structures(
     max_num_valid_configs = fg.find_max_num_valid_configs()
     # We need the +1 because we're also storing the config value all neighbors of a factor node,
     # not all neighbors of a particular edge
-    max_num_fac_neighbors = neighbors_vtof_arr.shape[1]+1 
+    max_num_fac_neighbors = neighbors_vtof_arr.shape[1] + 1
     fac_neighbor_valid_conf_arr = (
         np.ones(
             (len(fg.factor_nodes), max_num_valid_configs, max_num_fac_neighbors),
@@ -296,10 +294,34 @@ def compile_jax_data_structures(
         * -1
     )
     for fac_node, fac_index in tmp_fac_to_index_dict.items():
-        conf_num_rows, conf_num_cols = fac_node.neighbor_config_list.shape
+        # We now need to pad this array to have max_num_valid_configs rows. To do this, we'll simply
+        # copy the last row and append it to the array
+        num_config_rows, num_config_cols = fac_node.neighbor_config_list.shape
+        pad_arr = np.tile(
+            fac_node.neighbor_config_list[-1], max_num_valid_configs - num_config_rows
+        ).reshape(-1, num_config_cols)
+        padded_valid_configs = np.vstack([fac_node.neighbor_config_list, pad_arr])
+
         fac_neighbor_valid_conf_arr[
-            fac_index, :conf_num_rows, :conf_num_cols
-        ] = fac_node.neighbor_config_list
+            fac_index, :, :num_config_cols
+        ] = padded_valid_configs
+
+    # Generate the arrays to hold the valid configurations for each edge
+    max_num_valid_configs = fac_neighbor_valid_conf_arr.shape[1]
+    # Create an array to index all edges
+    edge_indices = np.arange(num_edges)
+    # Get all valid configurations for each edge
+    valid_confs_per_edge = fac_neighbor_valid_conf_arr[
+        edges_to_fac_arr[edge_indices, 0], :, :
+    ]
+    valid_confs_curr_edge = valid_confs_per_edge[
+        edge_indices, :, edges_to_fac_arr[edge_indices, 1]
+    ]
+    mask = np.ones_like(valid_confs_per_edge, dtype=bool)
+    mask[edge_indices, :, edges_to_fac_arr[edge_indices, 1]] = False
+    valid_confs_without_curr_edge = valid_confs_per_edge[mask].reshape(
+        num_edges, max_num_valid_configs, -1
+    )
 
     return (
         msgs_arr,
@@ -308,8 +330,8 @@ def compile_jax_data_structures(
         neighbors_ftov_arr,
         var_neighbors_arr,
         edges_to_var_arr,
-        edges_to_fac_arr,
-        fac_neighbor_valid_conf_arr,
+        valid_confs_curr_edge,
+        valid_confs_without_curr_edge,
         var_to_indices_dict,
     )
 
@@ -367,7 +389,8 @@ def pass_var_to_fac_messages_jnp(
 @jax.jit
 def pass_fac_to_var_messages_jnp(
     msgs_arr: jnp.ndarray,
-    neighbor_vars_valid_configs_arr: jnp.ndarray,
+    valid_confs_curr_edge: jnp.ndarray,
+    valid_confs_without_curr_edge: jnp.ndarray,
     neighbors_vtof_arr: jnp.ndarray,
 ) -> jnp.ndarray:
     """
@@ -378,38 +401,47 @@ def pass_fac_to_var_messages_jnp(
             of the 0th axis corresponds to f->v msgs while the 1st index of the 0th axis corresponds to v-> f
             msgs. The last row is just an extra row of 0's that represents a "null message" which will never
             be updated.
-        neighbor_vars_valid_configs_arr: Array shape is (num_edges x msg_size x max_num_valid_configs x max_num_fac_neighbors))
-                neighboring_vars_valid_configs[x,:,:] contains an array of arrays, such that the 0th array
-                contains an array of valid states such that whatever variable corresponds to msgs_arr[0,x,:] is
-                in state 0. In order to make this a regularly-sized array, we pad the innermost 2x2 matrix with -1's
+        valid_confs_curr_edge: Array shape is (num_edges x max_num_valid_configurations).
+                valid_confs_curr_edge[e,:] is an array of all the valid config values taken by the variable at edge e.
+        valid_confs_without_curr_edge: Array shape is (num_edges x max_num_valid_configurations x max_num_fac_neighbors - 1)
+            valid_confs_curr_edge[e,:,:] is an array of all the valid config values taken by all the variables surrounding
+            edge e.
         neighbors_vtof_arr: Array shape is (num_edges x max_num_fac_neighbors). neighbors_vtof_list[x,:] is an
-                array of integers that represent the indices into the 1st axis of msgs_arr[1,:,:] that correspond to
-                the messages needed to update the message for msgs_arr[0,x,:]. In order to make this a regularly-sized
-                array, we pad each row with -1's to refer to the "null message".
+            array of integers that represent the indices into the 1st axis of msgs_arr[1,:,:] that correspond to
+            the messages needed to update the message for msgs_arr[0,x,:]. In order to make this a regularly-sized
+            array, we pad each row with -1's to refer to the "null message".
 
     Returns:
         Array of shape (num_edges, msg_size) corresponding to the updated f->v messages after normalization and clipping
     """
-    _, num_edges, _ = msgs_arr.shape
+    _, num_edges, msg_size = msgs_arr.shape
     num_edges -= 1  # account for the extra null message row
-    indices_arr = jnp.arange(num_edges)  # make an array to index into the correct rows
 
-    neighboring_vtof_msgs = msgs_arr[1, neighbors_vtof_arr[indices_arr, :], :]
+    # Create an array to index all edges
+    edge_indices = jnp.arange(num_edges)
+    # Get all neighboring v->f messages for every edge
+    neighboring_vtof_msgs = msgs_arr[1, neighbors_vtof_arr[edge_indices, :], :]
 
-    # Expand dims of the vtof msgs and rearrange axes of neighbor_valid_configs
-    # so the below take_along_axis operation goes thru
-    neighboring_vtof_msgs_padded = neighboring_vtof_msgs[:, :, :, None]
-    configs_for_var_state = jnp.swapaxes(
-        neighbor_vars_valid_configs_arr[indices_arr, :, :, :], 1, 3
-    )
-    # Take the values corresponding to the right configs for each possible state, sum these and take
-    # the max to get the value of each message at each possible state
+    # Update msgs by leveraging JAX's scatter operation via .at
     updated_ftov_msgs = (
-        jnp.take_along_axis(
-            neighboring_vtof_msgs_padded[indices_arr, :], configs_for_var_state, axis=2
+        jnp.full(
+            shape=(
+                num_edges,
+                msg_size,
+            ),
+            fill_value=NEG_INF,
         )
-        .sum(1)
-        .max(1)
+        .at[edge_indices[:, None], valid_confs_curr_edge]
+        .max(
+            jnp.sum(
+                neighboring_vtof_msgs[
+                    edge_indices[:, None, None],
+                    jnp.arange(8)[None, None, :],
+                    valid_confs_without_curr_edge,
+                ],
+                axis=2,
+            )
+        )
     )
 
     # Normalize and clip messages (between -1000 and 1000) before returning
