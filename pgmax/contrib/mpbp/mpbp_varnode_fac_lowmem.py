@@ -39,7 +39,6 @@ def run_mp_belief_prop_and_compute_map(
         msgs_arr,
         evidence_arr,
         neighbors_vtof_arr,
-        _,
         var_neighbors_arr,
         edges_to_var_arr,
         valid_confs_curr_edge,
@@ -154,7 +153,6 @@ def compile_jax_data_structures(
     np.ndarray,
     np.ndarray,
     np.ndarray,
-    np.ndarray,
     Dict[node_classes.VariableNode, int],
 ]:
     """Creates data-structures that can be efficiently used with JAX for MPBP.
@@ -172,14 +170,10 @@ def compile_jax_data_structures(
                 be updated.
             evidence_arr: Array shape is shape (num_var_nodes, msg_size). evidence_arr[x,:] corresponds to the evidence
                 for the variable node at var_neighbors_arr[x,:,:]
-            neighbors_vtof_arr: Array shape is (num_edges x max_num_fac_neighbors). neighbors_vtof_list[x,:] is an
+            neighbors_vtof_arr: Array shape is (num_edges x max_num_fac_neighbors). neighbors_vtof_arr[x,:] is an
                 array of integers that represent the indices into the 1st axis of msgs_arr[1,:,:] that correspond to
                 the messages needed to update the message for msgs_arr[0,x,:]. In order to make this a regularly-sized
                 array, we pad each row with -1's to refer to the "null message".
-            neighbors_ftov_arr: Array shape is (num_edges x max_num_var_neighbors). neighbors_ftov_list[x,:] is an
-                array of integers that represent the indices into the 1st axis of msgs_arr[0,:,:] that correspond to the
-                messages needed to update the message for msgs_arr[1,x,:]. In order to make this a regularly-sized array,
-                we pad each row with -1's to refer to the "null message".
             var_neighbors_arr: Array shape is (num_variables x max_num_var_neighbors). var_neighbors_arr[i,:] represents
                 all the indices into msgs_arr[0,:,:] that correspond to neighboring f->v messages
             edges_to_var_arr: Array len is num_edges. The ith entry is an integer corresponding to the index into
@@ -251,7 +245,6 @@ def compile_jax_data_structures(
     # of msgs_arr of neighboring vars (except var_node) to a list to keep track of them. Do the same
     # for var_node.
     neighbors_vtof_list = [None for _ in range(num_edges)]
-    neighbors_ftov_list = [None for _ in range(num_edges)]
     for k in fac_to_var_msg_to_index_dict.keys():
         index_to_insert_at = fac_to_var_msg_to_index_dict[k]
         curr_fac_node = k[0]
@@ -267,19 +260,14 @@ def compile_jax_data_structures(
             if fn != curr_fac_node:
                 neighboring_index = fac_to_var_msg_to_index_dict[(fn, curr_var_node)]
                 var_neighbor_indices.append(neighboring_index)
-        neighbors_ftov_list[index_to_insert_at] = var_neighbor_indices  # type: ignore
 
     # Convert the neighbors lists and neighbor vars valid configs into regularly-shaped arrays
     neighbors_vtof_arr = np.array(
         list(itertools.zip_longest(*neighbors_vtof_list, fillvalue=-1))  # type: ignore
     ).T
-    neighbors_ftov_arr = np.array(
-        list(itertools.zip_longest(*neighbors_ftov_list, fillvalue=-1))  # type: ignore
-    ).T
 
     # Make sure all the neighbor arrays are int types
     neighbors_vtof_arr = neighbors_vtof_arr.astype(int)
-    neighbors_ftov_arr = neighbors_ftov_arr.astype(int)
 
     # Loop thru all factors and populate a list of all neighbors' valid configurations
     max_num_valid_configs = fg.find_max_num_valid_configs()
@@ -327,7 +315,6 @@ def compile_jax_data_structures(
         msgs_arr,
         evidence_arr,
         neighbors_vtof_arr,
-        neighbors_ftov_arr,
         var_neighbors_arr,
         edges_to_var_arr,
         valid_confs_curr_edge,
