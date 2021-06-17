@@ -1,8 +1,8 @@
 [tool.poetry]
 name = "pgmax"
 version = "0.1.0"
-description = ""
-authors = ["Nishanth Kumar <nkumar@vicarious.com>"]
+description = "A library to enable efficient MAP inference on Factor Graphs using JAX!"
+authors = ["Nishanth Kumar <nkumar@vicarious.com>", "Stannis Zhou <stannis@vicarious.com>"]
 
 [tool.poetry.dependencies]
 python = ">=3.7,<3.10"
