@@ -377,15 +377,17 @@ def pass_fac_to_var_messages_jnp(
     edge_indices = jnp.arange(num_edges)
 
     # Update Step 1
-    factor_neighboring_msgs_arr = msgs_arr[1, factor_to_surr_edges_indices, :]
-    factor_config_sums = jnp.take_along_axis(
-        factor_neighboring_msgs_arr,
-        jnp.swapaxes(factor_type_valid_confs_arr[factor_to_type_confs_inds], 1, 2),
+    factor_config_sums = jnp.sum(
+        msgs_arr[
+            1,
+            factor_to_surr_edges_indices[:, None],
+            factor_type_valid_confs_arr[factor_to_type_confs_inds],
+        ],
         axis=2,
-    ).sum(1)
+    )
 
     # Update Step 2
-    edge_neighboring_msgs_arr = factor_neighboring_msgs_arr[
+    edge_neighboring_msgs_arr = msgs_arr[1, factor_to_surr_edges_indices, :][
         edge_to_fac_indices_arr[:, 0]
     ]
     valid_confs_curr_edge = factor_type_valid_confs_arr[factor_to_type_confs_inds][
@@ -410,94 +412,3 @@ def pass_fac_to_var_messages_jnp(
     clipped_updated_msgs = jnp.clip(normalized_updated_msgs, -1000, 1000)
 
     return clipped_updated_msgs
-
-
-# @jax.partial(jax.jit, static_argnames=("damping_factor"))
-# def damp_and_update_messages(
-#     updated_vtof_msgs: jnp.ndarray,
-#     updated_ftov_msgs: jnp.ndarray,
-#     original_msgs_arr: jnp.ndarray,
-#     damping_factor: float,
-# ) -> jnp.ndarray:
-#     """
-#     updates messages using previous messages, new messages and damping factor
-
-#     Args:
-#         updated_vtof_msgs: Array shape is (num_edges, msg_size). This corresponds to the updated
-#             v->f messages after normalization and clipping
-#         updated_ftov_msgs: Array shape is (num_edges, msg_size). This corresponds to the updated
-#             f->v messages after normalization and clipping
-#         original_msgs_arr: Array shape is (2, num_edges + 1, msg_size). This holds all the messages prior to updating.
-#             the 0th index of the 0th axis corresponds to f->v msgs while the 1st index of the 0th axis corresponds
-#             to v-> f msgs. The last row is just an extra row of 0's that represents a "null message" which will never
-#             be updated.
-#         damping_factor (float): The damping factor to use when updating messages.
-
-#     Returns:
-#         updated_msgs_arr: Array shape is (2, num_edges + 1, msg_size). This holds all the updated messages.
-#             The 0th index of the 0th axis corresponds to f->v msgs while the 1st index of the 0th axis corresponds
-#             to v-> f msgs. The last row is just an extra row of 0's that represents a "null message" which will never
-#             be updated.
-#     """
-#     updated_msgs_arr = jnp.zeros_like(original_msgs_arr)
-#     damped_vtof_msgs = (damping_factor * original_msgs_arr[1, :-1, :]) + (
-#         1 - damping_factor
-#     ) * updated_vtof_msgs
-#     damped_ftov_msgs = (damping_factor * original_msgs_arr[0, :-1, :]) + (
-#         1 - damping_factor
-#     ) * updated_ftov_msgs
-#     updated_msgs_arr = updated_msgs_arr.at[1, :-1, :].set(damped_vtof_msgs)
-#     updated_msgs_arr = updated_msgs_arr.at[0, :-1, :].set(damped_ftov_msgs)
-#     return updated_msgs_arr
-
-
-# @jax.jit
-# def compute_map_estimate_jax(
-#     msgs_arr: jnp.ndarray,
-#     evidence_arr: jnp.ndarray,
-#     var_neighbors_arr: jnp.ndarray,
-# ) -> jnp.ndarray:
-#     """
-#     uses messages computed by message passing to derive the MAP estimate for every variable node
-
-#     Args:
-#         msgs_arr: Array shape is (2, num_edges + 1, msg_size). This holds all the messages. the 0th index
-#             of the 0th axis corresponds to f->v msgs while the 1st index of the 0th axis corresponds to v-> f
-#             msgs. The last row is just an extra row of 0's that represents a "null message" which will never
-#             be updated.
-#         evidence_arr: Array shape is shape (num_var_nodes, msg_size). evidence_arr[x,:] corresponds to the evidence
-#                 for the variable node at var_neighbors_arr[x,:,:]
-#         var_neighbors_arr: Array shape is (num_variables x max_num_var_neighbors). var_neighbors_arr[i,:] represent
-#                 all the indices into msgs_arr[0,:,:] that correspond to neighboring f-> messages
-
-#     Returns:
-#         an array of size num_var_nodes where each index corresponds to the MAP state of a particular variable node
-#     """
-
-#     var_indices = jnp.arange(var_neighbors_arr.shape[0])
-#     neighboring_msgs_sum = msgs_arr[0, var_neighbors_arr[var_indices, :], :].sum(1)
-#     neighbor_and_evidence_sum = neighboring_msgs_sum + evidence_arr[var_indices, :]
-#     return neighbor_and_evidence_sum.argmax(1)
-
-
-# def convert_map_to_dict(
-#     map_arr: jnp.ndarray, var_to_indices_dict: Dict[node_classes.VariableNode, int]
-# ) -> Dict[node_classes.VariableNode, int]:
-#     """converts the array after MAP inference to a dict format expected by the viz code
-
-#     Args:
-#         map_arr: an array of size num_var_nodes where each index corresponds to the MAP state of
-#             a particular variable node
-#         var_to_indices_dict: for a particular var_node key, var_to_indices_dict[var_node]
-#                 contains the row index into var_neighbors_arr that corresponds to var_node
-#     Returns:
-#         a dict mapping each VariableNode and its MAP state
-#     """
-#     var_map_dict = {}
-
-#     map_np_arr = np.array(map_arr)
-
-#     for var_node in var_to_indices_dict.keys():
-#         var_map_dict[var_node] = map_np_arr[var_to_indices_dict[var_node]]
-
-#     return var_map_dict
