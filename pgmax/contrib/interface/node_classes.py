@@ -17,8 +17,7 @@ class FactorNode(object):
                 raise ValueError(
                     "Error! A Factor Node can only be connected to a Variable Node"
                 )
-            else:
-                self.neighbor_to_index_mapping[neighbor] = index
+            self.neighbor_to_index_mapping[neighbor] = index
         self.neighbors = neighbor_list
 
     def set_valid_configs(self, config_arr):
@@ -56,8 +55,7 @@ class VariableNode(object):
             raise ValueError(
                 "Error! A Variable Node can only be connected to a Factor Node"
             )
-        else:
-            self.neighbors.append(neighbor)
+        self.neighbors.append(neighbor)
 
     def num_neighbors(self):
         return len(self.neighbors)
@@ -78,18 +76,13 @@ class FactorGraph(object):
         return num_edges
 
     def find_max_msg_size(self):
-        max_msg_size = 0
-        for var_node in self.variable_nodes:
-            if var_node.num_states > max_msg_size:
-                max_msg_size = var_node.num_states
-        return max_msg_size
+        return max((x.num_states for x in self.variable_nodes), default=0)
 
     def find_max_num_valid_configs(self):
-        max_configs = 0
-        for fac_node in self.factor_nodes:
-            if fac_node.neighbor_config_list.shape[0] > max_configs:
-                max_configs = fac_node.neighbor_config_list.shape[0]
-        return max_configs
+        return max(
+            (fac_node.neighbor_config_list.shape[0] for fac_node in self.factor_nodes),
+            default=0,
+        )
 
     def check_factor_nodes(self, factor_nodes):
         for fac_node in factor_nodes:

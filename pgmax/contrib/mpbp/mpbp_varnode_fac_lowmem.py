@@ -176,7 +176,7 @@ def compile_jax_data_structures(
                 array, we pad each row with -1's to refer to the "null message".
             var_neighbors_arr: Array shape is (num_variables x max_num_var_neighbors). var_neighbors_arr[i,:] represents
                 all the indices into msgs_arr[0,:,:] that correspond to neighboring f->v messages
-            edges_to_var_arr: Array len is num_edges. The ith entry is an integer corresponding to the index into
+            edges_to_var_arr: Array shape is (num_edges,). The ith entry is an integer corresponding to the index into
                 var_node_neighboring_indices that represents the variable connected to this edge
             valid_confs_curr_edge: Array shape is (num_edges x max_num_valid_configurations).
                 valid_confs_curr_edge[e,:] is an array of all the valid config values taken by the variable at edge e.
@@ -342,28 +342,16 @@ def pass_var_to_fac_messages_jnp(
                 for the variable node at var_neighbors_arr[x,:,:]
         var_neighbors_arr: Array shape is (num_variables x max_num_var_neighbors). var_neighbors_arr[i,:] represent
                 all the indices into msgs_arr[0,:,:] that correspond to neighboring f-> messages
-        edges_to_var_arr: Array len is num_edges. The ith entry is an integer corresponding to the index into
+        edges_to_var_arr: Array shape is (num_edges,). The ith entry is an integer corresponding to the index into
                 var_node_neighboring_indices that represents the variable connected to this edge
     Returns:
         Array of shape (num_edges, msg_size) corresponding to the updated v->f messages after normalization and clipping
     """
     _, num_edges, _ = msgs_arr.shape
     num_edges -= 1  # account for the extra null message row
-    msgs_indices_arr = jnp.arange(
-        num_edges
-    )  # make an array to index into the correct rows
-    num_vars = var_neighbors_arr.shape[0]
-    vars_indices_arr = jnp.arange(num_vars)
-
     # For each variable, sum the neighboring factor to variable messages and the evidence.
-    var_sums_arr = (
-        msgs_arr[0, var_neighbors_arr[vars_indices_arr, :], :].sum(1)
-        + evidence_arr[vars_indices_arr, :]
-    )
-    updated_vtof_msgs = (
-        var_sums_arr[edges_to_var_arr[msgs_indices_arr], :]
-        - msgs_arr[0, msgs_indices_arr, :]
-    )
+    var_sums_arr = msgs_arr[0, var_neighbors_arr, :].sum(1) + evidence_arr
+    updated_vtof_msgs = var_sums_arr[edges_to_var_arr] - msgs_arr[0, :-1]
 
     # Normalize and clip messages (between -1000 and 1000) before returning
     normalized_updated_msgs = updated_vtof_msgs - updated_vtof_msgs[:, [0]]
@@ -381,7 +369,7 @@ def pass_fac_to_var_messages_jnp(
     neighbors_vtof_arr: jnp.ndarray,
 ) -> jnp.ndarray:
     """
-    passes messages from VariableNodes to FactorNodes and computes a new, updated set of messages using JAX
+    passes messages from FactorNodes to VariableNodes and computes a new, updated set of messages using JAX
 
     Args:
         msgs_arr: Array shape is (2, num_edges + 1, msg_size). This holds all the messages. the 0th index
@@ -403,11 +391,12 @@ def pass_fac_to_var_messages_jnp(
     """
     _, num_edges, msg_size = msgs_arr.shape
     num_edges -= 1  # account for the extra null message row
+    max_num_fac_neighbors = neighbors_vtof_arr.shape[1]
 
     # Create an array to index all edges
     edge_indices = jnp.arange(num_edges)
     # Get all neighboring v->f messages for every edge
-    neighboring_vtof_msgs = msgs_arr[1, neighbors_vtof_arr[edge_indices, :], :]
+    neighboring_vtof_msgs = msgs_arr[1, neighbors_vtof_arr]
 
     # Update msgs by leveraging JAX's scatter operation via .at
     updated_ftov_msgs = (
@@ -423,7 +412,7 @@ def pass_fac_to_var_messages_jnp(
             jnp.sum(
                 neighboring_vtof_msgs[
                     edge_indices[:, None, None],
-                    jnp.arange(8)[None, None, :],
+                    jnp.arange(max_num_fac_neighbors)[None, None, :],
                     valid_confs_without_curr_edge,
                 ],
                 axis=2,

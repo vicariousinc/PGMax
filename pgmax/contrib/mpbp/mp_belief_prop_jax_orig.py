@@ -162,8 +162,7 @@ def compile_jax_data_structures(
                 contains an array of valid states such that whatever variable corresponds to msgs_arr[0,x,:] is
                 in state 0. In order to make this a regularly-sized array, we pad the max_num_fac_neighbors dimension with
                 -1s, and the max_num_valid_configs dimension with a repetition of the last row of valid configs (so that
-                there will be multiple copies of the same configuration, which won't affect the max operation in max-product
-                belief propagation)
+                there will be multiple copies of the same configuration)
             var_neighbors_arr: Array shape is (num_variables x max_num_var_neighbors). var_neighbors_arr[i,:] represent
                 all the indices into msgs_arr[0,:,:] that correspond to neighboring f-> messages
             var_to_indices_dict: for a particular var_node key, var_to_indices_dict[var_node]
@@ -355,8 +354,7 @@ def pass_fac_to_var_messages_jnp(
                 contains an array of valid states such that whatever variable corresponds to msgs_arr[0,x,:] is
                 in state 0. In order to make this a regularly-sized array, we pad the max_num_fac_neighbors dimension with
                 -1s, and the max_num_valid_configs dimension with a repetition of the last row of valid configs (so that
-                there will be multiple copies of the same configuration, which won't affect the max operation in max-product
-                belief propagation)
+                there will be multiple copies of the same configuration)
         neighbors_vtof_arr: Array shape is (num_edges x max_num_fac_neighbors). neighbors_vtof_list[x,:] is an
                 array of integers that represent the indices into the 1st axis of msgs_arr[1,:,:] that correspond to
                 the messages needed to update the message for msgs_arr[0,x,:]. In order to make this a regularly-sized

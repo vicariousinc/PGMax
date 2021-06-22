@@ -25,8 +25,7 @@ class VariableNode(object):
             raise ValueError(
                 "Error! A Variable Node can only be connected to a Factor Node"
             )
-        else:
-            self.neighbors.append(neighbor)
+        self.neighbors.append(neighbor)
 
     def num_neighbors(self):
         return len(self.neighbors)
@@ -48,8 +47,7 @@ class FactorNode(object):
                 raise ValueError(
                     "Error! A Factor Node can only be connected to a Variable Node"
                 )
-            else:
-                self.neighbor_to_index_mapping[neighbor] = index
+            self.neighbor_to_index_mapping[neighbor] = index
         self.neighbors = neighbor_list
 
     def num_neighbors(self):
@@ -80,26 +78,18 @@ class FactorGraph(object):
         return num_edges
 
     def find_max_num_factor_neighbors(self):
-        max_neighbors = 0
-        for fac_node in self.factor_nodes:
-            num_neighbors = len(fac_node.neighbors)
-            if num_neighbors > max_neighbors:
-                max_neighbors = num_neighbors
-        return max_neighbors
+        return max(
+            (len(fac_node.neighbors) for fac_node in self.factor_nodes), default=0
+        )
 
     def find_max_msg_size(self):
-        max_msg_size = 0
-        for var_node in self.variable_nodes:
-            if var_node.num_states > max_msg_size:
-                max_msg_size = var_node.num_states
-        return max_msg_size
+        return max((x.num_states for x in self.variable_nodes), default=0)
 
     def find_max_num_valid_configs(self):
-        max_configs = 0
-        for fac_type in self.factor_types:
-            if fac_type.neighbor_configs_arr.shape[0] > max_configs:
-                max_configs = fac_type.neighbor_configs_arr.shape[0]
-        return max_configs
+        return max(
+            (fac_type.neighbor_configs_arr.shape[0] for fac_type in self.factor_types),
+            default=0,
+        )
 
     def count_num_factor_nodes(self):
         return len(self.factor_nodes)
