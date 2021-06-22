@@ -35,7 +35,6 @@ def run_mp_belief_prop_and_compute_map(
         msgs_arr,
         evidence_arr,
         neighbors_vtof_arr,
-        _,
         neighbor_vars_valid_configs_arr,
         var_neighbors_arr,
         edges_to_var_arr,
@@ -45,12 +44,15 @@ def run_mp_belief_prop_and_compute_map(
     print(f"Data structures compiled in: {end_time - start_time}s")
 
     # Convert all arrays to jnp.ndarrays for use in BP
-    msgs_arr = jax.device_put(msgs_arr)
-    evidence_arr = jax.device_put(evidence_arr)
-    neighbors_vtof_arr = jax.device_put(neighbors_vtof_arr)
-    neighbor_vars_valid_configs_arr = jax.device_put(neighbor_vars_valid_configs_arr)
-    var_neighbors_arr = jax.device_put(var_neighbors_arr)
-    edges_to_var_arr = jax.device_put(edges_to_var_arr)
+    # (Comments on the right show cumulative memory usage as each of these lines execute)
+    msgs_arr = jax.device_put(msgs_arr)  # 69 MiB
+    evidence_arr = jax.device_put(evidence_arr)  # 85 MiB
+    neighbors_vtof_arr = jax.device_put(neighbors_vtof_arr)  # 85 MiB
+    neighbor_vars_valid_configs_arr = jax.device_put(
+        neighbor_vars_valid_configs_arr
+    )  # 2133 MiB
+    var_neighbors_arr = jax.device_put(var_neighbors_arr)  # 2133 MiB
+    edges_to_var_arr = jax.device_put(edges_to_var_arr)  # 2133 MiB
 
     @jax.partial(jax.jit, static_argnames=("num_iters"))
     def run_mpbp_update_loop(
@@ -138,7 +140,6 @@ def compile_jax_data_structures(
     np.ndarray,
     np.ndarray,
     np.ndarray,
-    np.ndarray,
     Dict[node_classes.VariableNode, int],
 ]:
     """Creates data-structures that can be efficiently used with JAX for MPBP.
@@ -154,22 +155,21 @@ def compile_jax_data_structures(
                 of the 0th axis corresponds to f->v msgs while the 1st index of the 0th axis corresponds to v-> f
                 msgs. The last row is just an extra row of 0's that represents a "null message" which will never
                 be updated.
-            evidence_arr: Array shape is shape (num_edges, msg_size). evidence_arr[x,:] corresponds to the evidence
-                needed to compute the message contained in msgs_arr[1,x,:]
+            evidence_arr: Array shape is shape (num_var_nodes, msg_size). evidence_arr[x,:] corresponds to the evidence
+                for the variable node at var_neighbors_arr[x,:,:]
             neighbors_vtof_arr: Array shape is (num_edges x max_num_fac_neighbors). neighbors_vtof_list[x,:] is an
                 array of integers that represent the indices into the 1st axis of msgs_arr[1,:,:] that correspond to
                 the messages needed to update the message for msgs_arr[0,x,:]. In order to make this a regularly-sized
                 array, we pad each row with -1's to refer to the "null message".
-            neighbors_ftov_arr: Array shape is (num_edges x max_num_var_neighbors). neighbors_ftov_list[x,:] is an
-                array of integers that represent the indices into the 1st axis of msgs_arr[0,:,:] that correspond to the
-                messages needed to update the message for msgs_arr[1,x,:]. In order to make this a regularly-sized array,
-                we pad each row with -1's to refer to the "null message".
             neighbor_vars_valid_configs_arr: Array shape is (num_edges x msg_size x max_num_valid_configs x max_num_fac_neighbors))
                 neighboring_vars_valid_configs[x,:,:] contains an array of arrays, such that the 0th array
                 contains an array of valid states such that whatever variable corresponds to msgs_arr[0,x,:] is
-                in state 0. In order to make this a regularly-sized array, we pad the innermost 2x2 matrix with -1's
+                in state 0. In order to make this a regularly-sized array, we pad the max_num_fac_neighbors dimension with
+                -1s, and the max_num_valid_configs dimension with a repetition of the last row of valid configs (so that
+                there will be multiple copies of the same configuration, which won't affect the max operation in max-product
+                belief propagation)
             var_neighbors_arr: Array shape is (num_variables x max_num_var_neighbors). var_neighbors_arr[i,:] represent
-                all the indices into msgs_arr[0,:,:] that correspond to neighboring f-> messages
+                all the indices into msgs_arr[0,:,:] that correspond to neighboring f->v messages
             edges_to_var_arr: Array len is num_edges. The ith entry is an integer corresponding to the index into
                 var_node_neighboring_indices that represents the variable connected to this edge
             var_to_indices_dict: for a particular var_node key, var_to_indices_dict[var_node]
@@ -182,7 +182,6 @@ def compile_jax_data_structures(
     # Initialize np arrays to hold messages and evidence. We will convert these to
     # jnp arrays later
     msgs_arr = np.zeros((2, num_edges + 1, msg_size))
-    evidence_arr = np.zeros((num_edges, msg_size))
 
     # The below loop does the following:
     # - Makes a mapping from (fac_node,var_node) and (var_node, fac_node) as keys to
@@ -196,6 +195,7 @@ def compile_jax_data_structures(
     #   neighbors are contained.
     fac_to_var_msg_to_index_dict = {}
     var_neighbors_list = [None for _ in range(len(fg.variable_nodes))]
+    evidence_arr = np.zeros((len(fg.variable_nodes), msg_size))
     edges_to_var_arr = np.zeros(num_edges, dtype=int)
     var_to_indices_dict = {}
     edge_counter = 0
@@ -203,11 +203,11 @@ def compile_jax_data_structures(
         var_node_neighboring_indices = []
         for fac_node_neighbor in var_node.neighbors:
             fac_to_var_msg_to_index_dict[(fac_node_neighbor, var_node)] = edge_counter
-            evidence_arr[edge_counter, :] = evidence[var_node]
             var_node_neighboring_indices.append(edge_counter)
             edges_to_var_arr[edge_counter] = var_index
             edge_counter += 1
         var_neighbors_list[var_index] = var_node_neighboring_indices  # type: ignore
+        evidence_arr[var_index, :] = evidence[var_node]
         var_to_indices_dict[var_node] = var_index
 
     # Convert the neighbors lists and neighbor vars valid configs into regularly-shaped arrays
@@ -223,7 +223,6 @@ def compile_jax_data_structures(
     # of msgs_arr of neighboring vars (except var_node) to a list to keep track of them. Do the same
     # for var_node.
     neighbors_vtof_list = [None for _ in range(num_edges)]
-    neighbors_ftov_list = [None for _ in range(num_edges)]
     for k in fac_to_var_msg_to_index_dict.keys():
         index_to_insert_at = fac_to_var_msg_to_index_dict[k]
         curr_fac_node = k[0]
@@ -239,14 +238,10 @@ def compile_jax_data_structures(
             if fn != curr_fac_node:
                 neighboring_index = fac_to_var_msg_to_index_dict[(fn, curr_var_node)]
                 var_neighbor_indices.append(neighboring_index)
-        neighbors_ftov_list[index_to_insert_at] = var_neighbor_indices  # type: ignore
 
     # Convert the neighbors lists and neighbor vars valid configs into regularly-shaped arrays
     neighbors_vtof_arr = np.array(
         list(itertools.zip_longest(*neighbors_vtof_list, fillvalue=-1))  # type: ignore
-    ).T
-    neighbors_ftov_arr = np.array(
-        list(itertools.zip_longest(*neighbors_ftov_list, fillvalue=-1))  # type: ignore
     ).T
 
     # Get the maximum number of neighbors for any factor
@@ -273,23 +268,31 @@ def compile_jax_data_structures(
                 valid_configs, curr_var_node_index, axis=1
             )
 
-            # Insert valid_configs_without_curr_var into the top left of the right location of
+            # We now need to pad this array to have max_num_valid_configs rows. To do this, we'll simply
+            # copy the last row and append it to the array
+            num_config_rows, num_config_cols = valid_configs_without_curr_var.shape
+            pad_arr = np.tile(
+                valid_configs_without_curr_var[-1],
+                max_num_valid_configs - num_config_rows,
+            ).reshape(-1, num_config_cols)
+            padded_valid_configs_without_curr_var = np.vstack(
+                [valid_configs_without_curr_var, pad_arr]
+            )
+
+            # Insert valid_configs_without_curr_var into the left of the correct location of
             # neighbor_vars_valid_configs_arr. All other vals are already -1 because of init.
-            ins_row_len, ins_col_len = valid_configs_without_curr_var.shape
             neighbor_vars_valid_configs_arr[
-                index_to_insert_at, var_state, :ins_row_len, :ins_col_len
-            ] = valid_configs_without_curr_var
+                index_to_insert_at, var_state, :, :num_config_cols
+            ] = padded_valid_configs_without_curr_var
 
     # Make sure all the neighbor arrays are int types
     neighbors_vtof_arr = neighbors_vtof_arr.astype(int)
-    neighbors_ftov_arr = neighbors_ftov_arr.astype(int)
     neighbor_vars_valid_configs_arr = neighbor_vars_valid_configs_arr.astype(int)
 
     return (
         msgs_arr,
         evidence_arr,
         neighbors_vtof_arr,
-        neighbors_ftov_arr,
         neighbor_vars_valid_configs_arr,
         var_neighbors_arr,
         edges_to_var_arr,
@@ -312,8 +315,8 @@ def pass_var_to_fac_messages_jnp(
             of the 0th axis corresponds to f->v msgs while the 1st index of the 0th axis corresponds to v-> f
             msgs. The last row is just an extra row of 0's that represents a "null message" which will never
             be updated.
-        evidence_arr: Array shape is shape (num_edges, msg_size). evidence_arr[x,:] corresponds to the evidence
-            needed to compute the message contained in msgs_arr[1,x,:]
+        evidence_arr: Array shape is shape (num_var_nodes, msg_size). evidence_arr[x,:] corresponds to the evidence
+                for the variable node at var_neighbors_arr[x,:,:]
         var_neighbors_arr: Array shape is (num_variables x max_num_var_neighbors). var_neighbors_arr[i,:] represent
                 all the indices into msgs_arr[0,:,:] that correspond to neighboring f-> messages
         edges_to_var_arr: Array len is num_edges. The ith entry is an integer corresponding to the index into
@@ -330,12 +333,9 @@ def pass_var_to_fac_messages_jnp(
     vars_indices_arr = jnp.arange(num_vars)
 
     # For each variable, sum the neighboring factor to variable messages and the evidence.
-    # For any var_index, we know that evidence_arr[var_neighbors_arr[var_index,:]] will be an array of the same
-    # evidence messages (since all messages connected to the same var_node must have the same evidence).
-    # Thus, to get only one of these messages, we can do evidence_arr[var_neighbors_arr[var_index,0]]
     var_sums_arr = (
         msgs_arr[0, var_neighbors_arr[vars_indices_arr, :], :].sum(1)
-        + evidence_arr[var_neighbors_arr[vars_indices_arr, 0]]
+        + evidence_arr[vars_indices_arr, :]
     )
     updated_vtof_msgs = (
         var_sums_arr[edges_to_var_arr[msgs_indices_arr], :]
@@ -364,12 +364,17 @@ def pass_fac_to_var_messages_jnp(
             of the 0th axis corresponds to f->v msgs while the 1st index of the 0th axis corresponds to v-> f
             msgs. The last row is just an extra row of 0's that represents a "null message" which will never
             be updated.
-        evidence_arr: Array shape is shape (num_edges, msg_size). evidence_arr[x,:] corresponds to the evidence
-            needed to compute the message contained in msgs_arr[1,x,:]
+        neighbor_vars_valid_configs_arr: Array shape is (num_edges x msg_size x max_num_valid_configs x max_num_fac_neighbors))
+            neighboring_vars_valid_configs[x,:,:] contains an array of arrays, such that the 0th array
+            contains an array of valid states such that whatever variable corresponds to msgs_arr[0,x,:] is
+            in state 0. In order to make this a regularly-sized array, we pad the max_num_fac_neighbors dimension with
+            -1s, and the max_num_valid_configs dimension with a repetition of the last row of valid configs (so that
+            there will be multiple copies of the same configuration, which won't affect the max operation in max-product
+            belief propagation)
         neighbors_vtof_arr: Array shape is (num_edges x max_num_fac_neighbors). neighbors_vtof_list[x,:] is an
-                array of integers that represent the indices into the 1st axis of msgs_arr[1,:,:] that correspond to
-                the messages needed to update the message for msgs_arr[0,x,:]. In order to make this a regularly-sized
-                array, we pad each row with -1's to refer to the "null message".
+            array of integers that represent the indices into the 1st axis of msgs_arr[1,:,:] that correspond to
+            the messages needed to update the message for msgs_arr[0,x,:]. In order to make this a regularly-sized
+            array, we pad each row with -1's to refer to the "null message".
 
     Returns:
         Array of shape (num_edges, msg_size) corresponding to the updated f->v messages after normalization and clipping
@@ -456,8 +461,8 @@ def compute_map_estimate_jax(
             of the 0th axis corresponds to f->v msgs while the 1st index of the 0th axis corresponds to v-> f
             msgs. The last row is just an extra row of 0's that represents a "null message" which will never
             be updated.
-        evidence_arr: Array shape is shape (num_edges, msg_size). evidence_arr[x,:] corresponds to the evidence
-            needed to compute the message contained in msgs_arr[1,x,:]
+        evidence_arr: Array shape is shape (num_var_nodes, msg_size). evidence_arr[x,:] corresponds to the evidence
+                for the variable node at var_neighbors_arr[x,:,:]
         var_neighbors_arr: Array shape is (num_variables x max_num_var_neighbors). var_neighbors_arr[i,:] represent
                 all the indices into msgs_arr[0,:,:] that correspond to neighboring f-> messages
 
@@ -467,12 +472,7 @@ def compute_map_estimate_jax(
 
     var_indices = jnp.arange(var_neighbors_arr.shape[0])
     neighboring_msgs_sum = msgs_arr[0, var_neighbors_arr[var_indices, :], :].sum(1)
-    # For any var_index, we know that evidence_arr[var_neighbors_arr[var_index,:]] will be an array of the same
-    # evidence messages (since all messages connected to the same var_node must have the same evidence).
-    # Thus, to get only one of these messages, we can do evidence_arr[var_neighbors_arr[var_index,0]]
-    neighbor_and_evidence_sum = (
-        neighboring_msgs_sum + evidence_arr[var_neighbors_arr[var_indices, 0]]
-    )
+    neighbor_and_evidence_sum = neighboring_msgs_sum + evidence_arr[var_indices, :]
     return neighbor_and_evidence_sum.argmax(1)
 
 
