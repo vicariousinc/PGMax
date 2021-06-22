@@ -387,17 +387,10 @@ def pass_fac_to_var_messages_jnp(
     )
 
     # Update Step 2
-    edge_neighboring_msgs_arr = msgs_arr[1, factor_to_surr_edges_indices, :][
-        edge_to_fac_indices_arr[:, 0]
-    ]
     valid_confs_curr_edge = factor_type_valid_confs_arr[factor_to_type_confs_inds][
         edge_to_fac_indices_arr[:, 0], :, edge_to_fac_indices_arr[:, 1]
     ]
-    curr_edge_conf_value_arr = edge_neighboring_msgs_arr[
-        edge_indices[:, None],
-        edge_to_fac_indices_arr[:, 1][:, None],
-        valid_confs_curr_edge,
-    ]
+    curr_edge_conf_value_arr = msgs_arr[1, edge_indices[:, None], valid_confs_curr_edge]
 
     updated_ftov_msgs = (
         jnp.full(shape=(num_edges, msg_size), fill_value=NEG_INF)
