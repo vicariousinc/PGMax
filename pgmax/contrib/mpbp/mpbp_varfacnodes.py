@@ -188,8 +188,6 @@ def compile_jax_data_structures(
                 all the indices into msgs_arr[0,:,:] that correspond to neighboring f->v messages
             edges_to_var_arr: Array len is num_edges. The ith entry is an integer corresponding to the index into
                 var_node_neighboring_indices that represents the variable connected to this edge
-            valid_confs_curr_edge: Array shape is (num_edges x max_num_valid_configurations).
-                valid_confs_curr_edge[e,:] is an array of all the valid config values taken by the variable at edge e.
             edge_to_fac_indices_arr: Array shape is (num_edges x 2). edge_to_fac_indices_arr[x,0] is an index into
                 the 0th axis of factor_to_type_conf corresponding to the factor that edge x is connected to.
                 edge_to_fac_indices_arr[x,1] is an index into the 2nd axis of factor_type_valid_confs_arr to
@@ -342,8 +340,6 @@ def pass_fac_to_var_messages_jnp(
             of the 0th axis corresponds to f->v msgs while the 1st index of the 0th axis corresponds to v-> f
             msgs. The last row is just an extra row of 0's that represents a "null message" which will never
             be updated.
-        valid_confs_curr_edge: Array shape is (num_edges x max_num_valid_configurations).
-            valid_confs_curr_edge[e,:] is an array of all the valid config values taken by the variable at edge e.
         edge_to_fac_indices_arr: Array shape is (num_edges x 2). edge_to_fac_indices_arr[x,0] is an index into
             the 0th axis of factor_to_type_conf corresponding to the factor that edge x is connected to.
             edge_to_fac_indices_arr[x,1] is an index into the 2nd axis of factor_type_valid_confs_arr to
