@@ -7,6 +7,7 @@ import numpy as np
 import pgmax.contrib.interface.node_classes_with_factortypes as node_classes
 
 from pgmax.contrib.mpbp.mpbp_varfacnodes_unpadded import (  # isort:skip
+    run_mp_belief_prop_and_compute_map,
     pass_var_to_fac_messages_jnp,
     pass_fac_to_var_messages_jnp,
     damp_and_update_messages,
@@ -17,129 +18,6 @@ from pgmax.contrib.mpbp.mpbp_varfacnodes_unpadded import (  # isort:skip
 NEG_INF = (
     -100000.0
 )  # A large negative value to use as -inf for numerical stability reasons
-
-
-def run_mp_belief_prop_and_compute_map(
-    fg: node_classes.FactorGraph,
-    evidence: Dict[node_classes.VariableNode, np.ndarray],
-    num_iters: int,
-    damping_factor: float,
-) -> Dict[node_classes.VariableNode, int]:
-    """Performs max-product belief propagation on a FactorGraph fg for num_iters iterations and returns the MAP
-    estimate.
-
-    Args
-        fg: A FactorGraph object upon which to do belief propagation
-        evidence: Each entry represents the constant, evidence message that's passed to the corresponding
-            VariableNode that acts as the key
-        num_iters: The number of iterations for which to perform message passing
-        damping_factor: The damping factor to use for message updates between one timestep and the next
-
-    Returns:
-        A dictionary mapping each variable to its MAP estimate value
-    """
-    start_time = timer()
-    (
-        msgs_arr,
-        evidence_arr,
-        edges_to_var_arr,
-        factor_configs,
-        edge_vals_to_config_summary_indices,
-        var_to_indices_dict,
-        num_val_configs,
-    ) = compile_jax_data_structures(fg, evidence)
-    end_time = timer()
-    print(f"Data structures compiled in: {end_time - start_time}s")
-
-    print(msgs_arr.shape)
-
-    # Convert all arrays to jnp.ndarrays for use in BP
-    # (Comments on the right show cumulative memory usage as each of these lines execute)
-    msgs_arr = jax.device_put(msgs_arr)  # 69 MiB
-    evidence_arr = jax.device_put(evidence_arr)  # 85 MiB
-    edges_to_var_arr = jax.device_put(edges_to_var_arr)
-    factor_configs = jax.device_put(factor_configs)
-    edge_vals_to_config_summary_indices = jax.device_put(
-        edge_vals_to_config_summary_indices
-    )
-
-    @jax.partial(jax.jit, static_argnames=("num_val_configs", "num_iters"))
-    def run_mpbp_update_loop(
-        msgs_arr,
-        evidence_arr,
-        edges_to_var_arr,
-        factor_configs,
-        edge_vals_to_config_summary_indices,
-        num_val_configs,
-        num_iters,
-    ):
-        "Function wrapper that leverages jax.lax.scan to efficiently perform BP"
-
-        def mpbp_update_step(msgs_arr, x):
-            # Variable to Factor messages update
-            updated_vtof_msgs = pass_var_to_fac_messages_jnp(
-                msgs_arr,
-                evidence_arr,
-                edges_to_var_arr,
-            )
-            # Factor to Variable messages update
-            updated_ftov_msgs = pass_fac_to_var_messages_jnp(
-                msgs_arr,
-                factor_configs,
-                edge_vals_to_config_summary_indices,
-                num_val_configs,
-            )
-            # Damping before final message update
-            msgs_arr = damp_and_update_messages(
-                updated_vtof_msgs, updated_ftov_msgs, msgs_arr, damping_factor
-            )
-            return msgs_arr, None
-
-        msgs_arr, _ = jax.lax.scan(mpbp_update_step, msgs_arr, None, num_iters)
-        return msgs_arr
-
-    # Run the entire BP loop once to allow JAX to compile
-    msg_comp_start_time = timer()
-    msgs_arr = run_mpbp_update_loop(
-        msgs_arr,
-        evidence_arr,
-        edges_to_var_arr,
-        factor_configs,
-        edge_vals_to_config_summary_indices,
-        num_val_configs,
-        num_iters,
-    ).block_until_ready()
-    msg_comp_end_time = timer()
-    print(
-        f"First Time Message Passing completed in: {msg_comp_end_time - msg_comp_start_time}s"
-    )
-
-    msg_update_start_time = timer()
-    msgs_arr = run_mpbp_update_loop(
-        msgs_arr,
-        evidence_arr,
-        edges_to_var_arr,
-        factor_configs,
-        edge_vals_to_config_summary_indices,
-        num_val_configs,
-        num_iters,
-    ).block_until_ready()
-    msg_update_end_time = timer()
-    print(
-        f"Second Time Message Passing completed in: {msg_update_end_time - msg_update_start_time}s"
-    )
-
-    map_start_time = timer()
-    map_arr = compute_map_estimate_jax(msgs_arr, evidence_arr, edges_to_var_arr)
-    map_end_time = timer()
-    print(f"MAP inference took {map_end_time - map_start_time}s")
-
-    map_conversion_start = timer()
-    var_map_estimate = convert_map_to_dict(map_arr, var_to_indices_dict)
-    map_conversion_end = timer()
-    print(f"MAP conversion to dict took {map_conversion_end - map_conversion_start}")
-
-    return var_map_estimate  # type: ignore
 
 
 def compile_jax_data_structures(
