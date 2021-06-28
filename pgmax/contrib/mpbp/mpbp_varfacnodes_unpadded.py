@@ -159,12 +159,11 @@ def compile_jax_data_structures(
 
     Returns:
         tuple containing data structures useful for message passing updates in JAX:
-            msgs_arr: Array shape is (2, num_edges, msg_size). This holds all the messages. the 0th index
-                of the 0th axis corresponds to f->v msgs while the 1st index of the 0th axis corresponds to v-> f
-                msgs.
+            msgs_arr: Array shape is (2, num_edges, msg_size). This holds all the messages. the 0th index of the
+                0th axis corresponds to f->v msgs while the 1st index of the 0th axis corresponds to v-> f msgs.
             evidence_arr: Array shape is shape (num_var_nodes, msg_size). evidence_arr[x,:] corresponds to the evidence
                 for the variable node at var_neighbors_arr[x,:,:]
-            edges_to_var_arr: Array len is num_edges. The ith entry is an integer representing which variable this edge is connected
+            edges_to_var_arr: Array shape is (num_edges,). The ith entry is an integer representing which variable this edge is connected
                 to.
             factor_configs: Maximum array shape is bounded by (3, num_factors * max_num_configs * max_config_size). The 0th axis is
                 essentially a flattened mapping from factors to edges, with some repetitions so that it has the same shape as
@@ -177,8 +176,8 @@ def compile_jax_data_structures(
                 value, and the 1st axis contains a segmentation mask of these values (i.e, all configuration indices corresponding to
                 edge 0 value 0 will be labelled 0, all indices corresponding to edge 0 value 1 will be labelled 1 and so on.) Note that
                 the length of the 1st axis will be the same as factor_configs
-            var_to_indices_dict: for a particular var_node key, var_to_indices_dict[var_node]
-                contains the row index into var_neighbors_arr that corresponds to var_node
+            var_to_indices_dict: for a particular var_node key, var_to_indices_dict[var_node] will yield the number in edges_to_var_arr
+                corresponding to var_node
             num_val_configs: the total number of valid configurations for factors in the factor graph.
     """
     # NOTE: This currently assumes all variable nodes have the same size. Thus, all messages have the same size
@@ -326,9 +325,8 @@ def pass_var_to_fac_messages_jnp(
     passes messages from VariableNodes to FactorNodes and computes a new updated set of messages using JAX
 
     Args:
-        msgs_arr: Array shape is (2, num_edges + 1, msg_size). This holds all the messages. the 0th index
-            of the 0th axis corresponds to f->v msgs while the 1st index of the 0th axis corresponds to v-> f
-            msgs.
+        msgs_arr: Array shape is (2, num_edges, msg_size). This holds all the messages. the 0th index of the
+            0th axis corresponds to f->v msgs while the 1st index of the 0th axis corresponds to v-> f msgs.
         evidence_arr: Array shape is shape (num_var_nodes, msg_size). evidence_arr[x,:] corresponds to the evidence
             for the variable node at var_neighbors_arr[x,:,:]
         edges_to_var_arr: Array len is num_edges. The ith entry is an integer representing which variable this edge is connected
@@ -364,9 +362,8 @@ def pass_fac_to_var_messages_jnp(
     passes messages from FactorNodes to VariableNodes and computes a new, updated set of messages using JAX
 
     Args:
-        msgs_arr: Array shape is (2, num_edges + 1, msg_size). This holds all the messages. the 0th index
-            of the 0th axis corresponds to f->v msgs while the 1st index of the 0th axis corresponds to v-> f
-            msgs.
+        msgs_arr: Array shape is (2, num_edges, msg_size). This holds all the messages. the 0th index of the
+            0th axis corresponds to f->v msgs while the 1st index of the 0th axis corresponds to v-> f msgs.
         factor_configs: Maximum array shape is bounded by (3, num_factors * max_num_configs * max_config_size). The 0th axis is
             essentially a flattened mapping from factors to edges, with some repetitions so that it has the same shape as
             the other axes; the entries provide a flattened set of indices that index into neighboring edges for each factor.
@@ -472,11 +469,10 @@ def compute_map_estimate_jax(
     uses messages computed by message passing to derive the MAP estimate for every variable node
 
     Args:
-        msgs_arr: Array shape is (2, num_edges + 1, msg_size). This holds all the messages. the 0th index
-            of the 0th axis corresponds to f->v msgs while the 1st index of the 0th axis corresponds to v-> f
-            msgs.
+        msgs_arr: Array shape is (2, num_edges, msg_size). This holds all the messages. the 0th index of the
+            0th axis corresponds to f->v msgs while the 1st index of the 0th axis corresponds to v-> f msgs.
         evidence_arr: Array shape is shape (num_var_nodes, msg_size). evidence_arr[x,:] corresponds to the evidence
-                for the variable node at var_neighbors_arr[x,:,:]
+            for the variable node at var_neighbors_arr[x,:,:]
         edges_to_var_arr: Array len is num_edges. The ith entry is an integer representing which variable this edge is connected
             to.
 
