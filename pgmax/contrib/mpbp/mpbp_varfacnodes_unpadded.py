@@ -164,8 +164,8 @@ def compile_jax_data_structures(
                 msgs.
             evidence_arr: Array shape is shape (num_var_nodes, msg_size). evidence_arr[x,:] corresponds to the evidence
                 for the variable node at var_neighbors_arr[x,:,:]
-            edges_to_var_arr: Array len is num_edges. The ith entry is an integer corresponding to the index into
-                var_node_neighboring_indices that represents the variable connected to this edge
+            edges_to_var_arr: Array len is num_edges. The ith entry is an integer representing which variable this edge is connected
+                to.
             factor_configs: Maximum array shape is bounded by (3, num_factors * max_num_configs * max_config_size). The 0th axis is
                 essentially a flattened mapping from factors to edges, with some repetitions so that it has the same shape as
                 the other axes; the entries provide a flattened set of indices that index into neighboring edges for each factor.
@@ -331,8 +331,8 @@ def pass_var_to_fac_messages_jnp(
             msgs.
         evidence_arr: Array shape is shape (num_var_nodes, msg_size). evidence_arr[x,:] corresponds to the evidence
             for the variable node at var_neighbors_arr[x,:,:]
-        edges_to_var_arr: Array shape is (num_edges,). The ith entry is an integer corresponding to the index into
-            var_node_neighboring_indices that represents the variable connected to this edge
+        edges_to_var_arr: Array len is num_edges. The ith entry is an integer representing which variable this edge is connected
+            to.
     Returns:
         Array of shape (num_edges, msg_size) corresponding to the updated v->f messages after normalization and clipping
     """
@@ -477,8 +477,8 @@ def compute_map_estimate_jax(
             msgs.
         evidence_arr: Array shape is shape (num_var_nodes, msg_size). evidence_arr[x,:] corresponds to the evidence
                 for the variable node at var_neighbors_arr[x,:,:]
-        edges_to_var_arr: Array shape is (num_edges,). The ith entry is an integer corresponding to the index into
-            var_node_neighboring_indices that represents the variable connected to this edge
+        edges_to_var_arr: Array len is num_edges. The ith entry is an integer representing which variable this edge is connected
+            to.
 
     Returns:
         an array of size num_var_nodes where each index corresponds to the MAP state of a particular variable node
