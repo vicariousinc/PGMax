@@ -1,7 +1,5 @@
-from timeit import default_timer as timer
 from typing import Dict, Tuple
 
-import jax
 import numpy as np
 
 import pgmax.contrib.interface.node_classes_with_factortypes as node_classes
@@ -43,7 +41,7 @@ def compile_jax_data_structures(
             msgs_arr: Array shape is (2, num_edges, max_msg_size). This holds all the messages. the 0th index of the
                 0th axis corresponds to f->v msgs while the 1st index of the 0th axis corresponds to v-> f msgs. To make this
                 a regularly-shaped array, messages are padded with a large negative value
-            evidence_arr: Array shape is shape (num_var_nodes, msg_size). evidence_arr[x,:] corresponds to the evidence
+            evidence_arr: Array shape is shape (num_var_nodes, max_msg_size). evidence_arr[x,:] corresponds to the evidence
                 for the variable node at var_neighbors_arr[x,:,:]
             edges_to_var_arr: Array shape is (num_edges,). The ith entry is an integer representing which variable this edge is
                 connected to.
@@ -74,7 +72,6 @@ def compile_jax_data_structures(
     evidence_arr = np.ones((len(fg.variable_nodes), max_msg_size)) * NEG_INF
     edges_to_var_arr = np.zeros(num_edges, dtype=int)
     msgs_arr = np.zeros((2, num_edges, max_msg_size))
-    edges_to_fac_arr = np.zeros((num_edges, 3), dtype=int)
     var_to_indices_dict = {}
     tmp_fac_to_index_dict: Dict[node_classes.FactorNode, int] = {}
     edge_counter = 0
@@ -86,13 +83,6 @@ def compile_jax_data_structures(
             if tmp_fac_to_index_dict.get(fac_node_neighbor) is None:
                 tmp_fac_to_index_dict[fac_node_neighbor] = fac_index
                 fac_index += 1
-            edges_to_fac_arr[edge_counter, 0] = tmp_fac_to_index_dict[fac_node_neighbor]
-            edges_to_fac_arr[
-                edge_counter, 1
-            ] = fac_node_neighbor.neighbor_to_index_mapping[var_node]
-            edges_to_fac_arr[edge_counter, 2] = fg.factor_type_to_index_dict[
-                fac_node_neighbor.factor_type
-            ]
             # Pad msgs_arr with NEG_INF
             msgs_arr[0, edge_counter, var_node.num_states :] = (
                 np.ones(max_msg_size - var_node.num_states) * NEG_INF
