@@ -13,9 +13,11 @@ from pgmax.contrib.mpbp.mpbp_varnode_fac_lowmem import (  # isort:skip
 
 NEG_INF = (
     -100000.0
-)  # A large negative value to use as -inf for numerical stability reasons
+)  # A A large negative value to use as -inf for numerical stability reasons
 
 
+# NOTE: This file contains an implementation of max-product belief propagation that uses padding to handle
+# messages of different sizes.
 def run_mp_belief_prop_and_compute_map(
     fg: node_classes.FactorGraph,
     evidence: Dict[node_classes.VariableNode, np.ndarray],
@@ -159,12 +161,13 @@ def compile_jax_data_structures(
 
     Returns:
         tuple containing data structures useful for message passing updates in JAX:
-            msgs_arr: Array shape is (2, num_edges, msg_size). This holds all the messages. the 0th index of the
-                0th axis corresponds to f->v msgs while the 1st index of the 0th axis corresponds to v-> f msgs.
-            evidence_arr: Array shape is shape (num_var_nodes, msg_size). evidence_arr[x,:] corresponds to the evidence
-                for a particular VariableNode x.
-            edges_to_var_arr: Array shape is (num_edges,). The ith entry is an integer representing which variable this edge is connected
-                to.
+            msgs_arr: Array shape is (2, num_edges, max_msg_size). This holds all the messages. the 0th index of the
+                0th axis corresponds to f->v msgs while the 1st index of the 0th axis corresponds to v-> f msgs. To make this
+                a regularly-shaped array, messages are padded with a large negative value
+            evidence_arr: Array shape is shape (num_var_nodes, max_msg_size). evidence_arr[x,:] corresponds to the evidence
+                for the variable node at var_neighbors_arr[x,:,:]
+            edges_to_var_arr: Array shape is (num_edges,). The ith entry is an integer representing which variable this edge is
+                connected to.
             factor_configs: Maximum array shape is bounded by (3, num_factors * max_num_configs * max_config_size). The 0th axis is
                 essentially a flattened mapping from factors to edges, with some repetitions so that it has the same shape as
                 the other axes; the entries provide a flattened set of indices that index into neighboring edges for each factor.
@@ -180,20 +183,18 @@ def compile_jax_data_structures(
                 corresponding to var_node
             num_val_configs: the total number of valid configurations for factors in the factor graph.
     """
-    # NOTE: This currently assumes all variable nodes have the same size. Thus, all messages have the same size
-
     num_edges = fg.count_num_edges()
-    msg_size = fg.variable_nodes[0].num_states
-    # Initialize np arrays to hold messages and evidence. We will convert these to
-    # jnp arrays later
-    msgs_arr = np.zeros((2, num_edges, msg_size))
+    max_msg_size = fg.find_max_msg_size()
 
     # This below loop constructs the following data structures that are returned:
     # - evidence_arr
     # - edges_to_var_arr
+    # It also pads msgs_arr with NEG_INF
     fac_to_var_msg_to_index_dict = {}
-    evidence_arr = np.zeros((len(fg.variable_nodes), msg_size))
+    # Initialize all entries in the evidence array to be negative infinity
+    evidence_arr = np.ones((len(fg.variable_nodes), max_msg_size)) * NEG_INF
     edges_to_var_arr = np.zeros(num_edges, dtype=int)
+    msgs_arr = np.zeros((2, num_edges, max_msg_size))
     var_to_indices_dict = {}
     tmp_fac_to_index_dict: Dict[node_classes.FactorNode, int] = {}
     edge_counter = 0
@@ -205,8 +206,15 @@ def compile_jax_data_structures(
             if tmp_fac_to_index_dict.get(fac_node_neighbor) is None:
                 tmp_fac_to_index_dict[fac_node_neighbor] = fac_index
                 fac_index += 1
+            # Pad msgs_arr with NEG_INF
+            msgs_arr[0, edge_counter, var_node.num_states :] = (
+                np.ones(max_msg_size - var_node.num_states) * NEG_INF
+            )
+            msgs_arr[1, edge_counter, var_node.num_states :] = (
+                np.ones(max_msg_size - var_node.num_states) * NEG_INF
+            )
             edge_counter += 1
-        evidence_arr[var_index, :] = evidence[var_node]
+        evidence_arr[var_index, : var_node.num_states] = evidence[var_node]
         var_to_indices_dict[var_node] = var_index
 
     # Create and populate remaining data structures
@@ -222,7 +230,7 @@ def compile_jax_data_structures(
         np.ones((3, num_factors * max_num_configs * max_config_size), dtype=int) * -100
     )
     edge_vals_to_config_summary_indices = (
-        np.ones((2, num_edges * msg_size * max_num_configs), dtype=int) * -100
+        np.ones((2, num_edges * max_msg_size * max_num_configs), dtype=int) * -100
     )
 
     configs_insertion_index = 0
@@ -255,8 +263,8 @@ def compile_jax_data_structures(
             edge_idx = fac_to_var_msg_to_index_dict[(fac_node, var_node)]
             surr_edge_indices.append(edge_idx)
             config_column_index = fac_node.neighbor_to_index_mapping[var_node]
-            for msg_idx in range(msg_size):
-                flattened_msg_idx_val = (edge_idx * msg_size) + msg_idx
+            for msg_idx in range(var_node.num_states):
+                flattened_msg_idx_val = (edge_idx * max_msg_size) + msg_idx
                 config_indices_for_msg_idx = config_indices_arr[
                     var_configs[:, config_column_index] == msg_idx
                 ]
@@ -336,7 +344,8 @@ def pass_var_to_fac_messages_jnp(
     updated_vtof_msgs = var_sums_arr[edges_to_var_arr] - msgs_arr[0]
 
     # Normalize and clip messages (between -1000 and 1000) before returning
-    normalized_updated_msgs = updated_vtof_msgs - updated_vtof_msgs[:, [0]]
+    # normalized_updated_msgs = updated_vtof_msgs - updated_vtof_msgs[:, [0]]
+    normalized_updated_msgs = updated_vtof_msgs - updated_vtof_msgs.max(axis=0)
     clipped_updated_msgs = jnp.clip(normalized_updated_msgs, -1000, 1000)
 
     return clipped_updated_msgs
@@ -408,7 +417,8 @@ def pass_fac_to_var_messages_jnp(
     )
 
     # Normalize and clip messages (between -1000 and 1000) before returning
-    normalized_updated_msgs = updated_ftov_msgs - updated_ftov_msgs[:, [0]]
+    # normalized_updated_msgs = updated_ftov_msgs - updated_ftov_msgs[:, [0]]
+    normalized_updated_msgs = updated_ftov_msgs - updated_ftov_msgs.max(axis=1).T
     clipped_updated_msgs = jnp.clip(normalized_updated_msgs, -1000, 1000)
 
     return clipped_updated_msgs

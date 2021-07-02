@@ -15,6 +15,8 @@ NEG_INF = (
 NEG_INF_INT = -10000
 
 
+# NOTE: This file contains a fully-flat implementation of max-product belief propagation that does not
+# use padding whatsoever.
 def run_mp_belief_prop_and_compute_map(
     fg: node_classes.FactorGraph,
     evidence: Dict[node_classes.VariableNode, np.ndarray],
@@ -165,7 +167,7 @@ def compile_jax_data_structures(
         tuple containing data structures useful for message passing updates in JAX:
             msgs_arr: Maximum array shape is bounded (2, num_edges * max_msg_size). This holds all the flattened messages.
                 the 0th index of the 0th axis corresponds to f->v msgs while the 1st index of the 0th axis corresponds to
-                v->f msgs. To make this a regularly-shaped array, messages are padded with a large negative value
+                v->f msgs.
             evidence_arr: Maximum array shape is bounded by (num_var_nodes * max_msg_size). This array contains the fully-flattened
                 set of evidence messages for each variable node
             msg_vals_to_var_arr: Maximum array shape is bounded by (num_edges * max_msg_size,). This array maps messages that are
@@ -366,7 +368,7 @@ def pass_var_to_fac_messages_jnp(
     Args:
         msgs_arr: Maximum array shape is bounded (2, num_edges * max_msg_size). This holds all the flattened messages.
             the 0th index of the 0th axis corresponds to f->v msgs while the 1st index of the 0th axis corresponds to
-            v->f msgs. To make this a regularly-shaped array, messages are padded with a large negative value
+            v->f msgs.
         evidence_arr: Maximum array shape is bounded by (num_var_nodes * max_msg_size). This array contains the fully-flattened
             set of evidence messages for each variable node
         msg_vals_to_var_arr: Maximum array shape is bounded by (num_edges * max_msg_size,). This array maps messages that are
@@ -389,9 +391,17 @@ def pass_var_to_fac_messages_jnp(
     updated_vtof_msgs = var_sums_arr[msg_vals_to_var_arr] - msgs_arr[0]
 
     # Normalize and clip messages (between -1000 and 1000) before returning
+    # normalized_updated_msgs = (
+    #     updated_vtof_msgs - updated_vtof_msgs[normalization_indices_arr]
+    # )
     normalized_updated_msgs = (
-        updated_vtof_msgs - updated_vtof_msgs[normalization_indices_arr]
+        updated_vtof_msgs
+        - jnp.full(shape=evidence_arr.shape, fill_value=NEG_INF)
+        .at[msg_vals_to_var_arr]
+        .max(updated_vtof_msgs)[msg_vals_to_var_arr]
     )
+
+    # normalized_updated_msgs = updated_vtof_msgs - jnp.full(shape=evidence_arr.shape, fill_value=NEG_INF).at[msg_vals_to_var_arr].max(updated_vtof_msgs)[msg_vals_to_var_arr]
     clipped_updated_msgs = jnp.clip(normalized_updated_msgs, -1000, 1000)
 
     return clipped_updated_msgs
@@ -412,7 +422,7 @@ def pass_fac_to_var_messages_jnp(
     Args:
         msgs_arr: Maximum array shape is bounded (2, num_edges * max_msg_size). This holds all the flattened messages.
             the 0th index of the 0th axis corresponds to f->v msgs while the 1st index of the 0th axis corresponds to
-            v->f msgs. To make this a regularly-shaped array, messages are padded with a large negative value
+            v->f msgs.
         factor_configs: Maximum array shape is bounded by (2, num_factors * max_num_configs * max_config_size). The 0th axis
             contains a flat list of valid configuration indices such that msgs_arr[1, factor_configs[0]] gives a flattened array of
             all the message values from the valid configurations. The 1st axis contains segmentation masks corresponding to the 0th
@@ -449,11 +459,8 @@ def pass_fac_to_var_messages_jnp(
     updated_ftov_msgs = (
         jnp.full(shape=(msgs_arr[1].shape[0],), fill_value=NEG_INF)
         .at[edge_vals_to_config_summary_indices[1]]
-        .max(
-            fac_config_summary_sum[edge_vals_to_config_summary_indices[0]]
-            - msgs_arr[1][edge_vals_to_config_summary_indices[1]]
-        )
-    )
+        .max(fac_config_summary_sum[edge_vals_to_config_summary_indices[0]])
+    ) - msgs_arr[1]
 
     # Normalize and clip messages (between -1000 and 1000) before returning
     normalized_updated_msgs = (
@@ -513,7 +520,7 @@ def compute_map_estimate_jax(
     Args:
         msgs_arr: Maximum array shape is bounded (2, num_edges * max_msg_size). This holds all the flattened messages.
             the 0th index of the 0th axis corresponds to f->v msgs while the 1st index of the 0th axis corresponds to
-            v->f msgs. To make this a regularly-shaped array, messages are padded with a large negative value
+            v->f msgs.
         evidence_arr: Maximum array shape is bounded by (num_var_nodes * max_msg_size). This array contains the fully-flattened
             set of evidence messages for each variable node
         msg_vals_to_var_arr: Maximum array shape is bounded by (num_edges * max_msg_size,). This array maps messages that are
