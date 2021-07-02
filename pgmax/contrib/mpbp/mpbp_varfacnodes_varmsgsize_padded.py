@@ -13,7 +13,7 @@ from pgmax.contrib.mpbp.mpbp_varnode_fac_lowmem import (  # isort:skip
 
 NEG_INF = (
     -100000.0
-)  # A A large negative value to use as -inf for numerical stability reasons
+)  # A large negative value to use as -inf for numerical stability reasons
 
 
 # NOTE: This file contains an implementation of max-product belief propagation that uses padding to handle

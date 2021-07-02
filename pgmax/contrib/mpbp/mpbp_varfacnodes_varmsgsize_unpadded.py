@@ -391,14 +391,8 @@ def pass_var_to_fac_messages_jnp(
     updated_vtof_msgs = var_sums_arr[msg_vals_to_var_arr] - msgs_arr[0]
 
     # Normalize and clip messages (between -1000 and 1000) before returning
-    # normalized_updated_msgs = (
-    #     updated_vtof_msgs - updated_vtof_msgs[normalization_indices_arr]
-    # )
     normalized_updated_msgs = (
-        updated_vtof_msgs
-        - jnp.full(shape=evidence_arr.shape, fill_value=NEG_INF)
-        .at[msg_vals_to_var_arr]
-        .max(updated_vtof_msgs)[msg_vals_to_var_arr]
+        updated_vtof_msgs - updated_vtof_msgs[normalization_indices_arr]
     )
 
     # normalized_updated_msgs = updated_vtof_msgs - jnp.full(shape=evidence_arr.shape, fill_value=NEG_INF).at[msg_vals_to_var_arr].max(updated_vtof_msgs)[msg_vals_to_var_arr]
