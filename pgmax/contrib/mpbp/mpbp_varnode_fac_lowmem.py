@@ -339,23 +339,21 @@ def pass_var_to_fac_messages_jnp(
             msgs. The last row is just an extra row of 0's that represents a "null message" which will never
             be updated.
         evidence_arr: Array shape is shape (num_var_nodes, msg_size). evidence_arr[x,:] corresponds to the evidence
-                for the variable node at var_neighbors_arr[x,:,:]
+            for the variable node at var_neighbors_arr[x,:,:]
         var_neighbors_arr: Array shape is (num_variables x max_num_var_neighbors). var_neighbors_arr[i,:] represent
-                all the indices into msgs_arr[0,:,:] that correspond to neighboring f-> messages
+            all the indices into msgs_arr[0,:,:] that correspond to neighboring f->v messages. This array is padded
+            with -1s to refer to the null message
         edges_to_var_arr: Array shape is (num_edges,). The ith entry is an integer corresponding to the index into
-                var_node_neighboring_indices that represents the variable connected to this edge
+            var_node_neighboring_indices that represents the variable connected to this edge
     Returns:
         Array of shape (num_edges, msg_size) corresponding to the updated v->f messages after normalization and clipping
     """
-    _, num_edges, _ = msgs_arr.shape
-    num_edges -= 1  # account for the extra null message row
     # For each variable, sum the neighboring factor to variable messages and the evidence.
     var_sums_arr = msgs_arr[0, var_neighbors_arr, :].sum(1) + evidence_arr
     updated_vtof_msgs = var_sums_arr[edges_to_var_arr] - msgs_arr[0, :-1]
 
     # Normalize and clip messages (between -1000 and 1000) before returning
     normalized_updated_msgs = updated_vtof_msgs - updated_vtof_msgs[:, [0]]
-
     clipped_updated_msgs = jnp.clip(normalized_updated_msgs, -1000, 1000)
 
     return clipped_updated_msgs

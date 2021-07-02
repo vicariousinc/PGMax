@@ -5,7 +5,7 @@ class FactorType(object):
     def __init__(self, name: str, neighbor_configs: np.array) -> None:
         # NOTE: neighbor_configs must be of shape (num_valid_configs x num_neighbors)
         self.name = name
-        self.neighbor_configs_arr = neighbor_configs
+        self.neighbor_configs_arr = neighbor_configs.astype(int)
 
     def num_neighbors(self) -> int:
         return self.neighbor_configs_arr.shape[1]  # type: ignore
@@ -72,10 +72,13 @@ class FactorGraph(object):
         return fac_type_to_index_dict
 
     def count_num_edges(self):
-        num_edges = 0
-        for fac_node in self.factor_nodes:
-            num_edges += fac_node.num_neighbors()
-        return num_edges
+        return sum(fac_node.num_neighbors() for fac_node in self.factor_nodes)
+
+    def count_total_num_valid_configs(self):
+        return sum(
+            fac_node.factor_type.neighbor_configs_arr.shape[0]
+            for fac_node in self.factor_nodes
+        )
 
     def find_max_num_factor_neighbors(self):
         return max(
@@ -88,6 +91,12 @@ class FactorGraph(object):
     def find_max_num_valid_configs(self):
         return max(
             (fac_type.neighbor_configs_arr.shape[0] for fac_type in self.factor_types),
+            default=0,
+        )
+
+    def find_max_valid_config_size(self):
+        return max(
+            (fac_type.neighbor_configs_arr.shape[1] for fac_type in self.factor_types),
             default=0,
         )
 

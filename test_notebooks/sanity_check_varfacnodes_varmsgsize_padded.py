@@ -26,7 +26,7 @@ from scipy.ndimage import gaussian_filter
 
 # Custom Imports
 import pgmax.contrib.interface.node_classes_with_factortypes as node_classes
-import pgmax.contrib.mpbp.mpbp_varfacnodes as mpbp_varfacnodes
+import pgmax.contrib.mpbp.mpbp_varfacnodes_varmsgsize_padded as mpbp_varfacnodes_varmsgsize_padded
 
 # %% [markdown]
 # ## Setting up Image and Factor Graph
@@ -358,8 +358,10 @@ os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 print(os.getenv("XLA_PYTHON_ALLOCATOR", "default").lower())
 print(os.getenv("XLA_PYTHON_CLIENT_PREALLOCATE"))
 # Run MAP inference to get the MAP estimate of each variable
-map_message_dict = mpbp_varfacnodes.run_mp_belief_prop_and_compute_map(
-    fg, var_evidence_dict, 1000, 0.5
+map_message_dict = (
+    mpbp_varfacnodes_varmsgsize_padded.run_mp_belief_prop_and_compute_map(
+        fg, var_evidence_dict, 1000, 0.5
+    )
 )
 
 
