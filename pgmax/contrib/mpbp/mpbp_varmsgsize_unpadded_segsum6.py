@@ -15,63 +15,6 @@ NEG_INF = (
 NEG_INF_INT = -10000
 
 
-def debug(fg: node_classes.FactorGraph,
-    evidence: Dict[node_classes.VariableNode, np.ndarray],
-    num_iters: int,
-    damping_factor: float,
-) -> Dict[node_classes.VariableNode, int]:
-
-    (
-        msgs_arr,
-        evidence_arr,
-        msg_vals_to_var_arr,
-        factor_configs,
-        factor_configs_segs_lens,
-        edge_vals_to_config_summary_indices,
-        normalization_indices_arr,
-        var_to_indices_dict,
-        num_val_configs,
-    ) = compile_jax_data_structures(fg, evidence)
-
-    max_config_segs_len = int(np.max(factor_configs_segs_lens))
-    # Convert all arrays to jnp.ndarrays for use in BP
-    # (Comments on the right show cumulative memory usage as each of these lines execute)
-    msgs_arr = jax.device_put(msgs_arr)  # 69 MiB
-    evidence_arr = jax.device_put(evidence_arr)  # 85 MiB
-    msg_vals_to_var_arr = jax.device_put(msg_vals_to_var_arr)
-    factor_configs = jax.device_put(factor_configs)
-    factor_configs_segs_lens = jax.device_put(factor_configs_segs_lens)
-    edge_vals_to_config_summary_indices = jax.device_put(
-        edge_vals_to_config_summary_indices
-    )
-    normalization_indices_arr = jax.device_put(normalization_indices_arr)
-
-    with jax.disable_jit():
-        for i in range(num_iters):
-            # Variable to Factor messages update
-            updated_vtof_msgs = pass_var_to_fac_messages_jnp(
-                msgs_arr, evidence_arr, msg_vals_to_var_arr, normalization_indices_arr
-            )
-            # Factor to Variable messages update
-            updated_ftov_msgs = pass_fac_to_var_messages_jnp(
-                msgs_arr,
-                factor_configs,
-                factor_configs_segs_lens,
-                edge_vals_to_config_summary_indices,
-                normalization_indices_arr,
-                max_config_segs_len,
-            )
-            # Damping before final message update
-            msgs_arr = damp_and_update_messages(
-                updated_vtof_msgs, updated_ftov_msgs, msgs_arr, damping_factor
-            )
-    
-    map_arr = compute_map_estimate_jax(msgs_arr, evidence_arr, msg_vals_to_var_arr)
-    var_map_estimate = convert_map_to_dict(map_arr, var_to_indices_dict)
-
-    return var_map_estimate
-
-
 def run_mp_belief_prop_and_compute_map(
     fg: node_classes.FactorGraph,
     evidence: Dict[node_classes.VariableNode, np.ndarray],
@@ -460,7 +403,6 @@ def pass_var_to_fac_messages_jnp(
         + evidence_arr
     )
     updated_vtof_msgs = var_sums_arr[msg_vals_to_var_arr] - msgs_arr[0]
-
     # Normalize and clip messages (between -1000 and 1000) before returning
     normalized_updated_msgs = (
         updated_vtof_msgs - updated_vtof_msgs[normalization_indices_arr]

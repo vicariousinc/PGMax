@@ -1,34 +1,60 @@
+# ---
+# jupyter:
+#   jupytext:
+#     formats: ipynb,py:percent
+#     text_representation:
+#       extension: .py
+#       format_name: percent
+#       format_version: '1.3'
+#       jupytext_version: 1.11.3
+#   kernelspec:
+#     display_name: 'Python 3.8.5 64-bit (''pgmax-JcKb81GE-py3.8'': poetry)'
+#     name: python3
+# ---
+
+# %%
+# %matplotlib inline
+
+import os
+
 # Standard Package Imports
-from timeit import default_timer as timer
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.ndimage import gaussian_filter
-from scipy import sparse
 from numpy.random import default_rng
-import os
+from scipy import sparse
+from scipy.ndimage import gaussian_filter
 
 # Custom Imports
 import pgmax.contrib.interface.node_classes_with_factortypes as node_classes
-import pgmax.contrib.mpbp.mpbp_varmsgsize_unpadded_segsum6 as mpbp_varmsgsize_unpadded_segsum6
+import pgmax.contrib.mpbp.optimize_mpbp_unpadded as optimize_mpbp_unpadded
 
+# %% [markdown]
+# ## Setting up Image and Factor Graph
+
+# %%
 # Set random seed for rng
 rng = default_rng(23)
 
 # Create a synthetic depth image for testing purposes
-im_size = 32
+im_size = 150
 depth_img = 5.0 * np.ones((im_size, im_size))
-depth_img[np.tril_indices(im_size, 0)] = 1.0 # This sets the lower triangle of the image to 1's 
-depth_img = gaussian_filter(depth_img, sigma=0.5) # Filter the depth image for realistic noise simulation?
+depth_img[
+    np.tril_indices(im_size, 0)
+] = 1.0  # This sets the lower triangle of the image to 1's
+depth_img = gaussian_filter(
+    depth_img, sigma=0.5
+)  # Filter the depth image for realistic noise simulation?
 labels_img = np.zeros((im_size, im_size), dtype=np.int32)
 labels_img[np.tril_indices(im_size, 0)] = 1
 
 # Plot the depth and label images
 fig, ax = plt.subplots(1, 2, figsize=(20, 10))
 ax[0].imshow(depth_img)
-ax[0].set_title('Depth Observation Image (yellow is higher depth than purple)')
+ax[0].set_title("Depth Observation Image (yellow is higher depth than purple)")
 ax[1].imshow(labels_img)
-ax[1].set_title('Label Image (yellow is higher depth than purple)')
+ax[1].set_title("Label Image (yellow is higher depth than purple)")
 
+# %%
 M, N = depth_img.shape
 # Compute dI/dx (horizontal derivative)
 horizontal_depth_differences = depth_img[:-1] - depth_img[1:]
@@ -56,6 +82,8 @@ fig, ax = plt.subplots(1, 2, figsize=(20, 10))
 ax[0].imshow(horizontal_oriented_cuts)
 ax[1].imshow(vertical_oriented_cuts)
 
+
+# %%
 # Helper function to easily generate a list of valid configurations for a given suppression diameter
 def create_valid_suppression_config_arr(suppression_diameter):
     valid_suppressions_list = []
@@ -70,6 +98,8 @@ def create_valid_suppression_config_arr(suppression_diameter):
         valid_suppressions_list.append(new_valid_list2)
     return np.array(valid_suppressions_list)
 
+
+# %% tags=[]
 # Creating the Factor Graph by instantiating Factor and Variable Nodes and writing out neighbors
 
 # We start by creating the two distinct factor types that are contained in this graph
@@ -128,7 +158,7 @@ for row in range(M - 1):
 
 vars_list = []
 vars_dict = {}
-factors_neighbors_dict = {}
+factors_neighbors_dict = {}  # type: ignore
 NUM_VAR_STATES = 3
 # Now that we have factors in place, we can create variables and assign neighbor relations
 # NOTE: The naming scheme for variables is not thorough. For instance, V1,1,down should be the same node as
@@ -218,7 +248,7 @@ while row < M - 1:
         # and cause the Factor's neighbors to change!
         vertical_vars_list = vertical_vars_list[:]
 
-        # Unless we're on the last column, where we can't slide to the right, remove the first element and 
+        # Unless we're on the last column, where we can't slide to the right, remove the first element and
         # add another one to effectively slide the suppression to the right
         if stride < N - SUPPRESSION_DIAMETER - 1:
             _ = vertical_vars_list.pop(0)
@@ -253,8 +283,8 @@ while col < N - 1:
         # IMPORTANT: This below line is necessary because otherwise, the underlying list will get modified
         # and cause the Factor's neighbors to change!
         horizontal_vars_list = horizontal_vars_list[:]
-        
-        # Unless we're on the last column, where we can't slide down, remove the first element and 
+
+        # Unless we're on the last column, where we can't slide down, remove the first element and
         # add another one to effectively slide the suppression down
         if stride < M - 1 - SUPPRESSION_DIAMETER:
             _ = horizontal_vars_list.pop(0)
@@ -279,12 +309,13 @@ for fac_name in factors_dict.keys():
 # Now that we have all the necessary nodes and edges, instantiate the node_classes.FactorGraph:
 fg = node_classes.FactorGraph("cuts_fg", factors_list, vars_list, [gf, sf])
 
+# %% tags=[]
 gt_has_cuts = gt_has_cuts.astype(np.int32)
 
 # First, we create an array such that the [0,i,j] entry corresponds to the  horizontal cut variable that's at that location in the
 # image, and the [1,i,j] entry corresponds to the  vertical cut variable that's at that location
 var_img_arr = np.array([[[None] * M] * N] * 2)
-    
+
 # We then loop thru and generate all rows and column variables
 for row in range(M - 1):
     for col in range(N - 1):
@@ -293,7 +324,7 @@ for row in range(M - 1):
         var_img_arr[1, row + 1, col] = vars_dict[f"V{row},{col},down"]
         if col == 0:
             var_img_arr[0, row, 0] = vars_dict[f"V{row},0,left"]
-        var_img_arr[0, row, col+1] = vars_dict[f"V{row},{col},right"]
+        var_img_arr[0, row, col + 1] = vars_dict[f"V{row},{col},right"]
 
 # Now, we use this array along with the gt_has_cuts array computed earlier using the image in order to derive the evidence values
 var_evidence_dict = {}
@@ -307,38 +338,55 @@ for i in range(2):
             evidence_arr[
                 gt_has_cuts[i, row, col]
             ] = 2.0  # This assigns belief value 2.0 to the correct index in the evidence vector
-            evidence_arr = evidence_arr - evidence_arr[0] # This normalizes the evidence by subtracting away the 0th index value
-            evidence_arr[1:] += 0.1 * rng.logistic(size=evidence_arr[1:].shape) # This adds logistic noise for every evidence entry
+            evidence_arr = (
+                evidence_arr - evidence_arr[0]
+            )  # This normalizes the evidence by subtracting away the 0th index value
+            evidence_arr[1:] += 0.1 * rng.logistic(
+                size=evidence_arr[1:].shape
+            )  # This adds logistic noise for every evidence entry
             if var_img_arr[i, row, col] is not None:
                 var_evidence_dict[var_img_arr[i, row, col]] = evidence_arr
 
+# %% [markdown]
+# ## Belief Propagation
+
+# %% tags=[]
 # Make sure these environment variables are set correctly to get an accurate picture of memory usage
 os.environ["XLA_PYTHON_ALLOCATOR"] = "platform"
-os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = 'false'
+os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 
-print(os.getenv('XLA_PYTHON_ALLOCATOR', 'default').lower())
-print(os.getenv('XLA_PYTHON_CLIENT_PREALLOCATE'))
+print(os.getenv("XLA_PYTHON_ALLOCATOR", "default").lower())
+print(os.getenv("XLA_PYTHON_CLIENT_PREALLOCATE"))
 # Run MAP inference to get the MAP estimate of each variable
-map_message_dict = mpbp_varmsgsize_unpadded_segsum6.debug(fg, var_evidence_dict, 2, 0.5)
-# map_message_dict = mpbp_varmsgsize_unpadded_segsum6.run_mp_belief_prop_and_compute_map(fg, var_evidence_dict, 1000, 0.5)
+map_message_dict = optimize_mpbp_unpadded.run_mp_belief_prop_and_compute_map(
+    fg, var_evidence_dict, 1000, 0.5
+)
 
+
+# %% [markdown]
+# ## Visualization of Results
+
+# %% tags=[]
 # Place the variable values derived from BP onto an image-sized array so they can be visualized. Do the same for bottom-up evidences that are just GT + logistic noise
-bp_values = np.zeros((2,M,N))
-bu_evidence = np.zeros((2,M,N,3))
+bp_values = np.zeros((2, M, N))
+bu_evidence = np.zeros((2, M, N, 3))
 for i in range(2):
     for row in range(M):
         for col in range(N):
-            if var_img_arr[i,row,col] is not None:
-                bp_values[i,row,col] = map_message_dict[var_img_arr[i,row,col]]
-                bu_evidence[i,row,col,:] = var_evidence_dict[var_img_arr[i,row,col]]
+            if var_img_arr[i, row, col] is not None:
+                bp_values[i, row, col] = map_message_dict[var_img_arr[i, row, col]]
+                bu_evidence[i, row, col, :] = var_evidence_dict[
+                    var_img_arr[i, row, col]
+                ]
 
 
+# %%
 # Helpful function for viz
 def get_color_mask(image, nc=None):
     image = image.astype(int)
     n_colors = image.max() + 1
 
-    cm = plt.get_cmap('gist_rainbow')
+    cm = plt.get_cmap("gist_rainbow")
     colors = [cm(1.0 * i / n_colors) for i in np.random.permutation(n_colors)]
 
     color_mask = np.zeros(image.shape + (3,)).astype(np.uint8)
@@ -346,6 +394,8 @@ def get_color_mask(image, nc=None):
         color_mask[image == i, :] = np.array(colors[i][:3]) * 255
     return color_mask
 
+
+# %%
 def get_surface_labels_from_cuts(has_cuts):
     """get_surface_labels_from_cuts
 
@@ -403,6 +453,8 @@ def get_surface_labels_from_cuts(has_cuts):
     ]
     return surface_labels
 
+
+# %%
 # Ground truth cuts
 gt_cuts_img = np.zeros((2 * M, 2 * N))
 gt_cuts_img[
@@ -434,24 +486,22 @@ cuts_img[
 # Plot ground-truth cuts
 fig, ax = plt.subplots(2, 3, figsize=(30, 20))
 ax[0, 0].imshow(gt_cuts_img)
-ax[0, 0].set_title('Ground truth', fontsize=40)
-ax[0, 0].axis('off')
+ax[0, 0].set_title("Ground truth", fontsize=40)
+ax[0, 0].axis("off")
 ax[1, 0].imshow(get_color_mask(labels_img))
-ax[1, 0].axis('off')
+ax[1, 0].axis("off")
 
 # Plot bottom-up evidences for cuts
 ax[0, 1].imshow(bu_cuts_img)
-ax[0, 1].axis('off')
-ax[0, 1].set_title('Using bottom-up evidences', fontsize=40)
-ax[1, 1].imshow(
-    get_color_mask(get_surface_labels_from_cuts(bu_has_cuts > 0))
-)
-ax[1, 1].axis('off')
+ax[0, 1].axis("off")
+ax[0, 1].set_title("Using bottom-up evidences", fontsize=40)
+ax[1, 1].imshow(get_color_mask(get_surface_labels_from_cuts(bu_has_cuts > 0)))
+ax[1, 1].axis("off")
 
 # Plot predicted cuts
 ax[0, 2].imshow(cuts_img)
-ax[0, 2].axis('off')
-ax[0, 2].set_title('Using surface model', fontsize=40)
+ax[0, 2].axis("off")
+ax[0, 2].set_title("Using surface model", fontsize=40)
 ax[1, 2].imshow(get_color_mask(get_surface_labels_from_cuts(bp_values > 0)))
-ax[1, 2].axis('off')
+ax[1, 2].axis("off")
 fig.tight_layout()

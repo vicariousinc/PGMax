@@ -36,7 +36,7 @@ import pgmax.contrib.mpbp.mpbp_varfacnodes_varmsgsize_unpadded as mpbp_varfacnod
 rng = default_rng(23)
 
 # Create a synthetic depth image for testing purposes
-im_size = 150
+im_size = 32
 depth_img = 5.0 * np.ones((im_size, im_size))
 depth_img[
     np.tril_indices(im_size, 0)
