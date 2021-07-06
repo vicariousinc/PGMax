@@ -15,7 +15,6 @@ NEG_INF = (
     -100000.0
 )  # A large negative value to use as -inf for numerical stability reasons
 
-
 # NOTE: This file contains an implementation of max-product belief propagation that uses padding to handle
 # messages of different sizes.
 def run_mp_belief_prop_and_compute_map(
@@ -343,9 +342,11 @@ def pass_var_to_fac_messages_jnp(
     )
     updated_vtof_msgs = var_sums_arr[edges_to_var_arr] - msgs_arr[0]
 
+
+    # from IPython import embed; embed()
+
     # Normalize and clip messages (between -1000 and 1000) before returning
-    # normalized_updated_msgs = updated_vtof_msgs - updated_vtof_msgs[:, [0]]
-    normalized_updated_msgs = updated_vtof_msgs - updated_vtof_msgs.max(axis=0)
+    normalized_updated_msgs = updated_vtof_msgs - updated_vtof_msgs.max(axis=1)[:,None]
     clipped_updated_msgs = jnp.clip(normalized_updated_msgs, -1000, 1000)
 
     return clipped_updated_msgs
@@ -417,8 +418,7 @@ def pass_fac_to_var_messages_jnp(
     )
 
     # Normalize and clip messages (between -1000 and 1000) before returning
-    # normalized_updated_msgs = updated_ftov_msgs - updated_ftov_msgs[:, [0]]
-    normalized_updated_msgs = updated_ftov_msgs - updated_ftov_msgs.max(axis=1).T
+    normalized_updated_msgs = updated_ftov_msgs - updated_ftov_msgs.max(axis=1)[:,None]
     clipped_updated_msgs = jnp.clip(normalized_updated_msgs, -1000, 1000)
 
     return clipped_updated_msgs
