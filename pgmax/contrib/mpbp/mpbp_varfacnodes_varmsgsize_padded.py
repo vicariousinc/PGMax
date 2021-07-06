@@ -418,7 +418,7 @@ def pass_fac_to_var_messages_jnp(
     )
 
     # Normalize and clip messages (between -1000 and 1000) before returning
-    normalized_updated_msgs = updated_ftov_msgs - updated_ftov_msgs.max(axis=1)[:,None]
+    normalized_updated_msgs = updated_ftov_msgs - updated_ftov_msgs.max(axis=1,keepdims=True)
     clipped_updated_msgs = jnp.clip(normalized_updated_msgs, -1000, 1000)
 
     return clipped_updated_msgs
