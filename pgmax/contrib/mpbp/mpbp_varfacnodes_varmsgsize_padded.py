@@ -342,9 +342,6 @@ def pass_var_to_fac_messages_jnp(
     )
     updated_vtof_msgs = var_sums_arr[edges_to_var_arr] - msgs_arr[0]
 
-
-    # from IPython import embed; embed()
-
     # Normalize and clip messages (between -1000 and 1000) before returning
     normalized_updated_msgs = updated_vtof_msgs - updated_vtof_msgs.max(axis=1,keepdims=True)
     clipped_updated_msgs = jnp.clip(normalized_updated_msgs, -1000, 1000)

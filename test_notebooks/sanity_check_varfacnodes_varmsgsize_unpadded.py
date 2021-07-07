@@ -36,7 +36,7 @@ import pgmax.contrib.mpbp.mpbp_varfacnodes_varmsgsize_unpadded as mpbp_varfacnod
 rng = default_rng(23)
 
 # Create a synthetic depth image for testing purposes
-im_size = 32
+im_size = 150
 depth_img = 5.0 * np.ones((im_size, im_size))
 depth_img[
     np.tril_indices(im_size, 0)
@@ -314,7 +314,7 @@ gt_has_cuts = gt_has_cuts.astype(np.int32)
 
 # First, we create an array such that the [0,i,j] entry corresponds to the  horizontal cut variable that's at that location in the
 # image, and the [1,i,j] entry corresponds to the  vertical cut variable that's at that location
-var_img_arr = np.array([[[None] * M] * N] * 2)
+var_img_arr = np.full(((2,N,M), None))
 
 # We then loop thru and generate all rows and column variables
 for row in range(M - 1):
