@@ -25,8 +25,8 @@ from scipy import sparse
 from scipy.ndimage import gaussian_filter
 
 # Custom Imports
-import pgmax.contrib.interface.node_classes as node_classes
-import pgmax.contrib.mpbp.mpbp_varnode_fac_lowmem as mpbp_varnode_fac_lowmem
+import pgmax.contrib.interface.node_classes_with_factortypes as node_classes
+import pgmax.contrib.mpbp.optimize_mpbp_unpadded as optimize_mpbp_unpadded
 
 # %% [markdown]
 # ## Setting up Image and Factor Graph
@@ -36,7 +36,7 @@ import pgmax.contrib.mpbp.mpbp_varnode_fac_lowmem as mpbp_varnode_fac_lowmem
 rng = default_rng(23)
 
 # Create a synthetic depth image for testing purposes
-im_size = 32
+im_size = 150
 depth_img = 5.0 * np.ones((im_size, im_size))
 depth_img[
     np.tril_indices(im_size, 0)
@@ -101,12 +101,59 @@ def create_valid_suppression_config_arr(suppression_diameter):
 
 # %% tags=[]
 # Creating the Factor Graph by instantiating Factor and Variable Nodes and writing out neighbors
+
+# We start by creating the two distinct factor types that are contained in this graph
+# We need to specify all the valid configurations for the non-suppression factors
+"""
+      1v
+0h  factor  2h
+      3v
+"""
+valid_configs_non_supp = np.array(
+    [
+        [0, 0, 0, 0],
+        [1, 0, 1, 0],
+        [2, 0, 2, 0],
+        [0, 0, 1, 1],
+        [0, 0, 2, 2],
+        [2, 0, 0, 1],
+        [1, 0, 0, 2],
+        [1, 0, 1, 1],
+        [2, 0, 2, 1],
+        [1, 0, 1, 2],
+        [2, 0, 2, 2],
+        [0, 1, 0, 1],
+        [1, 1, 0, 0],
+        [0, 1, 2, 0],
+        [1, 1, 0, 1],
+        [2, 1, 0, 1],
+        [0, 1, 1, 1],
+        [0, 1, 2, 1],
+        [1, 1, 1, 0],
+        [2, 1, 2, 0],
+        [0, 2, 0, 2],
+        [2, 2, 0, 0],
+        [0, 2, 1, 0],
+        [2, 2, 0, 2],
+        [1, 2, 0, 2],
+        [0, 2, 2, 2],
+        [0, 2, 1, 2],
+        [2, 2, 2, 0],
+        [1, 2, 1, 0],
+    ]
+)
+gf = node_classes.FactorType("Grid_Factor", valid_configs_non_supp)
+# Now, we specify the valid configurations for all the suppression factors
+SUPPRESSION_DIAMETER = 9
+valid_configs_supp = create_valid_suppression_config_arr(SUPPRESSION_DIAMETER)
+sf = node_classes.FactorType("Suppression_Factor", valid_configs_supp)
+
 factors_dict = {}
-# The Factors for the laterals model will form a (M-1) x (N-1) grid
+# The Grid Factors for the laterals model will form a (M-1) x (N-1) grid
 for row in range(M - 1):
     for col in range(N - 1):
         factor_name = f"F{row},{col}"
-        curr_factor = node_classes.FactorNode(factor_name)
+        curr_factor = node_classes.FactorNode(factor_name, gf)
         factors_dict[factor_name] = curr_factor
 
 vars_list = []
@@ -179,7 +226,6 @@ for row in range(M - 1):
 
 # Now that we have all the variables and know their connections with the existing factors are correct, we can define the suppression factors
 # as well as their connections
-SUPPRESSION_DIAMETER = 9
 suppression_factors_list = []
 # Add factors for all the vertical variables
 row = 0
@@ -191,9 +237,9 @@ while row < M - 1:
 
     for stride in range(N - SUPPRESSION_DIAMETER):
         if row == 0 and up_or_down == "up":
-            curr_vert_supp_factor = node_classes.FactorNode(f"FSV0,{stride}")
+            curr_vert_supp_factor = node_classes.FactorNode(f"FSV0,{stride}", sf)
         else:
-            curr_vert_supp_factor = node_classes.FactorNode(f"FSV{row+1},{stride}")
+            curr_vert_supp_factor = node_classes.FactorNode(f"FSV{row+1},{stride}", sf)
         for vert_var in vertical_vars_list:
             vert_var.add_neighbor(curr_vert_supp_factor)
         curr_vert_supp_factor.set_neighbors(vertical_vars_list)
@@ -227,9 +273,9 @@ while col < N - 1:
 
     for stride in range(M - SUPPRESSION_DIAMETER):
         if col == 0 and left_or_right == "left":
-            curr_horz_supp_factor = node_classes.FactorNode(f"FSH0,{stride}")
+            curr_horz_supp_factor = node_classes.FactorNode(f"FSH0,{stride}", sf)
         else:
-            curr_horz_supp_factor = node_classes.FactorNode(f"FSH{col+1},{stride}")
+            curr_horz_supp_factor = node_classes.FactorNode(f"FSH{col+1},{stride}", sf)
         for horz_var in horizontal_vars_list:
             horz_var.add_neighbor(curr_horz_supp_factor)
         curr_horz_supp_factor.set_neighbors(horizontal_vars_list)
@@ -252,60 +298,16 @@ while col < N - 1:
     else:
         col += 1
 
-# Now, we specify the valid configurations for all the suppression factors
-valid_suppressions_arr = create_valid_suppression_config_arr(SUPPRESSION_DIAMETER)
-for supp_factor in suppression_factors_list:
-    supp_factor.set_valid_configs(valid_suppressions_arr)
 
-# Now, we need to specify all the valid configurations for the non-suppression factors
-"""
-      1v
-0h  factor  2h
-      3v
-"""
-valid_configs = np.array(
-    [
-        [0, 0, 0, 0],
-        [1, 0, 1, 0],
-        [2, 0, 2, 0],
-        [0, 0, 1, 1],
-        [0, 0, 2, 2],
-        [2, 0, 0, 1],
-        [1, 0, 0, 2],
-        [1, 0, 1, 1],
-        [2, 0, 2, 1],
-        [1, 0, 1, 2],
-        [2, 0, 2, 2],
-        [0, 1, 0, 1],
-        [1, 1, 0, 0],
-        [0, 1, 2, 0],
-        [1, 1, 0, 1],
-        [2, 1, 0, 1],
-        [0, 1, 1, 1],
-        [0, 1, 2, 1],
-        [1, 1, 1, 0],
-        [2, 1, 2, 0],
-        [0, 2, 0, 2],
-        [2, 2, 0, 0],
-        [0, 2, 1, 0],
-        [2, 2, 0, 2],
-        [1, 2, 0, 2],
-        [0, 2, 2, 2],
-        [0, 2, 1, 2],
-        [2, 2, 2, 0],
-        [1, 2, 1, 0],
-    ]
-)
-# We can now create a list of factors with the correct neighbors and valid configurations
+# We can now create a list of factors with the correct neighbors
 factors_list = suppression_factors_list
 for fac_name in factors_dict.keys():
     curr_fac = factors_dict[fac_name]
     curr_fac.set_neighbors(factors_neighbors_dict[fac_name])
-    curr_fac.set_valid_configs(valid_configs)
     factors_list.append(curr_fac)
 
 # Now that we have all the necessary nodes and edges, instantiate the node_classes.FactorGraph:
-fg = node_classes.FactorGraph("cuts_fg", factors_list, vars_list)
+fg = node_classes.FactorGraph("cuts_fg", factors_list, vars_list, [gf, sf])
 
 # %% tags=[]
 gt_has_cuts = gt_has_cuts.astype(np.int32)
@@ -356,7 +358,7 @@ os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 print(os.getenv("XLA_PYTHON_ALLOCATOR", "default").lower())
 print(os.getenv("XLA_PYTHON_CLIENT_PREALLOCATE"))
 # Run MAP inference to get the MAP estimate of each variable
-map_message_dict = mpbp_varnode_fac_lowmem.run_mp_belief_prop_and_compute_map(
+map_message_dict = optimize_mpbp_unpadded.run_mp_belief_prop_and_compute_map(
     fg, var_evidence_dict, 1000, 0.5
 )
 
