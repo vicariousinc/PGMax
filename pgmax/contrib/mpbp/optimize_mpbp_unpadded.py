@@ -33,8 +33,6 @@ def run_mp_belief_prop_and_compute_map(
     Returns:
         A dictionary mapping each variable to its MAP estimate value
     """
-    # NOTE: This currently assumes all variable nodes have the same size. Thus, all messages have the same size
-
     start_time = timer()
     (
         msgs_arr,
