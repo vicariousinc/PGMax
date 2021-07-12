@@ -1,75 +1,50 @@
-name: pre-commit-checks
+# name: pre-commit-checks
 
-on: [push]
+# on: [push]
 
-jobs:
-  pre-commit:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: [3.7]
-        poetry-version: [1.1.6]
-    steps:
-      #----------------------------------------------
-      #       cancel any pending actions
-      #----------------------------------------------
-      - name: Cancel previous
-        uses: styfle/cancel-workflow-action@0.8.0
-        with:
-          access_token: ${{ github.token }}
-        if: ${{github.ref != 'refs/head/main'}}
-      #----------------------------------------------
-      #       check-out repo and set-up python
-      #----------------------------------------------
-      - name: Check out repository
-        uses: actions/checkout@v2
-      - name: Set up python
-        uses: actions/setup-python@v2
-        with:
-          python-version: ${{ matrix.python-version }}
-      # #----------------------------------------------
-      # #  -----  install & configure poetry  -----
-      # #----------------------------------------------
-      # - name: Install Poetry
-      #   uses: snok/install-poetry@v1.1.6
-      # #----------------------------------------------
-      # #       load cached venv if cache exists
-      # #----------------------------------------------
-      # - name: Load cached venv
-      #   id: cached-poetry-dependencies
-      #   uses: actions/cache@v2
-      #   with:
-      #     path: .venv
-      #     key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
-      # #----------------------------------------------
-      # # install dependencies if cache does not exist
-      # #----------------------------------------------
-      # - name: Install dependencies
-      #   if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
-      #   run: poetry install --no-interaction --no-root
-      # #----------------------------------------------
-      # # install your root project, if required
-      # #----------------------------------------------
-      # - name: Install library
-      #   run: poetry install --no-interaction
-      # #----------------------------------------------
-      # #              run test suite
-      # #----------------------------------------------
-      - uses: pre-commit/action@v2.0.3
+# jobs:
+#   pre-commit:
+#     runs-on: ubuntu-latest
+#     strategy:
+#       matrix:
+#         python-version: [3.7]
+#         poetry-version: [1.1.6]
+#     steps:
+#       #----------------------------------------------
+#       #       cancel any pending actions
+#       #----------------------------------------------
+#       - name: Cancel previous
+#         uses: styfle/cancel-workflow-action@0.8.0
+#         with:
+#           access_token: ${{ github.token }}
+#         if: ${{github.ref != 'refs/head/main'}}
+#       #----------------------------------------------
+#       #       check-out repo and set-up python
+#       #----------------------------------------------
+#       - name: Check out repository
+#         uses: actions/checkout@v2
+#       - name: Set up python
+#         uses: actions/setup-python@v2
+#         with:
+#           python-version: ${{ matrix.python-version }}
+#       #----------------------------------------------
+#       #              run pre-commit hooks
+#       #----------------------------------------------
+#       - uses: pre-commit/action@v2.0.3
 
-  docs:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: [3.7]
-    steps:
-    #----------------------------------------------
-    #               check-out repo
-    #----------------------------------------------
-    - uses: actions/checkout@v1
-    #----------------------------------------------
-    #             build sphinx docs
-    #----------------------------------------------
-    - uses: ammaraskar/sphinx-action@master
-      with:
-        docs-folder: "docs/"
+#   docs:
+#     runs-on: ubuntu-latest
+#     strategy:
+#       matrix:
+#         python-version: [3.7]
+#     steps:
+#     #----------------------------------------------
+#     #               check-out repo
+#     #----------------------------------------------
+#     - uses: actions/checkout@v1
+#     #----------------------------------------------
+#     #             build sphinx docs
+#     #----------------------------------------------
+#     - uses: ammaraskar/sphinx-action@master
+#       with:
+#         docs-folder: "docs/"
