@@ -17,7 +17,6 @@ NEG_INF = (
     -100000.0
 )  # A large negative value to use as -inf for numerical stability reasons
 NEG_INF_INT = -10000
-damping_factor = 0.5
 
 
 def run_mp_belief_prop_and_compute_map(
@@ -26,10 +25,11 @@ def run_mp_belief_prop_and_compute_map(
     num_iters: int,
     damping_factor: float,
 ) -> Dict[node_classes.VariableNode, int]:
-    """Performs max-product belief propagation on a FactorGraph fg for num_iters iterations and returns the MAP
+    """
+    performs max-product belief propagation on a FactorGraph fg for num_iters iterations and returns the MAP
     estimate.
 
-    Args
+    Args:
         fg: A FactorGraph object upon which to do belief propagation
         evidence: Each entry represents the constant, evidence message that's passed to the corresponding
             VariableNode that acts as the key
@@ -39,6 +39,7 @@ def run_mp_belief_prop_and_compute_map(
     Returns:
         A dictionary mapping each variable to its MAP estimate value
     """
+
     start_time = timer()
     (
         msgs_arr,
@@ -158,7 +159,8 @@ def compile_jax_data_structures(
     Dict[node_classes.VariableNode, List[int]],
     int,
 ]:
-    """Creates data-structures that can be efficiently used with JAX for MPBP.
+    """
+    creates data-structures that can be efficiently used with JAX for MPBP.
 
     Args:
         fg: A FactorGraph object upon which to do belief propagation
@@ -166,27 +168,29 @@ def compile_jax_data_structures(
             VariableNode that acts as the key
 
     Returns:
-        tuple containing data structures useful for message passing updates in JAX:
-            msgs_arr: Maximum array shape is bounded (2, num_edges * max_msg_size). This holds all the flattened messages.
-                the 0th index of the 0th axis corresponds to f->v msgs while the 1st index of the 0th axis corresponds to
-                v->f msgs.
-            evidence_arr: Maximum array shape is bounded by (num_var_nodes * max_msg_size). This array contains the fully-flattened
-                set of evidence messages for each variable node
-            msg_vals_to_var_arr: Maximum array shape is bounded by (num_edges * max_msg_size,). This array maps messages that are
-                contained in msgs_arr into a shape that is compatible with evidence_arr. So, for a particular entry in msgs_arr
-                (i.e msgs_arr[0,i]), msg_vals_to_var_arr[i] provides an index into evidence_arr such that
-                evidence_arr[msg_vals_to_var_arr[i]] is the evidence value that needs to be added to msgs_arr[0,i] to perform the
-                variable to factor update
-            factor_configs: Maximum array shape is bounded by (2, num_factors * max_num_configs * max_config_size). The 0th axis
-                contains a flat list of valid configuration indices such that msgs_arr[1, factor_configs[0]] gives a flattened array of
-                all the message values from the valid configurations. The 1st axis contains segmentation masks corresponding to the 0th
-                axis (i.e, all entries corresponding to factor 0 config 0 are labelled 0, all entries corresponding to factor 0 config 1
-                are labelled 1, and so on).
-            edge_msg_sizes: Array shape is (num_edges,). edge_msg_sizes[e] represents the size of the edge at index e.
-            var_to_indices_dict: for a particular var_node key, var_to_indices_dict[var_node] will yield the indices in evidence_arr
-                that correspond to messages surrounding var_node
-            num_val_configs: the total number of valid configurations for factors in the factor graph.
+        tuple:
+
+            - msgs_arr: Maximum array shape is bounded (2, num_edges * max_msg_size). This holds all the flattened messages.
+              the 0th index of the 0th axis corresponds to f->v msgs while the 1st index of the 0th axis corresponds to
+              v->f msgs.
+            - evidence_arr: Maximum array shape is bounded by (num_var_nodes * max_msg_size). This array contains the fully-flattened
+              set of evidence messages for each variable node
+            - msg_vals_to_var_arr: Maximum array shape is bounded by (num_edges * max_msg_size,). This array maps messages that are
+              contained in msgs_arr into a shape that is compatible with evidence_arr. So, for a particular entry in msgs_arr
+              (i.e msgs_arr[0,i]), msg_vals_to_var_arr[i] provides an index into evidence_arr such that
+              evidence_arr[msg_vals_to_var_arr[i]] is the evidence value that needs to be added to msgs_arr[0,i] to perform the
+              variable to factor update
+            - factor_configs: Maximum array shape is bounded by (2, num_factors * max_num_configs * max_config_size). The 0th axis
+              contains a flat list of valid configuration indices such that msgs_arr[1, factor_configs[0]] gives a flattened array of
+              all the message values from the valid configurations. The 1st axis contains segmentation masks corresponding to the 0th
+              axis (i.e, all entries corresponding to factor 0 config 0 are labelled 0, all entries corresponding to factor 0 config 1
+              are labelled 1, and so on).
+            - edge_msg_sizes: Array shape is (num_edges,). edge_msg_sizes[e] represents the size of the edge at index e.
+            - var_to_indices_dict: for a particular var_node key, var_to_indices_dict[var_node] will yield the indices in evidence_arr
+              that correspond to messages surrounding var_node
+            - num_val_configs: the total number of valid configurations for factors in the factor graph.
     """
+
     num_edges = fg.count_num_edges()
     max_msg_size = fg.find_max_msg_size()
 
@@ -452,7 +456,8 @@ def convert_map_to_dict(
     map_arr: jnp.ndarray,
     var_to_indices_dict: Dict[node_classes.VariableNode, List[int]],
 ) -> Dict[node_classes.VariableNode, int]:
-    """converts the array after MAP inference to a dict format expected by the viz code
+    """
+    converts the array after MAP inference to a dict format expected by the viz code
 
     Args:
         map_arr: an array of the same shape as evidence_arr corresponding to the final

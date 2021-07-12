@@ -56,3 +56,17 @@ jobs:
       #              run test suite
       #----------------------------------------------
       - uses: pre-commit/action@v2.0.3
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+    #----------------------------------------------
+    #               check-out repo
+    #----------------------------------------------
+    - uses: actions/checkout@v1
+    #----------------------------------------------
+    #             build sphinx docs
+    #----------------------------------------------
+    - uses: ammaraskar/sphinx-action@master
+      with:
+        docs-folder: "docs/"
