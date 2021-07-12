@@ -4,15 +4,20 @@ from typing import Dict, List, Tuple
 import jax
 import jax.numpy as jnp
 import numpy as np
+
 import pgmax.contrib.interface.node_classes_with_factortypes as node_classes
 import pgmax.contrib.mpbp.utils as utils
-from pgmax.contrib.mpbp.mpbp_varfacnodes_varmsgsize_unpadded import compute_map_estimate_jax, convert_map_to_dict, damp_and_update_messages
+
+from pgmax.contrib.mpbp.mpbp_varfacnodes_varmsgsize_unpadded import (  # isort:skip
+    compute_map_estimate_jax,
+    damp_and_update_messages,
+)
 
 NEG_INF = (
     -100000.0
 )  # A large negative value to use as -inf for numerical stability reasons
 NEG_INF_INT = -10000
-damping_factor = 0.5
+
 
 def run_mp_belief_prop_and_compute_map(
     fg: node_classes.FactorGraph,
@@ -20,10 +25,11 @@ def run_mp_belief_prop_and_compute_map(
     num_iters: int,
     damping_factor: float,
 ) -> Dict[node_classes.VariableNode, int]:
-    """Performs max-product belief propagation on a FactorGraph fg for num_iters iterations and returns the MAP
+    """
+    performs max-product belief propagation on a FactorGraph fg for num_iters iterations and returns the MAP
     estimate.
 
-    Args
+    Args:
         fg: A FactorGraph object upon which to do belief propagation
         evidence: Each entry represents the constant, evidence message that's passed to the corresponding
             VariableNode that acts as the key
@@ -33,7 +39,6 @@ def run_mp_belief_prop_and_compute_map(
     Returns:
         A dictionary mapping each variable to its MAP estimate value
     """
-    # NOTE: This currently assumes all variable nodes have the same size. Thus, all messages have the same size
 
     start_time = timer()
     (
@@ -56,7 +61,9 @@ def run_mp_belief_prop_and_compute_map(
     edge_msg_sizes = jax.device_put(edge_msg_sizes)
     max_edge_msg_size = int(jnp.max(edge_msg_sizes))
 
-    @jax.partial(jax.jit, static_argnames=("num_val_configs", "num_iters", "max_edge_msg_size"))
+    @jax.partial(
+        jax.jit, static_argnames=("num_val_configs", "num_iters", "max_edge_msg_size")
+    )
     def run_mpbp_update_loop(
         msgs_arr,
         evidence_arr,
@@ -68,10 +75,15 @@ def run_mp_belief_prop_and_compute_map(
         num_iters,
     ):
         "Function wrapper that leverages jax.lax.scan to efficiently perform BP"
+
         def mpbp_update_step(msgs_arr, x):
             # Variable to Factor messages update
             updated_vtof_msgs = pass_var_to_fac_messages_jnp(
-                msgs_arr, evidence_arr, msg_vals_to_var_arr, edge_msg_sizes, max_edge_msg_size
+                msgs_arr,
+                evidence_arr,
+                msg_vals_to_var_arr,
+                edge_msg_sizes,
+                max_edge_msg_size,
             )
             # Factor to Variable messages update
             updated_ftov_msgs = pass_fac_to_var_messages_jnp(
@@ -79,7 +91,7 @@ def run_mp_belief_prop_and_compute_map(
                 factor_configs,
                 edge_msg_sizes,
                 max_edge_msg_size,
-                num_val_configs
+                num_val_configs,
             )
             # Damping before final message update
             msgs_arr = damp_and_update_messages(
@@ -135,6 +147,7 @@ def run_mp_belief_prop_and_compute_map(
 
     return var_map_estimate
 
+
 def compile_jax_data_structures(
     fg: node_classes.FactorGraph, evidence: Dict[node_classes.VariableNode, np.ndarray]
 ) -> Tuple[
@@ -146,7 +159,8 @@ def compile_jax_data_structures(
     Dict[node_classes.VariableNode, List[int]],
     int,
 ]:
-    """Creates data-structures that can be efficiently used with JAX for MPBP.
+    """
+    creates data-structures that can be efficiently used with JAX for MPBP.
 
     Args:
         fg: A FactorGraph object upon which to do belief propagation
@@ -154,27 +168,29 @@ def compile_jax_data_structures(
             VariableNode that acts as the key
 
     Returns:
-        tuple containing data structures useful for message passing updates in JAX:
-            msgs_arr: Maximum array shape is bounded (2, num_edges * max_msg_size). This holds all the flattened messages.
-                the 0th index of the 0th axis corresponds to f->v msgs while the 1st index of the 0th axis corresponds to
-                v->f msgs.
-            evidence_arr: Maximum array shape is bounded by (num_var_nodes * max_msg_size). This array contains the fully-flattened
-                set of evidence messages for each variable node
-            msg_vals_to_var_arr: Maximum array shape is bounded by (num_edges * max_msg_size,). This array maps messages that are
-                contained in msgs_arr into a shape that is compatible with evidence_arr. So, for a particular entry in msgs_arr
-                (i.e msgs_arr[0,i]), msg_vals_to_var_arr[i] provides an index into evidence_arr such that
-                evidence_arr[msg_vals_to_var_arr[i]] is the evidence value that needs to be added to msgs_arr[0,i] to perform the
-                variable to factor update
-            factor_configs: Maximum array shape is bounded by (2, num_factors * max_num_configs * max_config_size). The 0th axis
-                contains a flat list of valid configuration indices such that msgs_arr[1, factor_configs[0]] gives a flattened array of
-                all the message values from the valid configurations. The 1st axis contains segmentation masks corresponding to the 0th
-                axis (i.e, all entries corresponding to factor 0 config 0 are labelled 0, all entries corresponding to factor 0 config 1
-                are labelled 1, and so on).
-            edge_msg_sizes: Array shape is (num_edges,). edge_msg_sizes[e] represents the size of the edge at index e.
-            var_to_indices_dict: for a particular var_node key, var_to_indices_dict[var_node] will yield the indices in evidence_arr
-                that correspond to messages surrounding var_node
-            num_val_configs: the total number of valid configurations for factors in the factor graph.
+        tuple:
+
+            - msgs_arr: Maximum array shape is bounded (2, num_edges * max_msg_size). This holds all the flattened messages.
+              the 0th index of the 0th axis corresponds to f->v msgs while the 1st index of the 0th axis corresponds to
+              v->f msgs.
+            - evidence_arr: Maximum array shape is bounded by (num_var_nodes * max_msg_size). This array contains the fully-flattened
+              set of evidence messages for each variable node
+            - msg_vals_to_var_arr: Maximum array shape is bounded by (num_edges * max_msg_size,). This array maps messages that are
+              contained in msgs_arr into a shape that is compatible with evidence_arr. So, for a particular entry in msgs_arr
+              (i.e msgs_arr[0,i]), msg_vals_to_var_arr[i] provides an index into evidence_arr such that
+              evidence_arr[msg_vals_to_var_arr[i]] is the evidence value that needs to be added to msgs_arr[0,i] to perform the
+              variable to factor update
+            - factor_configs: Maximum array shape is bounded by (2, num_factors * max_num_configs * max_config_size). The 0th axis
+              contains a flat list of valid configuration indices such that msgs_arr[1, factor_configs[0]] gives a flattened array of
+              all the message values from the valid configurations. The 1st axis contains segmentation masks corresponding to the 0th
+              axis (i.e, all entries corresponding to factor 0 config 0 are labelled 0, all entries corresponding to factor 0 config 1
+              are labelled 1, and so on).
+            - edge_msg_sizes: Array shape is (num_edges,). edge_msg_sizes[e] represents the size of the edge at index e.
+            - var_to_indices_dict: for a particular var_node key, var_to_indices_dict[var_node] will yield the indices in evidence_arr
+              that correspond to messages surrounding var_node
+            - num_val_configs: the total number of valid configurations for factors in the factor graph.
     """
+
     num_edges = fg.count_num_edges()
     max_msg_size = fg.find_max_msg_size()
 
@@ -303,7 +319,6 @@ def compile_jax_data_structures(
         var_to_indices_dict,
         num_val_configs,
     )
-
 
 
 @jax.partial(jax.jit, static_argnames="max_segment_length")
@@ -435,3 +450,28 @@ def pass_fac_to_var_messages_jnp(
     clipped_updated_msgs = jnp.clip(normalized_updated_msgs, -1000, None)
 
     return clipped_updated_msgs
+
+
+def convert_map_to_dict(
+    map_arr: jnp.ndarray,
+    var_to_indices_dict: Dict[node_classes.VariableNode, List[int]],
+) -> Dict[node_classes.VariableNode, int]:
+    """
+    converts the array after MAP inference to a dict format expected by the viz code
+
+    Args:
+        map_arr: an array of the same shape as evidence_arr corresponding to the final
+            message values of each VariableNode
+        var_to_indices_dict: for a particular var_node key, var_to_indices_dict[var_node] will
+            yield the indices in evidence_arr that correspond to messages surrounding var_node
+    Returns:
+        a dict mapping each VariableNode and its MAP state
+    """
+    var_map_dict = {}
+
+    map_np_arr = np.array(map_arr)
+
+    for var_node in var_to_indices_dict.keys():
+        var_map_dict[var_node] = np.argmax(map_np_arr[var_to_indices_dict[var_node]])
+
+    return var_map_dict
