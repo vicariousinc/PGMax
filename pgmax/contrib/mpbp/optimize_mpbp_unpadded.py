@@ -4,15 +4,21 @@ from typing import Dict, List, Tuple
 import jax
 import jax.numpy as jnp
 import numpy as np
+
 import pgmax.contrib.interface.node_classes_with_factortypes as node_classes
 import pgmax.contrib.mpbp.utils as utils
-from pgmax.contrib.mpbp.mpbp_varfacnodes_varmsgsize_unpadded import compute_map_estimate_jax, convert_map_to_dict, damp_and_update_messages
+
+from pgmax.contrib.mpbp.mpbp_varfacnodes_varmsgsize_unpadded import (  # isort:skip
+    compute_map_estimate_jax,
+    damp_and_update_messages,
+)
 
 NEG_INF = (
     -100000.0
 )  # A large negative value to use as -inf for numerical stability reasons
 NEG_INF_INT = -10000
 damping_factor = 0.5
+
 
 def run_mp_belief_prop_and_compute_map(
     fg: node_classes.FactorGraph,
@@ -54,7 +60,9 @@ def run_mp_belief_prop_and_compute_map(
     edge_msg_sizes = jax.device_put(edge_msg_sizes)
     max_edge_msg_size = int(jnp.max(edge_msg_sizes))
 
-    @jax.partial(jax.jit, static_argnames=("num_val_configs", "num_iters", "max_edge_msg_size"))
+    @jax.partial(
+        jax.jit, static_argnames=("num_val_configs", "num_iters", "max_edge_msg_size")
+    )
     def run_mpbp_update_loop(
         msgs_arr,
         evidence_arr,
@@ -66,10 +74,15 @@ def run_mp_belief_prop_and_compute_map(
         num_iters,
     ):
         "Function wrapper that leverages jax.lax.scan to efficiently perform BP"
+
         def mpbp_update_step(msgs_arr, x):
             # Variable to Factor messages update
             updated_vtof_msgs = pass_var_to_fac_messages_jnp(
-                msgs_arr, evidence_arr, msg_vals_to_var_arr, edge_msg_sizes, max_edge_msg_size
+                msgs_arr,
+                evidence_arr,
+                msg_vals_to_var_arr,
+                edge_msg_sizes,
+                max_edge_msg_size,
             )
             # Factor to Variable messages update
             updated_ftov_msgs = pass_fac_to_var_messages_jnp(
@@ -77,7 +90,7 @@ def run_mp_belief_prop_and_compute_map(
                 factor_configs,
                 edge_msg_sizes,
                 max_edge_msg_size,
-                num_val_configs
+                num_val_configs,
             )
             # Damping before final message update
             msgs_arr = damp_and_update_messages(
@@ -132,6 +145,7 @@ def run_mp_belief_prop_and_compute_map(
     print(f"MAP conversion to dict took {map_conversion_end - map_conversion_start}")
 
     return var_map_estimate
+
 
 def compile_jax_data_structures(
     fg: node_classes.FactorGraph, evidence: Dict[node_classes.VariableNode, np.ndarray]
@@ -303,7 +317,6 @@ def compile_jax_data_structures(
     )
 
 
-
 @jax.partial(jax.jit, static_argnames="max_segment_length")
 def segment_max_opt(data, segments_lengths, max_segment_length):
     @jax.partial(jax.vmap, in_axes=(None, 0, 0), out_axes=0)
@@ -433,3 +446,27 @@ def pass_fac_to_var_messages_jnp(
     clipped_updated_msgs = jnp.clip(normalized_updated_msgs, -1000, None)
 
     return clipped_updated_msgs
+
+
+def convert_map_to_dict(
+    map_arr: jnp.ndarray,
+    var_to_indices_dict: Dict[node_classes.VariableNode, List[int]],
+) -> Dict[node_classes.VariableNode, int]:
+    """converts the array after MAP inference to a dict format expected by the viz code
+
+    Args:
+        map_arr: an array of the same shape as evidence_arr corresponding to the final
+            message values of each VariableNode
+        var_to_indices_dict: for a particular var_node key, var_to_indices_dict[var_node] will
+            yield the indices in evidence_arr that correspond to messages surrounding var_node
+    Returns:
+        a dict mapping each VariableNode and its MAP state
+    """
+    var_map_dict = {}
+
+    map_np_arr = np.array(map_arr)
+
+    for var_node in var_to_indices_dict.keys():
+        var_map_dict[var_node] = np.argmax(map_np_arr[var_to_indices_dict[var_node]])
+
+    return var_map_dict
