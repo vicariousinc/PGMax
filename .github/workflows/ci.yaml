@@ -71,7 +71,7 @@ jobs:
       - name: Test with pytest
         if: ${{ github.event_name == 'pull_request' }}
         run: |
-          pytest
+          poetry run pytest
 
   docs:
     runs-on: ubuntu-latest
