@@ -17,6 +17,8 @@ NEG_INF = (
 
 # NOTE: This file contains an implementation of max-product belief propagation that uses padding to handle
 # messages of different sizes.
+
+
 def run_mp_belief_prop_and_compute_map(
     fg: node_classes.FactorGraph,
     evidence: Dict[node_classes.VariableNode, np.ndarray],
@@ -343,7 +345,9 @@ def pass_var_to_fac_messages_jnp(
     updated_vtof_msgs = var_sums_arr[edges_to_var_arr] - msgs_arr[0]
 
     # Normalize and clip messages (between -1000 and 1000) before returning
-    normalized_updated_msgs = updated_vtof_msgs - updated_vtof_msgs.max(axis=1,keepdims=True)
+    normalized_updated_msgs = updated_vtof_msgs - updated_vtof_msgs.max(
+        axis=1, keepdims=True
+    )
     clipped_updated_msgs = jnp.clip(normalized_updated_msgs, -1000, 1000)
 
     return clipped_updated_msgs
@@ -415,7 +419,9 @@ def pass_fac_to_var_messages_jnp(
     )
 
     # Normalize and clip messages (between -1000 and 1000) before returning
-    normalized_updated_msgs = updated_ftov_msgs - updated_ftov_msgs.max(axis=1,keepdims=True)
+    normalized_updated_msgs = updated_ftov_msgs - updated_ftov_msgs.max(
+        axis=1, keepdims=True
+    )
     clipped_updated_msgs = jnp.clip(normalized_updated_msgs, -1000, 1000)
 
     return clipped_updated_msgs
