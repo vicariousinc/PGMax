@@ -1,7 +1,7 @@
 name: full-tests
 
 on:
-  push:
+  push
   pull_request:
     branches:
       - master
