@@ -9,6 +9,14 @@ from pgmax.fg.nodes import EnumerationWiring
 def concatenate_enumeration_wirings(
     wirings: Sequence[EnumerationWiring],
 ) -> EnumerationWiring:
+    """Concante a list of enumeration wirings from individual enumeration factors
+
+    Args:
+        wirings: A list of enumeration wirings, one for each individual enumeration factor
+
+    Returns:
+        Concatenated enumeration wiring
+    """
     num_factor_configs_cumsum = np.insert(
         np.array(
             [np.max(wiring.factor_configs_edge_states[:, 0]) + 1 for wiring in wirings]

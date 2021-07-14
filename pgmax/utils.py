@@ -6,6 +6,14 @@ import numpy as np
 
 
 def register_pytree_node_dataclass(cls: Any) -> Any:
+    """register_pytree_node_dataclass.
+
+    Args:
+
+    Returns:
+        Any:
+    """
+
     def _flatten(obj):
         jax.tree_flatten(dataclasses.asdict(obj))
 
@@ -17,6 +25,14 @@ def register_pytree_node_dataclass(cls: Any) -> Any:
 
 
 def concatenate_arrays(arrays: Sequence[np.ndarray]) -> np.ndarray:
+    """concatenate_arrays.
+
+    Args:
+        arrays (Sequence[np.ndarray]): arrays
+
+    Returns:
+        np.ndarray:
+    """
     lengths = np.array([array.shape[0] for array in arrays], dtype=int)
     lengths_cumsum = np.insert(lengths.cumsum(), 0, 0)
     starts, total_length = lengths_cumsum[:-1], lengths_cumsum[-1]

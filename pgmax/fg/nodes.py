@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Hashable, Sequence, Union
+from typing import Sequence, Union
 
 import jax.numpy as jnp
 import numpy as np
@@ -10,13 +10,29 @@ from pgmax import utils
 
 @dataclass(frozen=True)
 class Variable:
+    """Base class for variables.
+    Concrete variables can have additional associated meta information.
+    """
+
     num_states: int
-    meta: Hashable
 
 
 @utils.register_pytree_node_dataclass
 @dataclass(frozen=True)
 class EnumerationWiring:
+    """Wiring for enumeration factors.
+
+    Args:
+        edges_num_states: Array of shape (num_edges,)
+            Number of states for the variables connected to each edge
+        var_states_for_edges: Array of shape (num_edge_states,)
+            Global variable state indices for each edge state
+        factor_configs_edge_states: Array of shape (num_factor_configs, 2)
+            factor_configs_edge_states[ii] contains a pair of global factor_config and edge_state indices
+            factor_configs_edge_states[ii, 0] contains the global factor config index
+            factor_configs_edge_states[ii, 1] contains the corresponding global edge_state index
+    """
+
     edges_num_states: Union[np.ndarray, jnp.ndarray]
     var_states_for_edges: Union[np.ndarray, jnp.ndarray]
     factor_configs_edge_states: Union[np.ndarray, jnp.ndarray]
@@ -24,11 +40,12 @@ class EnumerationWiring:
 
 @dataclass
 class EnumerationFactor:
-    """EnumerationFactor.
+    """An enumeration factor
 
     Args:
         variables: List of involved variables
         configs: Array of shape (num_configs, num_variables)
+            An array containing explicit enumeration of all valid configurations
     """
 
     variables: Sequence[Variable]
@@ -55,6 +72,16 @@ class EnumerationFactor:
     def compile_wiring(
         self, vars_to_starts: MappingProxyType[Variable, int]
     ) -> EnumerationWiring:
+        """Compile enumeration wiring for the enumeration factor
+
+        Args:
+            vars_to_starts: A dictionary that maps variables to their global starting indices
+                For an n-state variable, a global start index of m means the global indices
+                of its n variable states are m, m + 1, ..., m + n - 1
+
+        Returns:
+            Enumeration wiring for the enumeration factor
+        """
         if not hasattr(self, "_edges_num_states"):
             self._edges_num_states = np.array(
                 [variable.num_states for variable in self.variables], dtype=int

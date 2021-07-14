@@ -5,11 +5,20 @@ from typing import Any, Sequence
 import jax.numpy as jnp
 import numpy as np
 
-from pgmax.fg import nodes
+from pgmax.fg import fg_utils, nodes
 
 
 @dataclass
 class FactorGraph:
+    """Base class for factor graph
+    Concrete factor graphs inherits from this class, and specifies get_evidence to generate
+    the evidence array, and optionally init_msgs (default to initializing all messages to 0)
+
+    Args:
+        variables: List of involved variables
+        factors: List of involved factors
+    """
+
     variables: Sequence[nodes.Variable]
     factors: Sequence[nodes.EnumerationFactor]
 
@@ -29,16 +38,36 @@ class FactorGraph:
         )
         self.num_var_states = vars_num_states_cumsum[-1]
 
-    def compile_wiring(self) -> nodes.EnumerationWiring:
+    def compile_wiring(self) -> None:
+        """Compile wiring for belief propagation inference using JAX"""
         wirings = [
             factor.compile_wiring(self._vars_to_starts) for factor in self.factors
         ]
-        return nodes.concatenate_enumeration_wirings(wirings)
+        self._wiring = fg_utils.concatenate_enumeration_wirings(wirings)
 
     def get_evidence(self, data: Any, context: Any) -> jnp.ndarray:
+        """Function to generate evidence array. Need to be overwritten for concrete factor graphs
+
+        Args:
+            data: Data for generating evidence
+            context: Optional context for generating evidence
+
+        Returns:
+            An evidence array of shape (num_var_states,)
+        """
         raise NotImplementedError("get_evidence function needs to be implemented")
 
-    def init_msgs(
-        self, wiring: nodes.EnumerationWiring, context: Any = None
-    ) -> jnp.ndarray:
-        return jnp.zeros(wiring.var_states_for_edges.shape[0])
+    def init_msgs(self, context: Any = None) -> jnp.ndarray:
+        """Initialize messages. By default it initializes all messages to 0.
+        Can be overwritten to support customized initialization schemes
+
+        Args:
+            context: Optional context for initializing messages
+
+        Returns:
+            Initialized messages
+        """
+        if not hasattr(self, "_wiring"):
+            self.compile_wiring()
+
+        return jnp.zeros(self._wiring.var_states_for_edges.shape[0])
