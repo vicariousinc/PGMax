@@ -6,12 +6,13 @@ import numpy as np
 
 
 def register_pytree_node_dataclass(cls: Any) -> Any:
-    """register_pytree_node_dataclass.
+    """Decrator to register a dataclass as a pytree
 
     Args:
+        cls: A dataclass to be registered as a pytree
 
     Returns:
-        Any:
+        The registered dataclass
     """
 
     def _flatten(obj):
@@ -25,13 +26,13 @@ def register_pytree_node_dataclass(cls: Any) -> Any:
 
 
 def concatenate_arrays(arrays: Sequence[np.ndarray]) -> np.ndarray:
-    """concatenate_arrays.
+    """Convenience function to concatenate a list of arrays along the 0th axis
 
     Args:
-        arrays (Sequence[np.ndarray]): arrays
+        arrays: A list of numpy arrays to be concatenated
 
     Returns:
-        np.ndarray:
+        The concatenated array
     """
     lengths = np.array([array.shape[0] for array in arrays], dtype=int)
     lengths_cumsum = np.insert(lengths.cumsum(), 0, 0)
