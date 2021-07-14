@@ -14,24 +14,24 @@
 
 # %%
 # %matplotlib inline
-
+# fmt: off
 import os
 
-# Standard Package Imports
-import matplotlib.pyplot as plt
-import numpy as np
-import jax
-import jax.numpy as jnp
-from numpy.random import default_rng
-from scipy import sparse
-from scipy.ndimage import gaussian_filter
-from typing import Any, Dict
-from timeit import default_timer as timer
-
+import pgmax.fg.graph as graph
 # Custom Imports
 import pgmax.fg.nodes as nodes
-import pgmax.fg.graph as graph
 
+# Standard Package Imports
+import matplotlib.pyplot as plt  # isort:skip
+import numpy as np  # isort:skip
+import jax  # isort:skip
+import jax.numpy as jnp  # isort:skip
+from numpy.random import default_rng  # isort:skip
+from scipy import sparse  # isort:skip
+from scipy.ndimage import gaussian_filter  # isort:skip
+from typing import Any, Dict  # isort:skip
+from timeit import default_timer as timer  # isort:skip
+# fmt: on
 
 # %% [markdown]
 # ## Setting up Image and Factor Graph
@@ -103,7 +103,7 @@ def create_valid_suppression_config_arr(suppression_diameter):
         valid_suppressions_list.append(new_valid_list2)
     ret_arr = np.array(valid_suppressions_list)
     ret_arr.flags.writeable = False
-    return ret_arr 
+    return ret_arr
 
 
 # %% tags=[]
@@ -157,7 +157,7 @@ valid_configs_supp = create_valid_suppression_config_arr(SUPPRESSION_DIAMETER)
 # Start by creating all the necessary variables
 vars_list = []
 vars_dict = {}
-factors_neighbors_dict = {}  #type: ignore
+factors_neighbors_dict = {}  # type: ignore
 NUM_VAR_STATES = 3
 # Now that we have factors in place, we can create variables and assign neighbor relations
 # NOTE: The naming scheme for variables is not thorough. For instance, V1,1,down should be the same node as
@@ -234,7 +234,9 @@ while row < M - 1:
         vars_dict[f"V{row},{col}," + up_or_down] for col in range(SUPPRESSION_DIAMETER)
     ]
     for stride in range(N - SUPPRESSION_DIAMETER):
-        curr_vert_supp_factor = nodes.EnumerationFactor(vertical_vars_list, valid_configs_supp)
+        curr_vert_supp_factor = nodes.EnumerationFactor(
+            vertical_vars_list, valid_configs_supp
+        )
         facs_list.append(curr_vert_supp_factor)
         # IMPORTANT: This below line is necessary because otherwise, the underlying list will get modified
         # and cause the Factor's neighbors to change!
@@ -243,7 +245,7 @@ while row < M - 1:
         # Unless we're on the last column, where we can't slide to the right, remove the first element and
         # add another one to effectively slide the suppression to the right
         if stride < N - SUPPRESSION_DIAMETER - 1:
-            _ = vertical_vars_list.pop(0)
+            _ = vertical_vars_list.pop(0)  # type:ignore
             vertical_vars_list.append(
                 vars_dict[f"V{row},{stride + SUPPRESSION_DIAMETER}," + up_or_down]
             )
@@ -264,7 +266,9 @@ while col < N - 1:
     ]
 
     for stride in range(M - SUPPRESSION_DIAMETER):
-        curr_horz_supp_factor = nodes.EnumerationFactor(horizontal_vars_list, valid_configs_supp)
+        curr_horz_supp_factor = nodes.EnumerationFactor(
+            horizontal_vars_list, valid_configs_supp
+        )
         facs_list.append(curr_horz_supp_factor)
         # IMPORTANT: This below line is necessary because otherwise, the underlying list will get modified
         # and cause the Factor's neighbors to change!
@@ -273,7 +277,7 @@ while col < N - 1:
         # Unless we're on the last column, where we can't slide down, remove the first element and
         # add another one to effectively slide the suppression down
         if stride < M - 1 - SUPPRESSION_DIAMETER:
-            _ = horizontal_vars_list.pop(0)
+            _ = horizontal_vars_list.pop(0)  # type:ignore
             horizontal_vars_list.append(
                 vars_dict[f"V{stride + SUPPRESSION_DIAMETER},{col}," + left_or_right]
             )
@@ -288,7 +292,9 @@ while col < N - 1:
 # %%
 # Override and define a concrete FactorGraph Class with the get_evidence function implemented
 class GridFactorGraph(graph.FactorGraph):
-    def get_evidence(self, data: Dict[nodes.Variable, np.array], context: Any = None) -> jnp.ndarray:
+    def get_evidence(
+        self, data: Dict[nodes.Variable, np.array], context: Any = None
+    ) -> jnp.ndarray:
         """Function to generate evidence array. Need to be overwritten for concrete factor graphs
 
         Args:
@@ -301,9 +307,8 @@ class GridFactorGraph(graph.FactorGraph):
         evidence = np.zeros(self.num_var_states)
         for var in self.variables:
             start_index = self._vars_to_starts[var]
-            evidence[start_index:start_index + var.num_states] = data[var]
+            evidence[start_index : start_index + var.num_states] = data[var]
         return jax.device_put(evidence)
-
 
 
 # %% tags=[]
@@ -364,157 +369,154 @@ print(f"Data Compilation time = {data_comp_end_time - data_comp_start_time}")
 # ## Belief Propagation
 
 # %% tags=[]
-# Make sure these environment variables are set correctly to get an accurate picture of memory usage
-os.environ["XLA_PYTHON_ALLOCATOR"] = "platform"
-os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+# # Make sure these environment variables are set correctly to get an accurate picture of memory usage
+# os.environ["XLA_PYTHON_ALLOCATOR"] = "platform"
+# os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 
-print(os.getenv("XLA_PYTHON_ALLOCATOR", "default").lower())
-print(os.getenv("XLA_PYTHON_CLIENT_PREALLOCATE"))
-# Run MAP inference to get the MAP estimate of each variable
-map_message_dict = optimize_mpbp_unpadded.run_mp_belief_prop_and_compute_map(
-    fg, var_evidence_dict, 1000, 0.5
-)
+# print(os.getenv("XLA_PYTHON_ALLOCATOR", "default").lower())
+# print(os.getenv("XLA_PYTHON_CLIENT_PREALLOCATE"))
+# # Run MAP inference to get the MAP estimate of each variable
+# map_message_dict = optimize_mpbp_unpadded.run_mp_belief_prop_and_compute_map(
+#     fg, var_evidence_dict, 1000, 0.5
+# )
 
 
 # %% [markdown]
 # ## Visualization of Results
 
 # %% tags=[]
-# Place the variable values derived from BP onto an image-sized array so they can be visualized. Do the same for bottom-up evidences that are just GT + logistic noise
-bp_values = np.zeros((2, M, N))
-bu_evidence = np.zeros((2, M, N, 3))
-for i in range(2):
-    for row in range(M):
-        for col in range(N):
-            if var_img_arr[i, row, col] is not None:
-                bp_values[i, row, col] = map_message_dict[var_img_arr[i, row, col]]
-                bu_evidence[i, row, col, :] = var_evidence_dict[
-                    var_img_arr[i, row, col]
-                ]
-
-
-# %%
-# Helpful function for viz
-def get_color_mask(image, nc=None):
-    image = image.astype(int)
-    n_colors = image.max() + 1
-
-    cm = plt.get_cmap("gist_rainbow")
-    colors = [cm(1.0 * i / n_colors) for i in np.random.permutation(n_colors)]
-
-    color_mask = np.zeros(image.shape + (3,)).astype(np.uint8)
-    for i in np.unique(image):
-        color_mask[image == i, :] = np.array(colors[i][:3]) * 255
-    return color_mask
-
+# # Place the variable values derived from BP onto an image-sized array so they can be visualized. Do the same for bottom-up evidences that are just GT + logistic noise
+# bp_values = np.zeros((2, M, N))
+# bu_evidence = np.zeros((2, M, N, 3))
+# for i in range(2):
+#     for row in range(M):
+#         for col in range(N):
+#             if var_img_arr[i, row, col] is not None:
+#                 bp_values[i, row, col] = map_message_dict[var_img_arr[i, row, col]]
+#                 bu_evidence[i, row, col, :] = var_evidence_dict[
+#                     var_img_arr[i, row, col]
+#                 ]
 
 # %%
-def get_surface_labels_from_cuts(has_cuts):
-    """get_surface_labels_from_cuts
+# # Helpful function for viz
+# def get_color_mask(image, nc=None):
+#     image = image.astype(int)
+#     n_colors = image.max() + 1
 
-    Parameters
-    ----------
-    has_cuts : np.array
-        Array of shape (2, M, N)
-    Returns
-    -------
-    surface_labels : np.array
-        Array of shape (M, N)
-        Surface labels of each pixel
-    """
-    M, N = has_cuts.shape[1:]
-    # Indices for 4-connected grid
-    nodes_indices0 = (np.arange(1, M) - 1)[:, None] * N + np.arange(N)
-    nodes_indices1 = (np.arange(M - 1) + 1)[:, None] * N + np.arange(N)
-    nodes_indices2 = np.arange(M)[:, None] * N + np.arange(1, N) - 1
-    nodes_indices3 = np.arange(M)[:, None] * N + np.arange(N - 1) + 1
-    row_indices_for_grid = np.concatenate(
-        [nodes_indices0.ravel(), nodes_indices2.ravel()]
-    )
-    col_indices_for_grid = np.concatenate(
-        [nodes_indices1.ravel(), nodes_indices3.ravel()]
-    )
-    # Indices for cuts
-    horizontal_row_indices_for_cuts, horizontal_col_indices_for_cuts = np.nonzero(
-        has_cuts[0, :-1]
-    )
-    vertical_row_indices_for_cuts, vertical_col_indices_for_cuts = np.nonzero(
-        has_cuts[1, :, :-1]
-    )
-    row_indices_for_cuts = np.concatenate(
-        [
-            horizontal_row_indices_for_cuts * N + horizontal_col_indices_for_cuts,
-            vertical_row_indices_for_cuts * N + vertical_col_indices_for_cuts,
-        ]
-    )
-    col_indices_for_cuts = np.concatenate(
-        [
-            (horizontal_row_indices_for_cuts + 1) * N + horizontal_col_indices_for_cuts,
-            vertical_row_indices_for_cuts * N + (vertical_col_indices_for_cuts + 1),
-        ]
-    )
-    csgraph = sparse.lil_matrix((M * N, M * N), dtype=np.int32)
-    csgraph[row_indices_for_grid, col_indices_for_grid] = 1
-    csgraph[col_indices_for_grid, row_indices_for_grid] = 1
-    csgraph[row_indices_for_cuts, col_indices_for_cuts] = 0
-    csgraph[col_indices_for_cuts, row_indices_for_cuts] = 0
-    n_connected_components, surface_labels = sparse.csgraph.connected_components(
-        csgraph.tocsr(), directed=False, return_labels=True
-    )
-    surface_labels = np.random.permutation(n_connected_components)[
-        surface_labels.reshape((M, N))
-    ]
-    return surface_labels
+#     cm = plt.get_cmap("gist_rainbow")
+#     colors = [cm(1.0 * i / n_colors) for i in np.random.permutation(n_colors)]
 
+#     color_mask = np.zeros(image.shape + (3,)).astype(np.uint8)
+#     for i in np.unique(image):
+#         color_mask[image == i, :] = np.array(colors[i][:3]) * 255
+#     return color_mask
 
 # %%
-# Ground truth cuts
-gt_cuts_img = np.zeros((2 * M, 2 * N))
-gt_cuts_img[
-    np.arange(1, 2 * M, 2).reshape((-1, 1)), np.arange(0, 2 * N, 2).reshape((1, -1))
-] = gt_has_cuts[0]
-gt_cuts_img[
-    np.arange(0, 2 * M, 2).reshape((-1, 1)), np.arange(1, 2 * N, 2).reshape((1, -1))
-] = gt_has_cuts[1]
+# def get_surface_labels_from_cuts(has_cuts):
+#     """get_surface_labels_from_cuts
 
-# Bottom-up evidences for cuts
-bu_has_cuts = np.argmax(bu_evidence, axis=-1)
-bu_cuts_img = np.zeros((2 * M, 2 * N))
-bu_cuts_img[
-    np.arange(1, (2 * M), 2).reshape((-1, 1)), np.arange(0, (2 * N), 2).reshape((1, -1))
-] = bu_has_cuts[0]
-bu_cuts_img[
-    np.arange(0, (2 * M), 2).reshape((-1, 1)), np.arange(1, (2 * N), 2).reshape((1, -1))
-] = bu_has_cuts[1]
+#     Parameters
+#     ----------
+#     has_cuts : np.array
+#         Array of shape (2, M, N)
+#     Returns
+#     -------
+#     surface_labels : np.array
+#         Array of shape (M, N)
+#         Surface labels of each pixel
+#     """
+#     M, N = has_cuts.shape[1:]
+#     # Indices for 4-connected grid
+#     nodes_indices0 = (np.arange(1, M) - 1)[:, None] * N + np.arange(N)
+#     nodes_indices1 = (np.arange(M - 1) + 1)[:, None] * N + np.arange(N)
+#     nodes_indices2 = np.arange(M)[:, None] * N + np.arange(1, N) - 1
+#     nodes_indices3 = np.arange(M)[:, None] * N + np.arange(N - 1) + 1
+#     row_indices_for_grid = np.concatenate(
+#         [nodes_indices0.ravel(), nodes_indices2.ravel()]
+#     )
+#     col_indices_for_grid = np.concatenate(
+#         [nodes_indices1.ravel(), nodes_indices3.ravel()]
+#     )
+#     # Indices for cuts
+#     horizontal_row_indices_for_cuts, horizontal_col_indices_for_cuts = np.nonzero(
+#         has_cuts[0, :-1]
+#     )
+#     vertical_row_indices_for_cuts, vertical_col_indices_for_cuts = np.nonzero(
+#         has_cuts[1, :, :-1]
+#     )
+#     row_indices_for_cuts = np.concatenate(
+#         [
+#             horizontal_row_indices_for_cuts * N + horizontal_col_indices_for_cuts,
+#             vertical_row_indices_for_cuts * N + vertical_col_indices_for_cuts,
+#         ]
+#     )
+#     col_indices_for_cuts = np.concatenate(
+#         [
+#             (horizontal_row_indices_for_cuts + 1) * N + horizontal_col_indices_for_cuts,
+#             vertical_row_indices_for_cuts * N + (vertical_col_indices_for_cuts + 1),
+#         ]
+#     )
+#     csgraph = sparse.lil_matrix((M * N, M * N), dtype=np.int32)
+#     csgraph[row_indices_for_grid, col_indices_for_grid] = 1
+#     csgraph[col_indices_for_grid, row_indices_for_grid] = 1
+#     csgraph[row_indices_for_cuts, col_indices_for_cuts] = 0
+#     csgraph[col_indices_for_cuts, row_indices_for_cuts] = 0
+#     n_connected_components, surface_labels = sparse.csgraph.connected_components(
+#         csgraph.tocsr(), directed=False, return_labels=True
+#     )
+#     surface_labels = np.random.permutation(n_connected_components)[
+#         surface_labels.reshape((M, N))
+#     ]
+#     return surface_labels
 
-# Predicted cuts
-cuts_img = np.zeros((2 * M, 2 * N))
-cuts_img[
-    np.arange(1, 2 * M, 2).reshape((-1, 1)), np.arange(0, 2 * N, 2).reshape((1, -1))
-] = bp_values[0]
-cuts_img[
-    np.arange(0, 2 * M, 2).reshape((-1, 1)), np.arange(1, 2 * N, 2).reshape((1, -1))
-] = bp_values[1]
+# %%
+# # Ground truth cuts
+# gt_cuts_img = np.zeros((2 * M, 2 * N))
+# gt_cuts_img[
+#     np.arange(1, 2 * M, 2).reshape((-1, 1)), np.arange(0, 2 * N, 2).reshape((1, -1))
+# ] = gt_has_cuts[0]
+# gt_cuts_img[
+#     np.arange(0, 2 * M, 2).reshape((-1, 1)), np.arange(1, 2 * N, 2).reshape((1, -1))
+# ] = gt_has_cuts[1]
 
-# Plot ground-truth cuts
-fig, ax = plt.subplots(2, 3, figsize=(30, 20))
-ax[0, 0].imshow(gt_cuts_img)
-ax[0, 0].set_title("Ground truth", fontsize=40)
-ax[0, 0].axis("off")
-ax[1, 0].imshow(get_color_mask(labels_img))
-ax[1, 0].axis("off")
+# # Bottom-up evidences for cuts
+# bu_has_cuts = np.argmax(bu_evidence, axis=-1)
+# bu_cuts_img = np.zeros((2 * M, 2 * N))
+# bu_cuts_img[
+#     np.arange(1, (2 * M), 2).reshape((-1, 1)), np.arange(0, (2 * N), 2).reshape((1, -1))
+# ] = bu_has_cuts[0]
+# bu_cuts_img[
+#     np.arange(0, (2 * M), 2).reshape((-1, 1)), np.arange(1, (2 * N), 2).reshape((1, -1))
+# ] = bu_has_cuts[1]
 
-# Plot bottom-up evidences for cuts
-ax[0, 1].imshow(bu_cuts_img)
-ax[0, 1].axis("off")
-ax[0, 1].set_title("Using bottom-up evidences", fontsize=40)
-ax[1, 1].imshow(get_color_mask(get_surface_labels_from_cuts(bu_has_cuts > 0)))
-ax[1, 1].axis("off")
+# # Predicted cuts
+# cuts_img = np.zeros((2 * M, 2 * N))
+# cuts_img[
+#     np.arange(1, 2 * M, 2).reshape((-1, 1)), np.arange(0, 2 * N, 2).reshape((1, -1))
+# ] = bp_values[0]
+# cuts_img[
+#     np.arange(0, 2 * M, 2).reshape((-1, 1)), np.arange(1, 2 * N, 2).reshape((1, -1))
+# ] = bp_values[1]
 
-# Plot predicted cuts
-ax[0, 2].imshow(cuts_img)
-ax[0, 2].axis("off")
-ax[0, 2].set_title("Using surface model", fontsize=40)
-ax[1, 2].imshow(get_color_mask(get_surface_labels_from_cuts(bp_values > 0)))
-ax[1, 2].axis("off")
-fig.tight_layout()
+# # Plot ground-truth cuts
+# fig, ax = plt.subplots(2, 3, figsize=(30, 20))
+# ax[0, 0].imshow(gt_cuts_img)
+# ax[0, 0].set_title("Ground truth", fontsize=40)
+# ax[0, 0].axis("off")
+# ax[1, 0].imshow(get_color_mask(labels_img))
+# ax[1, 0].axis("off")
+
+# # Plot bottom-up evidences for cuts
+# ax[0, 1].imshow(bu_cuts_img)
+# ax[0, 1].axis("off")
+# ax[0, 1].set_title("Using bottom-up evidences", fontsize=40)
+# ax[1, 1].imshow(get_color_mask(get_surface_labels_from_cuts(bu_has_cuts > 0)))
+# ax[1, 1].axis("off")
+
+# # Plot predicted cuts
+# ax[0, 2].imshow(cuts_img)
+# ax[0, 2].axis("off")
+# ax[0, 2].set_title("Using surface model", fontsize=40)
+# ax[1, 2].imshow(get_color_mask(get_surface_labels_from_cuts(bp_values > 0)))
+# ax[1, 2].axis("off")
+# fig.tight_layout()
