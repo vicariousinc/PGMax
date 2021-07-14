@@ -1,6 +1,5 @@
 from dataclasses import dataclass
-from types import MappingProxyType
-from typing import Sequence, Union
+from typing import Mapping, Sequence, Union
 
 import jax.numpy as jnp
 import numpy as np
@@ -66,11 +65,11 @@ class EnumerationFactor:
             )
 
         vars_num_states = np.array([variable.num_states for variable in self.variables])
-        if not np.logical_and(self.configs >= 0, self.configs < vars_num_states[None]):
+        if not np.logical_and(self.configs >= 0, self.configs < vars_num_states[None]).any():
             raise ValueError("Invalid configurations for given variables")
 
     def compile_wiring(
-        self, vars_to_starts: MappingProxyType[Variable, int]
+        self, vars_to_starts: Mapping[Variable, int]
     ) -> EnumerationWiring:
         """Compile enumeration wiring for the enumeration factor
 
@@ -100,7 +99,7 @@ class EnumerationFactor:
             self._factor_configs_edge_states = np.stack(
                 [
                     np.repeat(np.arange(configs.shape[0]), configs.shape[1]),
-                    configs + edges_starts[None],
+                    (configs + edges_starts[None]).flatten(),
                 ],
                 axis=1,
             )

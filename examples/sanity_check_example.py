@@ -20,13 +20,18 @@ import os
 # Standard Package Imports
 import matplotlib.pyplot as plt
 import numpy as np
+import jax
+import jax.numpy as jnp
 from numpy.random import default_rng
 from scipy import sparse
 from scipy.ndimage import gaussian_filter
+from typing import Any, Dict
+from timeit import default_timer as timer
 
 # Custom Imports
-import pgmax.contrib.interface.node_classes_with_factortypes as node_classes
-import pgmax.contrib.mpbp.optimize_mpbp_unpadded as optimize_mpbp_unpadded
+import pgmax.fg.nodes as nodes
+import pgmax.fg.graph as graph
+
 
 # %% [markdown]
 # ## Setting up Image and Factor Graph
@@ -96,7 +101,9 @@ def create_valid_suppression_config_arr(suppression_diameter):
         new_valid_list2[idx] = 2
         valid_suppressions_list.append(new_valid_list1)
         valid_suppressions_list.append(new_valid_list2)
-    return np.array(valid_suppressions_list)
+    ret_arr = np.array(valid_suppressions_list)
+    ret_arr.flags.writeable = False
+    return ret_arr 
 
 
 # %% tags=[]
@@ -142,23 +149,15 @@ valid_configs_non_supp = np.array(
         [1, 2, 1, 0],
     ]
 )
-gf = node_classes.FactorType("Grid_Factor", valid_configs_non_supp)
+valid_configs_non_supp.flags.writeable = False
 # Now, we specify the valid configurations for all the suppression factors
 SUPPRESSION_DIAMETER = 9
 valid_configs_supp = create_valid_suppression_config_arr(SUPPRESSION_DIAMETER)
-sf = node_classes.FactorType("Suppression_Factor", valid_configs_supp)
 
-factors_dict = {}
-# The Grid Factors for the laterals model will form a (M-1) x (N-1) grid
-for row in range(M - 1):
-    for col in range(N - 1):
-        factor_name = f"F{row},{col}"
-        curr_factor = node_classes.FactorNode(factor_name, gf)
-        factors_dict[factor_name] = curr_factor
-
+# Start by creating all the necessary variables
 vars_list = []
 vars_dict = {}
-factors_neighbors_dict = {}  # type: ignore
+factors_neighbors_dict = {}  #type: ignore
 NUM_VAR_STATES = 3
 # Now that we have factors in place, we can create variables and assign neighbor relations
 # NOTE: The naming scheme for variables is not thorough. For instance, V1,1,down should be the same node as
@@ -167,8 +166,7 @@ for row in range(M - 1):
     for col in range(N - 1):
         if col == 0:
             left_var_name = f"V{row},{col},left"
-            left_var = node_classes.VariableNode(left_var_name, NUM_VAR_STATES)
-            left_var.add_neighbor(factors_dict[f"F{row},{col}"])
+            left_var = nodes.Variable(NUM_VAR_STATES)
             factors_neighbors_dict[f"F{row},{col}"] = factors_neighbors_dict.get(
                 f"F{row},{col}", []
             ) + [left_var]
@@ -177,8 +175,7 @@ for row in range(M - 1):
 
         if row == 0:
             up_var_name = f"V{row},{col},up"
-            up_var = node_classes.VariableNode(up_var_name, NUM_VAR_STATES)
-            up_var.add_neighbor(factors_dict[f"F{row},{col}"])
+            up_var = nodes.Variable(NUM_VAR_STATES)
             factors_neighbors_dict[f"F{row},{col}"] = factors_neighbors_dict.get(
                 f"F{row},{col}", []
             ) + [up_var]
@@ -186,14 +183,12 @@ for row in range(M - 1):
             vars_dict[up_var_name] = up_var
 
         right_var_name = f"V{row},{col},right"
-        right_var = node_classes.VariableNode(right_var_name, NUM_VAR_STATES)
-        right_var.add_neighbor(factors_dict[f"F{row},{col}"])
+        right_var = nodes.Variable(NUM_VAR_STATES)
         factors_neighbors_dict[f"F{row},{col}"] = factors_neighbors_dict.get(
             f"F{row},{col}", []
         ) + [right_var]
         # If the right_var is not at the last column, it will also have another factor neighbor
         if col != N - 2:
-            right_var.add_neighbor(factors_dict[f"F{row},{col+1}"])
             factors_neighbors_dict[f"F{row},{col+1}"] = factors_neighbors_dict.get(
                 f"F{row},{col+1}", []
             ) + [right_var]
@@ -201,14 +196,12 @@ for row in range(M - 1):
         vars_dict[right_var_name] = right_var
 
         down_var_name = f"V{row},{col},down"
-        down_var = node_classes.VariableNode(down_var_name, NUM_VAR_STATES)
-        down_var.add_neighbor(factors_dict[f"F{row},{col}"])
+        down_var = nodes.Variable(NUM_VAR_STATES)
         factors_neighbors_dict[f"F{row},{col}"] = factors_neighbors_dict.get(
             f"F{row},{col}", []
         ) + [down_var]
         # If the down_var is not at the last row, it will also have another factor neighbor
         if row != M - 2:
-            down_var.add_neighbor(factors_dict[f"F{row+1},{col}"])
             factors_neighbors_dict[f"F{row+1},{col}"] = factors_neighbors_dict.get(
                 f"F{row+1},{col}", []
             ) + [down_var]
@@ -224,26 +217,25 @@ for row in range(M - 1):
             neighbors_list[1] = zero_index_neighbor
             factors_neighbors_dict[f"F{row},{col}"] = neighbors_list
 
+# Now that we have created all the variables correctly, we can create all the grid EnumerationFactors correctly
+facs_list = []
+for _, var_neighbs in factors_neighbors_dict.items():
+    grid_fac = nodes.EnumerationFactor(var_neighbs, valid_configs_non_supp)
+    facs_list.append(grid_fac)
+
 # Now that we have all the variables and know their connections with the existing factors are correct, we can define the suppression factors
 # as well as their connections
-suppression_factors_list = []
-# Add factors for all the vertical variables
+
+# Start by adding factors for all the vertical variables
 row = 0
 up_or_down = "up"
 while row < M - 1:
     vertical_vars_list = [
         vars_dict[f"V{row},{col}," + up_or_down] for col in range(SUPPRESSION_DIAMETER)
     ]
-
     for stride in range(N - SUPPRESSION_DIAMETER):
-        if row == 0 and up_or_down == "up":
-            curr_vert_supp_factor = node_classes.FactorNode(f"FSV0,{stride}", sf)
-        else:
-            curr_vert_supp_factor = node_classes.FactorNode(f"FSV{row+1},{stride}", sf)
-        for vert_var in vertical_vars_list:
-            vert_var.add_neighbor(curr_vert_supp_factor)
-        curr_vert_supp_factor.set_neighbors(vertical_vars_list)
-        suppression_factors_list.append(curr_vert_supp_factor)
+        curr_vert_supp_factor = nodes.EnumerationFactor(vertical_vars_list, valid_configs_supp)
+        facs_list.append(curr_vert_supp_factor)
         # IMPORTANT: This below line is necessary because otherwise, the underlying list will get modified
         # and cause the Factor's neighbors to change!
         vertical_vars_list = vertical_vars_list[:]
@@ -272,14 +264,8 @@ while col < N - 1:
     ]
 
     for stride in range(M - SUPPRESSION_DIAMETER):
-        if col == 0 and left_or_right == "left":
-            curr_horz_supp_factor = node_classes.FactorNode(f"FSH0,{stride}", sf)
-        else:
-            curr_horz_supp_factor = node_classes.FactorNode(f"FSH{col+1},{stride}", sf)
-        for horz_var in horizontal_vars_list:
-            horz_var.add_neighbor(curr_horz_supp_factor)
-        curr_horz_supp_factor.set_neighbors(horizontal_vars_list)
-        suppression_factors_list.append(curr_horz_supp_factor)
+        curr_horz_supp_factor = nodes.EnumerationFactor(horizontal_vars_list, valid_configs_supp)
+        facs_list.append(curr_horz_supp_factor)
         # IMPORTANT: This below line is necessary because otherwise, the underlying list will get modified
         # and cause the Factor's neighbors to change!
         horizontal_vars_list = horizontal_vars_list[:]
@@ -299,15 +285,26 @@ while col < N - 1:
         col += 1
 
 
-# We can now create a list of factors with the correct neighbors
-factors_list = suppression_factors_list
-for fac_name in factors_dict.keys():
-    curr_fac = factors_dict[fac_name]
-    curr_fac.set_neighbors(factors_neighbors_dict[fac_name])
-    factors_list.append(curr_fac)
+# %%
+# Override and define a concrete FactorGraph Class with the get_evidence function implemented
+class GridFactorGraph(graph.FactorGraph):
+    def get_evidence(self, data: Dict[nodes.Variable, np.array], context: Any = None) -> jnp.ndarray:
+        """Function to generate evidence array. Need to be overwritten for concrete factor graphs
 
-# Now that we have all the necessary nodes and edges, instantiate the node_classes.FactorGraph:
-fg = node_classes.FactorGraph("cuts_fg", factors_list, vars_list, [gf, sf])
+        Args:
+            data: Data for generating evidence
+            context: Optional context for generating evidence
+
+        Returns:
+            An evidence array of shape (num_var_states,)
+        """
+        evidence = np.zeros(self.num_var_states)
+        for var in self.variables:
+            start_index = self._vars_to_starts[var]
+            evidence[start_index:start_index + var.num_states] = data[var]
+        return jax.device_put(evidence)
+
+
 
 # %% tags=[]
 gt_has_cuts = gt_has_cuts.astype(np.int32)
@@ -331,7 +328,7 @@ var_evidence_dict = {}
 for i in range(2):
     for row in range(M):
         for col in range(N):
-            # The dictionary key is in var_img_arr at loc [i,row,call] (the VariableNode is stored here!)
+            # The dictionary key is in var_img_arr at loc [i,row,call] (the Variable is stored here!)
             evidence_arr = np.zeros(
                 3
             )  # Note that we know num states for each variable is 3, so we can do this
@@ -346,6 +343,22 @@ for i in range(2):
             )  # This adds logistic noise for every evidence entry
             if var_img_arr[i, row, col] is not None:
                 var_evidence_dict[var_img_arr[i, row, col]] = evidence_arr
+
+# %%
+fg_creation_start_time = timer()
+fg = GridFactorGraph(vars_list, facs_list)
+fg_creation_end_time = timer()
+print(f"fg Creation time = {fg_creation_end_time - fg_creation_start_time}")
+
+evidence_start_time = timer()
+fg_evidence = fg.get_evidence(var_evidence_dict)
+evidence_end_time = timer()
+print(f"fg Creation time = {evidence_end_time - evidence_start_time}")
+
+data_comp_start_time = timer()
+init_msgs = fg.init_msgs()
+data_comp_end_time = timer()
+print(f"Data Compilation time = {data_comp_end_time - data_comp_start_time}")
 
 # %% [markdown]
 # ## Belief Propagation
