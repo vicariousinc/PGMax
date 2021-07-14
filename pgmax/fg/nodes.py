@@ -5,7 +5,7 @@ from typing import Hashable, Sequence, Union
 import jax.numpy as jnp
 import numpy as np
 
-from pgmax.utils import register_pytree_node_dataclass
+from pgmax import utils
 
 
 @dataclass(frozen=True)
@@ -14,7 +14,7 @@ class Variable:
     meta: Hashable
 
 
-@register_pytree_node_dataclass
+@utils.register_pytree_node_dataclass
 @dataclass(frozen=True)
 class EnumerationWiring:
     edges_num_states: Union[np.ndarray, jnp.ndarray]
@@ -60,7 +60,7 @@ class EnumerationFactor:
                 [variable.num_states for variable in self.variables], dtype=int
             )
 
-        var_states_for_edges = np.concatenate(
+        var_states_for_edges = utils.concatenate_arrays(
             [
                 np.arange(variable.num_states) + vars_to_starts[variable]
                 for variable in self.variables
@@ -83,40 +83,3 @@ class EnumerationFactor:
             var_states_for_edges=var_states_for_edges,
             factor_configs_edge_states=self._factor_configs_edge_states,
         )
-
-
-def concatenate_enumeration_wirings(
-    wirings: Sequence[EnumerationWiring],
-) -> EnumerationWiring:
-    num_factor_configs_cumsum = np.insert(
-        np.array(
-            [np.max(wiring.factor_configs_edge_states[:, 0]) + 1 for wiring in wirings]
-        ).cumsum(),
-        0,
-        0,
-    )[:-1]
-    num_edge_states_cumsum = np.insert(
-        np.array(
-            [wiring.factor_configs_edge_states.shape[0] + 1 for wiring in wirings]
-        ).cumsum(),
-        0,
-        0,
-    )[:-1]
-    factor_configs_edge_states = []
-    for ww, wiring in enumerate(wirings):
-        factor_configs_edge_states.append(
-            wiring.factor_configs_edge_states
-            + np.array(
-                [[num_factor_configs_cumsum[ww], num_edge_states_cumsum[ww]]], dtype=int
-            )
-        )
-
-    return EnumerationWiring(
-        edges_num_states=np.concatenate(
-            [wiring.edges_num_states for wiring in wirings]
-        ),
-        var_states_for_edges=np.concatenate(
-            [wiring.var_states_for_edges for wiring in wirings]
-        ),
-        factor_configs_edge_states=np.concatenate(factor_configs_edge_states, axis=0),
-    )
