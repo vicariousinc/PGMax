@@ -9,7 +9,7 @@ from pgmax.fg.nodes import EnumerationWiring
 def concatenate_enumeration_wirings(
     wirings: Sequence[EnumerationWiring],
 ) -> EnumerationWiring:
-    """Concante a list of enumeration wirings from individual enumeration factors
+    """Concatenate a list of enumeration wirings from individual enumeration factors
 
     Args:
         wirings: A list of enumeration wirings, one for each individual enumeration factor

@@ -6,7 +6,7 @@ import numpy as np
 
 
 def register_pytree_node_dataclass(cls: Any) -> Any:
-    """Decrator to register a dataclass as a pytree
+    """Decorator to register a dataclass as a pytree
 
     Args:
         cls: A dataclass to be registered as a pytree
