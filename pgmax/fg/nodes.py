@@ -65,7 +65,9 @@ class EnumerationFactor:
             )
 
         vars_num_states = np.array([variable.num_states for variable in self.variables])
-        if not np.logical_and(self.configs >= 0, self.configs < vars_num_states[None]).any():
+        if not np.logical_and(
+            self.configs >= 0, self.configs < vars_num_states[None]
+        ).any():
             raise ValueError("Invalid configurations for given variables")
 
     def compile_wiring(
