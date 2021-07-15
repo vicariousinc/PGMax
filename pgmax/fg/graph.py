@@ -42,6 +42,12 @@ class FactorGraph:
         ]
         self._wiring = fg_utils.concatenate_enumeration_wirings(wirings)
 
+    def get_wiring(self) -> nodes.EnumerationWiring:
+        """Compile (if not already done) and return wiring for belief propagation inference using JAX"""
+        if not hasattr(self, "_wiring"):
+            self.compile_wiring()
+        return self._wiring
+
     def get_evidence(self, data: Any, context: Any) -> jnp.ndarray:
         """Function to generate evidence array. Need to be overwritten for concrete factor graphs
 

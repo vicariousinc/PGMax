@@ -17,8 +17,9 @@
 # fmt: off
 import os
 
-import pgmax.fg.graph as graph
+import pgmax.bp.infer as bp_infer
 # Custom Imports
+import pgmax.fg.graph as graph
 import pgmax.fg.nodes as nodes
 
 # Standard Package Imports
@@ -369,16 +370,29 @@ print(f"Data Compilation time = {data_comp_end_time - data_comp_start_time}")
 # ## Belief Propagation
 
 # %% tags=[]
-# # Make sure these environment variables are set correctly to get an accurate picture of memory usage
-# os.environ["XLA_PYTHON_ALLOCATOR"] = "platform"
-# os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+# Make sure these environment variables are set correctly to get an accurate picture of memory usage
+os.environ["XLA_PYTHON_ALLOCATOR"] = "platform"
+os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 
-# print(os.getenv("XLA_PYTHON_ALLOCATOR", "default").lower())
-# print(os.getenv("XLA_PYTHON_CLIENT_PREALLOCATE"))
-# # Run MAP inference to get the MAP estimate of each variable
-# map_message_dict = optimize_mpbp_unpadded.run_mp_belief_prop_and_compute_map(
-#     fg, var_evidence_dict, 1000, 0.5
-# )
+print(os.getenv("XLA_PYTHON_ALLOCATOR", "default").lower())
+print(os.getenv("XLA_PYTHON_CLIENT_PREALLOCATE"))
+
+wiring = fg.get_wiring()
+edges_num_states = jax.device_put(wiring.edges_num_states)
+var_states_for_edges = jax.device_put(wiring.var_states_for_edges)
+factor_configs_edge_states = jax.device_put(wiring.factor_configs_edge_states)
+
+
+# Run MAP inference to get the MAP estimate of each variable
+_ = bp_infer.run_bp_and_infer(
+    init_msgs,
+    fg_evidence,
+    edges_num_states,
+    var_states_for_edges,
+    factor_configs_edge_states,
+    1000,
+    0.5,
+)
 
 
 # %% [markdown]
