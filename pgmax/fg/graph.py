@@ -48,7 +48,7 @@ class FactorGraph:
             self.compile_wiring()
         return self._wiring
 
-    def get_evidence(self, data: Any, context: Any) -> jnp.ndarray:
+    def get_evidence(self, data: Any, context: Any = None) -> jnp.ndarray:
         """Function to generate evidence array. Need to be overwritten for concrete factor graphs
 
         Args:
@@ -58,6 +58,24 @@ class FactorGraph:
         Returns:
             An evidence array of shape (num_var_states,)
         """
+        raise NotImplementedError("get_evidence function needs to be implemented")
+
+    def output_inference(
+        self, final_var_states: jnp.ndarray, context: Any = None
+    ) -> Any:
+        """Function to take the result of message passing and output the inference result for
+            each variable
+
+        Args:
+            final_var_states: an array of shape (num_var_states,) that is the result of belief
+                propagation
+            context: Optional context for using this array
+
+        Returns:
+            An evidence array of shape (num_var_states,)
+        """
+        # NOTE: An argument can be passed here to do different inferences for sum-product and
+        # max-product respectively
         raise NotImplementedError("get_evidence function needs to be implemented")
 
     def init_msgs(self, context: Any = None) -> jnp.ndarray:

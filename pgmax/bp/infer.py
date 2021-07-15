@@ -73,7 +73,7 @@ def run_bp_and_infer(
                 max_num_edges,
                 num_val_configs,
             )
-            normalized_msgs = damp_and_update_messages(
+            normalized_msgs = _damp_and_update_messages(
                 normalized_msgs,
                 ftov_msgs,
                 edges_num_states,
@@ -97,7 +97,11 @@ def run_bp_and_infer(
         num_iters,
     )
 
-    return msgs_after_bp
+    final_var_states = _compute_final_var_states(
+        msgs_after_bp, evidence, var_states_for_edges
+    )
+
+    return final_var_states
 
 
 @jax.partial(jax.jit, static_argnames="max_num_edges")
@@ -196,7 +200,7 @@ def _pass_fac_to_var_messages(
 
 
 @jax.partial(jax.jit, static_argnames=("damping_factor", "max_num_edges"))
-def damp_and_update_messages(
+def _damp_and_update_messages(
     original_msgs: jnp.ndarray,
     new_msgs: jnp.ndarray,
     edges_num_states: jnp.ndarray,
@@ -228,3 +232,27 @@ def damp_and_update_messages(
     )
 
     return normalized_updated_msgs
+
+
+@jax.jit
+def _compute_final_var_states(
+    msgs: jnp.array,
+    evidence: jnp.array,
+    var_states_for_edges: jnp.array,
+) -> jnp.array:
+    """
+    passes messages from VariableNodes to FactorNodes and computes a new updated set of messages using JAX
+
+    Args:
+        msgs: Array of shape (num_edge_states). This holds all the flattened factor to variable messages.
+        evidence: Maximum array shape is bounded by (num_var_nodes * max_msg_size). This array contains the fully-flattened
+            set of evidence messages for each variable node
+        var_states_for_edges: Array of shape (num_edge_states,). Global variable state indices for each edge state
+        edges_num_states: Array of shape (num_edges,). Number of states for the variables connected to each edge
+        max_num_edges: the max of edges_num_states
+    Returns:
+        Array of shape (num_edge_states). This holds all the flattened variable to factor messages.
+    """
+    # For each variable, sum the neighboring factor to variable messages and the evidence.
+    var_sums_arr = evidence.at[var_states_for_edges].add(msgs)
+    return var_sums_arr
