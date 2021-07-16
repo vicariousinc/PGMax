@@ -42,7 +42,7 @@ from timeit import default_timer as timer  # isort:skip
 rng = default_rng(23)
 
 # Create a synthetic depth image for testing purposes
-im_size = 32
+im_size = 150
 depth_img = 5.0 * np.ones((im_size, im_size))
 depth_img[
     np.tril_indices(im_size, 0)
@@ -160,7 +160,7 @@ vars_list = []
 vars_dict = {}
 factors_neighbors_dict = {}  # type: ignore
 NUM_VAR_STATES = 3
-# Now that we have factors in place, we can create variables and assign neighbor relations
+# We start by creating all the various variables and assigning them as neighbors to factors
 # NOTE: The naming scheme for variables is not thorough. For instance, V1,1,down should be the same node as
 # V2,1,up however this is not the case because a variable can only have one name...
 for row in range(M - 1):
@@ -328,10 +328,11 @@ class GridFactorGraph(graph.FactorGraph):
         # NOTE: An argument can be passed here to do different inferences for sum-product and
         # max-product respectively
         var_to_map_dict = {}
+        final_var_states_np = np.array(final_var_states)
         for var in self.variables:
             start_index = self._vars_to_starts[var]
-            var_to_map_dict[var] = int(
-                jnp.max(final_var_states[start_index : start_index + var.num_states])
+            var_to_map_dict[var] = np.argmax(
+                final_var_states_np[start_index : start_index + var.num_states]
             )
 
         return var_to_map_dict
@@ -375,6 +376,7 @@ for i in range(2):
             if var_img_arr[i, row, col] is not None:
                 var_evidence_dict[var_img_arr[i, row, col]] = evidence_arr
 
+
 # %%
 fg_creation_start_time = timer()
 fg = GridFactorGraph(vars_list, facs_list)
@@ -408,6 +410,7 @@ var_states_for_edges = jax.device_put(wiring.var_states_for_edges)
 factor_configs_edge_states = jax.device_put(wiring.factor_configs_edge_states)
 
 # Run MAP inference to get the MAP estimate of each variable
+bp_start_time = timer()
 final_var_states = bp_infer.run_bp_and_infer(
     init_msgs,
     fg_evidence,
@@ -417,7 +420,15 @@ final_var_states = bp_infer.run_bp_and_infer(
     1000,
     0.5,
 )
+bp_end_time = timer()
+print(f"time taken for bp {bp_end_time - bp_start_time}")
+
+data_writeback_start_time = timer()
 map_message_dict = fg.output_inference(final_var_states)
+data_writeback_end_time = timer()
+print(
+    f"time taken for data conversion of inference result {data_writeback_end_time - data_writeback_start_time}"
+)
 
 
 # %% [markdown]

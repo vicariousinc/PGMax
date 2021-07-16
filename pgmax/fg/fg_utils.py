@@ -25,9 +25,7 @@ def concatenate_enumeration_wirings(
         0,
     )[:-1]
     num_edge_states_cumsum = np.insert(
-        np.array(
-            [wiring.factor_configs_edge_states.shape[0] + 1 for wiring in wirings]
-        ).cumsum(),
+        np.array([wiring.edges_num_states.cumsum()[-1] for wiring in wirings]).cumsum(),
         0,
         0,
     )[:-1]

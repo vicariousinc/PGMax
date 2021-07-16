@@ -17,7 +17,7 @@ def run_bp_and_infer(
     factor_configs_edge_states: jnp.ndarray,
     num_iters: int,
     damping_factor: float,
-):
+) -> jnp.ndarray:
     # NOTE: We can use a boolean variable here to indicate max-product vs sum-product!
     """
     performs belief propagation given the specified data-structures for num_iters iterations and returns the
@@ -37,11 +37,11 @@ def run_bp_and_infer(
         damping_factor: The damping factor to use for message updates between one timestep and the next
 
     Returns:
-        ???: Really not sure yet. Will figure out after implementing!
+        an array of the same shape as evidence that contains the values for each state for each variables after BP
     """
-    max_num_edges = int(jnp.max(edges_num_states))
+    max_msg_size = int(jnp.max(edges_num_states))
     normalized_msgs = msgs - jnp.repeat(
-        utils.segment_max_opt(msgs, edges_num_states, max_num_edges),
+        utils.segment_max_opt(msgs, edges_num_states, max_msg_size),
         edges_num_states,
         total_repeat_length=msgs.shape[0],
     )  # Normalize the messages to ensure the maximum value is 0.
@@ -52,7 +52,7 @@ def run_bp_and_infer(
         evidence,
         var_states_for_edges,
         edges_num_states,
-        max_num_edges,
+        max_msg_size,
         damping_factor,
         num_iters,
     ):
@@ -64,35 +64,35 @@ def run_bp_and_infer(
                 evidence,
                 var_states_for_edges,
                 edges_num_states,
-                max_num_edges,
+                max_msg_size,
             )
             ftov_msgs = _pass_fac_to_var_messages(
                 vtof_msgs,
                 factor_configs_edge_states,
                 edges_num_states,
-                max_num_edges,
+                max_msg_size,
                 num_val_configs,
             )
             normalized_msgs = _damp_and_update_messages(
                 normalized_msgs,
                 ftov_msgs,
                 edges_num_states,
-                max_num_edges,
+                max_msg_size,
                 damping_factor,
             )
             return normalized_msgs, None
 
-        normalized_msgs, _ = jax.lax.scan(
+        final_msgs, _ = jax.lax.scan(
             message_passing_step, normalized_msgs, None, num_iters
         )
-        return normalized_msgs
+        return final_msgs
 
     msgs_after_bp = message_passing_loop(
         normalized_msgs,
         evidence,
         var_states_for_edges,
         edges_num_states,
-        max_num_edges,
+        max_msg_size,
         damping_factor,
         num_iters,
     )
@@ -104,13 +104,13 @@ def run_bp_and_infer(
     return final_var_states
 
 
-@jax.partial(jax.jit, static_argnames="max_num_edges")
+@jax.partial(jax.jit, static_argnames="max_msg_size")
 def _pass_var_to_fac_messages(
     msgs: jnp.array,
     evidence: jnp.array,
     var_states_for_edges: jnp.array,
     edges_num_states: jnp.array,
-    max_num_edges: int,
+    max_msg_size: int,
 ) -> jnp.array:
     """
     passes messages from VariableNodes to FactorNodes and computes a new updated set of messages using JAX
@@ -121,7 +121,7 @@ def _pass_var_to_fac_messages(
             set of evidence messages for each variable node
         var_states_for_edges: Array of shape (num_edge_states,). Global variable state indices for each edge state
         edges_num_states: Array of shape (num_edges,). Number of states for the variables connected to each edge
-        max_num_edges: the max of edges_num_states
+        max_msg_size: the max of edges_num_states
     Returns:
         Array of shape (num_edge_states). This holds all the flattened variable to factor messages.
     """
@@ -130,23 +130,20 @@ def _pass_var_to_fac_messages(
     vtof_msgs = var_sums_arr[var_states_for_edges] - msgs
     # Normalize and clip messages (between -1000 and 1000) before returning
     normalized_vtof_msgs = vtof_msgs - jnp.repeat(
-        utils.segment_max_opt(vtof_msgs, edges_num_states, max_num_edges),
+        utils.segment_max_opt(vtof_msgs, edges_num_states, max_msg_size),
         edges_num_states,
         total_repeat_length=msgs.shape[0],
     )
-    clipped_vtof_msgs = jnp.clip(
-        normalized_vtof_msgs, -1000, None
-    )  # TODO: Take out clipping here and just clip the final updates msgs
 
-    return clipped_vtof_msgs
+    return normalized_vtof_msgs
 
 
-@jax.partial(jax.jit, static_argnames=("num_val_configs", "max_num_edges"))
+@jax.partial(jax.jit, static_argnames=("num_val_configs", "max_msg_size"))
 def _pass_fac_to_var_messages(
     vtof_msgs: jnp.ndarray,
     factor_configs_edge_states: jnp.ndarray,
     edges_num_states: jnp.ndarray,
-    max_num_edges: int,
+    max_msg_size: int,
     num_val_configs: int,
 ) -> jnp.ndarray:
 
@@ -160,7 +157,7 @@ def _pass_fac_to_var_messages(
             factor_configs_edge_states[ii, 0] contains the global factor config index
             factor_configs_edge_states[ii, 1] contains the corresponding global edge_state index
         edges_num_states: Array of shape (num_edges,). Number of states for the variables connected to each edge
-        max_num_edges: the max of edges_num_states
+        max_msg_size: the max of edges_num_states
         num_val_configs: the total number of valid configurations for factors in the factor graph.
 
     Returns:
@@ -190,21 +187,20 @@ def _pass_fac_to_var_messages(
 
     # Normalize and clip messages (between -1000 and 1000) before returning
     normalized_updated_msgs = updated_ftov_msgs - jnp.repeat(
-        utils.segment_max_opt(updated_ftov_msgs, edges_num_states, max_num_edges),
+        utils.segment_max_opt(updated_ftov_msgs, edges_num_states, max_msg_size),
         edges_num_states,
         total_repeat_length=vtof_msgs.shape[0],
     )
-    clipped_updated_msgs = jnp.clip(normalized_updated_msgs, -1000, None)
 
-    return clipped_updated_msgs  # TODO: Take out clipping here and just clip the final updates msgs
+    return normalized_updated_msgs
 
 
-@jax.partial(jax.jit, static_argnames=("damping_factor", "max_num_edges"))
+@jax.partial(jax.jit, static_argnames=("damping_factor", "max_msg_size"))
 def _damp_and_update_messages(
     original_msgs: jnp.ndarray,
     new_msgs: jnp.ndarray,
     edges_num_states: jnp.ndarray,
-    max_num_edges: int,
+    max_msg_size: int,
     damping_factor: float,
 ) -> jnp.ndarray:
     """
@@ -216,7 +212,7 @@ def _damp_and_update_messages(
         new_msgs: msgs: Array of shape (num_edge_states). This holds all the flattened factor to variable messages
             after bp updating but before damping.
         edges_num_states: Array of shape (num_edges,). Number of states for the variables connected to each edge
-        max_num_edges: the max of edges_num_states
+        max_msg_size: the max of edges_num_states
         damping_factor (float): The damping factor to use when updating messages.
 
     Returns:
@@ -224,14 +220,15 @@ def _damp_and_update_messages(
             after damping.
     """
     delta_msgs = new_msgs - original_msgs
-    damped_updated_msgs = original_msgs + damping_factor * delta_msgs
+    damped_updated_msgs = original_msgs + ((1 - damping_factor) * delta_msgs)
     normalized_updated_msgs = damped_updated_msgs - jnp.repeat(
-        utils.segment_max_opt(damped_updated_msgs, edges_num_states, max_num_edges),
+        utils.segment_max_opt(damped_updated_msgs, edges_num_states, max_msg_size),
         edges_num_states,
         total_repeat_length=damped_updated_msgs.shape[0],
     )
-
-    return normalized_updated_msgs
+    # Clip message values to be always greater than NEG_INF
+    clipped_updated_msgs = jnp.clip(normalized_updated_msgs, NEG_INF, None)
+    return clipped_updated_msgs
 
 
 @jax.jit
@@ -249,7 +246,7 @@ def _compute_final_var_states(
             set of evidence messages for each variable node
         var_states_for_edges: Array of shape (num_edge_states,). Global variable state indices for each edge state
         edges_num_states: Array of shape (num_edges,). Number of states for the variables connected to each edge
-        max_num_edges: the max of edges_num_states
+        max_msg_size: the max of edges_num_states
     Returns:
         Array of shape (num_edge_states). This holds all the flattened variable to factor messages.
     """

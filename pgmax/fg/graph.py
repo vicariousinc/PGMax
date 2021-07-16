@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Any, Sequence
 
 import jax.numpy as jnp
@@ -29,10 +30,12 @@ class FactorGraph:
             0,
             0,
         )
-        self._vars_to_starts = {
-            variable: vars_num_states_cumsum[vv]
-            for vv, variable in enumerate(self.variables)
-        }
+        self._vars_to_starts = MappingProxyType(
+            {
+                variable: vars_num_states_cumsum[vv]
+                for vv, variable in enumerate(self.variables)
+            }
+        )
         self.num_var_states = vars_num_states_cumsum[-1]
 
     def compile_wiring(self) -> None:

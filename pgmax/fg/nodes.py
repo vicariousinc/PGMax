@@ -13,7 +13,13 @@ class Variable:
     Concrete variables can have additional associated meta information.
     """
 
+    # NOTE: Since we want two variables to be different regardless of having the same args,
+    # we should consider overriding the __eq__ method as well!
+
     num_states: int
+
+    def __hash__(self):
+        return super().__hash__()
 
 
 @utils.register_pytree_node_dataclass
