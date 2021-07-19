@@ -314,7 +314,7 @@ class GridFactorGraph(graph.FactorGraph):
         for var in self.variables:
             start_index = self._vars_to_starts[var]
             evidence[start_index : start_index + var.num_states] = data[var]
-        self._evidence = jax.device_put(evidence)
+        return jax.device_put(evidence)
 
     def output_inference(
         self, final_var_states: jnp.ndarray, context: Any = None
@@ -382,22 +382,31 @@ for i in range(2):
                 var_evidence_dict[var_img_arr[i, row, col]] = evidence_arr
 
 
+# %% [markdown]
+# ## Belief Propagation
+
 # %%
 fg_creation_start_time = timer()
 fg = GridFactorGraph(vars_list, facs_list)
 fg_creation_end_time = timer()
 print(f"fg Creation time = {fg_creation_end_time - fg_creation_start_time}")
 
-# %% [markdown]
-# ## Belief Propagation
-
 # %% tags=[]
-# Run MAP inference to get the MAP estimate of each variable
+# Run BP
 bp_start_time = timer()
-final_var_states = fg.run_bp_and_infer(1000, 0.5)
+final_msgs = fg.run_bp(1000, 0.5, evidence_data=var_evidence_dict)
 bp_end_time = timer()
 print(f"time taken for bp {bp_end_time - bp_start_time}")
 
+# Run inference
+infer_start = timer()
+final_var_states = fg.decode_max_product_message_states(
+    final_msgs, evidence_data=var_evidence_dict
+)
+infer_end = timer()
+print(f"time taken for inference {infer_end - infer_start})")
+
+# Convert inference result to usable data structure
 data_writeback_start_time = timer()
 map_message_dict = fg.output_inference(final_var_states)
 data_writeback_end_time = timer()

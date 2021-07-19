@@ -6,7 +6,6 @@ import pgmax.bp.bp_utils as bp_utils
 NEG_INF = (
     -100000.0
 )  # A large negative value to use as -inf for numerical stability reasons
-NEG_INF_INT = -10000
 
 
 @jax.jit
@@ -28,7 +27,6 @@ def pass_var_to_fac_messages(
     # For each variable, sum the neighboring factor to variable messages and the evidence.
     var_sums_arr = evidence.at[var_states_for_edges].add(msgs)
     vtof_msgs = var_sums_arr[var_states_for_edges] - msgs
-
     return vtof_msgs
 
 
