@@ -17,7 +17,6 @@
 # fmt: off
 import os
 
-import pgmax.bp.infer as bp_infer
 # Custom Imports
 import pgmax.fg.graph as graph
 import pgmax.fg.nodes as nodes
@@ -41,8 +40,14 @@ from timeit import default_timer as timer  # isort:skip
 # Set random seed for rng
 rng = default_rng(23)
 
+# Make sure these environment variables are set correctly to get an accurate picture of memory usage
+os.environ["XLA_PYTHON_ALLOCATOR"] = "platform"
+os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+print(os.getenv("XLA_PYTHON_ALLOCATOR", "default").lower())
+print(os.getenv("XLA_PYTHON_CLIENT_PREALLOCATE"))
+
 # Create a synthetic depth image for testing purposes
-im_size = 150
+im_size = 32
 depth_img = 5.0 * np.ones((im_size, im_size))
 depth_img[
     np.tril_indices(im_size, 0)
@@ -303,13 +308,13 @@ class GridFactorGraph(graph.FactorGraph):
             context: Optional context for generating evidence
 
         Returns:
-            An evidence array of shape (num_var_states,)
+            None, but must set the self._evidence attribute to a jnp.array of shape (num_var_states,)
         """
         evidence = np.zeros(self.num_var_states)
         for var in self.variables:
             start_index = self._vars_to_starts[var]
             evidence[start_index : start_index + var.num_states] = data[var]
-        return jax.device_put(evidence)
+        self._evidence = jax.device_put(evidence)
 
     def output_inference(
         self, final_var_states: jnp.ndarray, context: Any = None
@@ -383,43 +388,13 @@ fg = GridFactorGraph(vars_list, facs_list)
 fg_creation_end_time = timer()
 print(f"fg Creation time = {fg_creation_end_time - fg_creation_start_time}")
 
-evidence_start_time = timer()
-fg_evidence = fg.get_evidence(var_evidence_dict)
-evidence_end_time = timer()
-print(f"fg Creation time = {evidence_end_time - evidence_start_time}")
-
-data_comp_start_time = timer()
-init_msgs = fg.init_msgs()
-data_comp_end_time = timer()
-print(f"Data Compilation time = {data_comp_end_time - data_comp_start_time}")
-
 # %% [markdown]
 # ## Belief Propagation
 
 # %% tags=[]
-# Make sure these environment variables are set correctly to get an accurate picture of memory usage
-os.environ["XLA_PYTHON_ALLOCATOR"] = "platform"
-os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
-
-print(os.getenv("XLA_PYTHON_ALLOCATOR", "default").lower())
-print(os.getenv("XLA_PYTHON_CLIENT_PREALLOCATE"))
-
-wiring = fg.get_wiring()
-edges_num_states = jax.device_put(wiring.edges_num_states)
-var_states_for_edges = jax.device_put(wiring.var_states_for_edges)
-factor_configs_edge_states = jax.device_put(wiring.factor_configs_edge_states)
-
 # Run MAP inference to get the MAP estimate of each variable
 bp_start_time = timer()
-final_var_states = bp_infer.run_bp_and_infer(
-    init_msgs,
-    fg_evidence,
-    edges_num_states,
-    var_states_for_edges,
-    factor_configs_edge_states,
-    1000,
-    0.5,
-)
+final_var_states = fg.run_bp_and_infer(1000, 0.5)
 bp_end_time = timer()
 print(f"time taken for bp {bp_end_time - bp_start_time}")
 

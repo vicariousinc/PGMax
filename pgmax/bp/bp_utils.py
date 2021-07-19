@@ -14,6 +14,16 @@ def segment_max_opt(
     Computes the max of every segment of data, where segments_lengths
     specifies the segments
 
+    Args:
+        data: Array of shape (a_len,) where a_len is an arbitrary integer.
+        segments_lengths: Array of shape (num_segments,), where num_segments <= a_len.
+            segments_lengths.sum() should yield a_len.
+        max_segment_length: The maximum value in segments_lengths.
+
+    Returns:
+        An array of shape (num_segments,) that contains the maximum value from data of
+            every segment sepcified by segments_lengths
+
     """
 
     @jax.partial(jax.vmap, in_axes=(None, 0, 0), out_axes=0)

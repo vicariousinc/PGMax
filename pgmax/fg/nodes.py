@@ -7,19 +7,13 @@ import numpy as np
 from pgmax import utils
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class Variable:
     """Base class for variables.
     Concrete variables can have additional associated meta information.
     """
 
-    # NOTE: Since we want two variables to be different regardless of having the same args,
-    # we should consider overriding the __eq__ method as well!
-
     num_states: int
-
-    def __hash__(self):
-        return super().__hash__()
 
 
 @utils.register_pytree_node_dataclass
@@ -73,7 +67,7 @@ class EnumerationFactor:
         vars_num_states = np.array([variable.num_states for variable in self.variables])
         if not np.logical_and(
             self.configs >= 0, self.configs < vars_num_states[None]
-        ).any():
+        ).all():
             raise ValueError("Invalid configurations for given variables")
 
     def compile_wiring(
