@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.abspath("../pgmax/"))
 # -- Project information -----------------------------------------------------
 
 project = "PGMax"
-copyright = "2021, Vicarious Inc."
+copyright = "2021, Vicarious Inc"
 author = (
     "Nishanth Kumar, Guangyao (Stannis) Zhou,"
     + " Miguel Lazaro-Gredilla, Wolfgang Lehrach"
