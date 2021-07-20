@@ -92,7 +92,7 @@ def normalize_and_clip_msgs(
 
     Returns:
         Array of shape (num_edge_state,). This holds all the flattened factor to variable messages
-            after normalization and clipping to the range [-1000,0]
+        after normalization and clipping to the range [-1000,0]
     """
     normalized_updated_msgs = msgs - jnp.repeat(
         bp_utils.segment_max_opt(msgs, edges_num_states, max_msg_size),
