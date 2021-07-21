@@ -10,7 +10,6 @@ PGMax is a library for working with Factor Graphs in `JAX <https://jax.readthedo
 
 .. toctree::
    :maxdepth: 2
-   :caption: API Documentation:
 
    modules
 
