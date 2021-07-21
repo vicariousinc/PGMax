@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Sequence
+from typing import Any, Dict, Sequence
 
 import jax
 import jax.numpy as jnp
@@ -12,9 +12,10 @@ from pgmax.fg import fg_utils, nodes
 
 @dataclass
 class FactorGraph:
-    """Base class for factor graph
-        Concrete factor graphs inherits from this class, and specifies get_evidence to generate
-        the evidence array, and optionally init_msgs (default to initializing all messages to 0)
+    """Base class to represent a factor graph.
+
+    Concrete factor graphs inherits from this class, and specifies get_evidence to generate
+    the evidence array, and optionally init_msgs (default to initializing all messages to 0)
 
     Args:
         variables: List of involved variables
@@ -42,8 +43,11 @@ class FactorGraph:
         self._wiring = None
 
     def compile_wiring(self) -> None:
-        """Compile wiring for belief propagation inference using JAX. If wiring has already been
-        compiled, do nothing."""
+        """Function to compile wiring for belief propagation..
+
+        If wiring has already beeen compiled, do nothing.
+        """
+
         if self._wiring is None:
             wirings = [
                 factor.compile_wiring(self._vars_to_starts) for factor in self.factors
@@ -62,26 +66,11 @@ class FactorGraph:
         """
         raise NotImplementedError("get_evidence function needs to be implemented")
 
-    def output_inference(
-        self, final_var_states: jnp.ndarray, context: Any = None
-    ) -> Any:
-        """Function to take the result of message passing and output the inference result for
-            each variable
-
-        Args:
-            final_var_states: an array of shape (num_var_states,) that is the result of belief
-                propagation
-            context: Optional context for using this array
-
-        Returns:
-            Any data-structure of the user's choice that contains the MAP result derived from
-                final_var_states
-        """
-        raise NotImplementedError("output_inference function needs to be implemented")
-
     def get_init_msgs(self, context: Any = None):
-        """Initialize messages. By default it initializes all messages to 0.
-            Can be overwritten to support customized initialization schemes
+        """Function to initialize messages.
+
+        By default it initializes all messages to 0. Can be overwritten to support
+        customized initialization schemes
 
         Args:
             context: Optional context for initializing messages
@@ -102,8 +91,10 @@ class FactorGraph:
         evidence_data: Any = None,
         evidence_context: Any = None,
     ) -> jnp.ndarray:
-        """performs belief propagation from messages obtained from the self.get_init_msgs method
-            for num_iters iterations and returns the resulting messages
+        """Function to perform belief propagation.
+
+        Specifically, belief propagation is run on messages obtained from the self.get_init_msgs
+        method for num_iters iterations and returns the resulting messages.
 
         Args:
             evidence: Array of shape (num_var_states,). This array contains the fully-flattened
@@ -136,16 +127,14 @@ class FactorGraph:
         max_msg_size = int(jnp.max(edges_num_states))
 
         # Normalize the messages to ensure the maximum value is 0.
-        normalized_msgs = infer.normalize_and_clip_msgs(
-            msgs, edges_num_states, max_msg_size
-        )
+        msgs = infer.normalize_and_clip_msgs(msgs, edges_num_states, max_msg_size)
         num_val_configs = int(factor_configs_edge_states[-1, 0])
 
         @jax.jit
-        def message_passing_step(original_msgs, _):
+        def message_passing_step(msgs, _):
             # Compute new variable to factor messages by message passing
             vtof_msgs = infer.pass_var_to_fac_messages(
-                original_msgs,
+                msgs,
                 evidence,
                 var_states_for_edges,
             )
@@ -157,27 +146,27 @@ class FactorGraph:
             )
             # Use the results of message passing to perform damping and
             # update the factor to variable messages
-            delta_msgs = ftov_msgs - original_msgs
-            damped_updated_msgs = original_msgs + ((1 - damping_factor) * delta_msgs)
+            delta_msgs = ftov_msgs - msgs
+            msgs = msgs + (1 - damping_factor) * delta_msgs
             # Normalize and clip these damped, updated messages before returning
             # them.
-            normalized_and_clipped_msgs = infer.normalize_and_clip_msgs(
-                damped_updated_msgs,
+            msgs = infer.normalize_and_clip_msgs(
+                msgs,
                 edges_num_states,
                 max_msg_size,
             )
-            return normalized_and_clipped_msgs, None
+            return msgs, None
 
-        msgs_after_bp, _ = jax.lax.scan(
-            message_passing_step, normalized_msgs, None, num_iters
-        )
+        msgs_after_bp, _ = jax.lax.scan(message_passing_step, msgs, None, num_iters)
 
         return msgs_after_bp
 
-    def decode_max_product_message_states(
+    def decode_map_states(
         self, msgs: jnp.ndarray, evidence_data: Any = None, evidence_context: Any = None
-    ):
-        """Computes the final states of all msgs based on evidence obtained from the self.get_evidence
+    ) -> Dict[nodes.Variable, int]:
+        """Function to computes the output of MAP inference on input messages.
+
+        The final states are computed based on evidence obtained from the self.get_evidence
         method as well as the internal wiring.
 
         Args:
@@ -187,14 +176,20 @@ class FactorGraph:
             evidence_context: Optional context for generating evidence
 
         Returns:
-            an array of shape (num_var_states,) that correspond to the states for
+            a dictionary mapping variables to their MAP state
         """
         # NOTE: Having to regenerate the evidence here is annoying - there must be a better way to handle evidence and
-        # message initialization, perhaps something similar to what's currently happening with the wiring?
+        # message initialization.
         evidence = self.get_evidence(evidence_data, evidence_context)
-
         # TODO: Once issue #20 is resolved, just grab this from self._wiring instead of
         # casting it to a jnp.array
         var_states_for_edges = jax.device_put(self._wiring.var_states_for_edges)
-
-        return evidence.at[var_states_for_edges].add(msgs)
+        final_var_states = evidence.at[var_states_for_edges].add(msgs)
+        var_to_map_dict = {}
+        final_var_states_np = np.array(final_var_states)
+        for var in self.variables:
+            start_index = self._vars_to_starts[var]
+            var_to_map_dict[var] = np.argmax(
+                final_var_states_np[start_index : start_index + var.num_states]
+            )
+        return var_to_map_dict
