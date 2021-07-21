@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Dict, Sequence
+from typing import Any, Dict, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -8,9 +8,10 @@ import numpy as np
 
 import pgmax.bp.infer as infer
 from pgmax.fg import fg_utils, nodes
+from pgmax.utils import cached_property
 
 
-@dataclass
+@dataclass(frozen=True)
 class FactorGraph:
     """Base class to represent a factor graph.
 
@@ -22,8 +23,8 @@ class FactorGraph:
         factors: List of involved factors
     """
 
-    variables: Sequence[nodes.Variable]
-    factors: Sequence[nodes.EnumerationFactor]
+    variables: Tuple[nodes.Variable, ...]
+    factors: Tuple[nodes.EnumerationFactor, ...]
 
     def __post_init__(self):
         vars_num_states_cumsum = np.insert(
@@ -40,19 +41,18 @@ class FactorGraph:
             }
         )
         self.num_var_states = vars_num_states_cumsum[-1]
-        self._wiring = None
 
-    def compile_wiring(self) -> None:
+    @cached_property
+    def wiring(self) -> nodes.EnumerationWiring:
         """Function to compile wiring for belief propagation..
 
         If wiring has already beeen compiled, do nothing.
         """
-
-        if self._wiring is None:
-            wirings = [
-                factor.compile_wiring(self._vars_to_starts) for factor in self.factors
-            ]
-            self._wiring = fg_utils.concatenate_enumeration_wirings(wirings)
+        wirings = [
+            factor.compile_wiring(self._vars_to_starts) for factor in self.factors
+        ]
+        wiring = fg_utils.concatenate_enumeration_wirings(wirings)
+        return wiring
 
     def get_evidence(self, data: Any, context: Any = None) -> jnp.ndarray:
         """Function to generate evidence array. Need to be overwritten for concrete factor graphs
@@ -79,8 +79,7 @@ class FactorGraph:
             array of shape (num_edge_state,) representing initialized factor to variable
                 messages
         """
-        self.compile_wiring()
-        return jnp.zeros(self._wiring.var_states_for_edges.shape[0])
+        return jnp.zeros(self.wiring.var_states_for_edges.shape[0])
 
     def run_bp(
         self,
@@ -110,19 +109,17 @@ class FactorGraph:
         Returns:
             an array of shape (num_edge_state,) that contains the message values after running BP for num_iters iterations
         """
-        self.compile_wiring()
-
-        # Retrieve the necessary data structures from the compiled self._wiring and
+        # Retrieve the necessary data structures from the compiled self.wiring and
         # convert these to jax arrays.
         if init_msgs is not None:
             msgs = init_msgs
         else:
             msgs = self.get_init_msgs(msgs_context)
         evidence = self.get_evidence(evidence_data, evidence_context)
-        edges_num_states = jax.device_put(self._wiring.edges_num_states)
-        var_states_for_edges = jax.device_put(self._wiring.var_states_for_edges)
+        edges_num_states = jax.device_put(self.wiring.edges_num_states)
+        var_states_for_edges = jax.device_put(self.wiring.var_states_for_edges)
         factor_configs_edge_states = jax.device_put(
-            self._wiring.factor_configs_edge_states
+            self.wiring.factor_configs_edge_states
         )
         max_msg_size = int(jnp.max(edges_num_states))
 
@@ -181,9 +178,9 @@ class FactorGraph:
         # NOTE: Having to regenerate the evidence here is annoying - there must be a better way to handle evidence and
         # message initialization.
         evidence = self.get_evidence(evidence_data, evidence_context)
-        # TODO: Once issue #20 is resolved, just grab this from self._wiring instead of
+        # TODO: Once issue #20 is resolved, just grab this from self.wiring instead of
         # casting it to a jnp.array
-        var_states_for_edges = jax.device_put(self._wiring.var_states_for_edges)
+        var_states_for_edges = jax.device_put(self.wiring.var_states_for_edges)
         final_var_states = evidence.at[var_states_for_edges].add(msgs)
         var_to_map_dict = {}
         final_var_states_np = np.array(final_var_states)

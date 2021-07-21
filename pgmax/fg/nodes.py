@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Mapping, Sequence, Union
+from typing import Mapping, Tuple, Union
 
 import jax.numpy as jnp
 import numpy as np
@@ -37,7 +37,7 @@ class EnumerationWiring:
     factor_configs_edge_states: Union[np.ndarray, jnp.ndarray]
 
 
-@dataclass
+@dataclass(frozen=True)
 class EnumerationFactor:
     """An enumeration factor
 
@@ -47,7 +47,7 @@ class EnumerationFactor:
             An array containing explicit enumeration of all valid configurations
     """
 
-    variables: Sequence[Variable]
+    variables: Tuple[Variable, ...]
     configs: np.ndarray
 
     def __post_init__(self):
