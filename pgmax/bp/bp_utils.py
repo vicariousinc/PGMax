@@ -22,7 +22,7 @@ def segment_max_opt(
 
     Returns:
         An array of shape (num_segments,) that contains the maximum value from data of
-        every segment sepcified by segments_lengths
+            every segment sepcified by segments_lengths
 
     """
 
