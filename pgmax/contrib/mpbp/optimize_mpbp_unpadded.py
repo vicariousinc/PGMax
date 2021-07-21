@@ -422,11 +422,6 @@ def pass_fac_to_var_messages_jnp(
     #   a flat set of output messages.
 
     # Generate summary array for each factor and each config
-    # fac_config_summary_sum = jax.ops.segment_sum(
-    #     msgs_arr[1, factor_configs[0]],
-    #     factor_configs[1],
-    #     num_segments=num_val_configs,
-    # )
     fac_config_summary_sum = (
         jnp.zeros(shape=(num_val_configs,))
         .at[factor_configs[1]]

@@ -1,6 +1,5 @@
 from dataclasses import dataclass
-from types import MappingProxyType
-from typing import Sequence, Union
+from typing import Mapping, Tuple, Union
 
 import jax.numpy as jnp
 import numpy as np
@@ -8,7 +7,7 @@ import numpy as np
 from pgmax import utils
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class Variable:
     """Base class for variables.
     Concrete variables can have additional associated meta information.
@@ -38,7 +37,7 @@ class EnumerationWiring:
     factor_configs_edge_states: Union[np.ndarray, jnp.ndarray]
 
 
-@dataclass
+@dataclass(frozen=True)
 class EnumerationFactor:
     """An enumeration factor
 
@@ -48,7 +47,7 @@ class EnumerationFactor:
             An array containing explicit enumeration of all valid configurations
     """
 
-    variables: Sequence[Variable]
+    variables: Tuple[Variable, ...]
     configs: np.ndarray
 
     def __post_init__(self):
@@ -66,11 +65,13 @@ class EnumerationFactor:
             )
 
         vars_num_states = np.array([variable.num_states for variable in self.variables])
-        if not np.logical_and(self.configs >= 0, self.configs < vars_num_states[None]):
+        if not np.logical_and(
+            self.configs >= 0, self.configs < vars_num_states[None]
+        ).all():
             raise ValueError("Invalid configurations for given variables")
 
     def compile_wiring(
-        self, vars_to_starts: MappingProxyType[Variable, int]
+        self, vars_to_starts: Mapping[Variable, int]
     ) -> EnumerationWiring:
         """Compile enumeration wiring for the enumeration factor
 
@@ -100,7 +101,7 @@ class EnumerationFactor:
             self._factor_configs_edge_states = np.stack(
                 [
                     np.repeat(np.arange(configs.shape[0]), configs.shape[1]),
-                    configs + edges_starts[None],
+                    (configs + edges_starts[None]).flatten(),
                 ],
                 axis=1,
             )
