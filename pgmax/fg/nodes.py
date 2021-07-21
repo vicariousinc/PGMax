@@ -37,7 +37,7 @@ class EnumerationWiring:
     factor_configs_edge_states: Union[np.ndarray, jnp.ndarray]
 
 
-@dataclass(frozen=True)
+@dataclass
 class EnumerationFactor:
     """An enumeration factor
 
