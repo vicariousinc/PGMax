@@ -41,7 +41,6 @@ class FactorGraph:
             }
         )
         self.num_var_states = vars_num_states_cumsum[-1]
-        self._wiring = None
 
     @cached_property
     def wiring(self) -> nodes.EnumerationWiring:
