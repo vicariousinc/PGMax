@@ -118,7 +118,7 @@ class EnumerationFactor:
         Returns:
             Enumeration wiring for the enumeration factor
         """
-        var_states_for_edges = utils.concatenate_arrays(
+        var_states_for_edges = np.concatenate(
             [
                 np.arange(variable.num_states) + vars_to_starts[variable]
                 for variable in self.variables
