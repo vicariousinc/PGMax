@@ -74,6 +74,12 @@ class EnumerationFactor:
 
     @utils.cached_property
     def edges_num_states(self) -> np.ndarray:
+        """Number of states for the variables connected to each edge
+
+        Returns:
+            Array of shape (num_edges,)
+            Number of states for the variables connected to each edge
+        """
         edge_num_states = np.array(
             [variable.num_states for variable in self.variables], dtype=int
         )
@@ -81,6 +87,14 @@ class EnumerationFactor:
 
     @utils.cached_property
     def factor_configs_edge_states(self) -> np.ndarray:
+        """Array containing factor configs and edge states pairs
+
+        Returns:
+            Array of shape (num_factor_configs, 2)
+            factor_configs_edge_states[ii] contains a pair of global factor_config and edge_state indices
+            factor_configs_edge_states[ii, 0] contains the global factor config index
+            factor_configs_edge_states[ii, 1] contains the corresponding global edge_state index
+        """
         edges_starts = np.insert(self.edges_num_states.cumsum(), 0, 0)[:-1]
         factor_configs_edge_states = np.stack(
             [
