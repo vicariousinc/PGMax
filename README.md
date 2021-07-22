@@ -1,5 +1,7 @@
+[![continuous-integration](https://github.com/vicariousinc/PGMax/actions/workflows/ci.yaml/badge.svg)](https://github.com/vicariousinc/PGMax/actions/workflows/ci.yaml)
+
 # PGMax
-Repository for the PGMax Library, which aims to implement Factor Graphs and efficient inference on these in JAX!
+PGMax is a library for working with Factor Graphs in [JAX](https://jax.readthedocs.io/en/latest/). It currently provides an interface for specifying factor graphs of any type, as well as an efficient implementation of max-product belief propagation and inference on these graphs.
 
 ## Installation Instructions
 ### Developer
