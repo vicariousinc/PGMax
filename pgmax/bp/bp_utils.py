@@ -1,3 +1,5 @@
+"""A module containing helper functions used for belief propagation."""
+
 import jax
 import jax.numpy as jnp
 
