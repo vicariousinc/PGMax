@@ -17,7 +17,7 @@ class Variable:
 
 
 @utils.register_pytree_node_dataclass
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class EnumerationWiring:
     """Wiring for enumeration factors.
 
@@ -36,8 +36,12 @@ class EnumerationWiring:
     var_states_for_edges: Union[np.ndarray, jnp.ndarray]
     factor_configs_edge_states: Union[np.ndarray, jnp.ndarray]
 
+    def __post_init__(self):
+        for field in self.__dataclass_fields__:
+            getattr(self, field).flags.writeable = False
 
-@dataclass
+
+@dataclass(frozen=True, eq=False)
 class EnumerationFactor:
     """An enumeration factor
 
@@ -51,9 +55,7 @@ class EnumerationFactor:
     configs: np.ndarray
 
     def __post_init__(self):
-        if self.configs.flags.writeable:
-            raise ValueError("Configurations need to be immutable.")
-
+        self.configs.flags.writeable = False
         if not np.issubdtype(self.configs.dtype, np.integer):
             raise ValueError(
                 f"Configurations should be integers. Got {self.configs.dtype}."
@@ -70,6 +72,39 @@ class EnumerationFactor:
         ).all():
             raise ValueError("Invalid configurations for given variables")
 
+    @utils.cached_property
+    def edges_num_states(self) -> np.ndarray:
+        """Number of states for the variables connected to each edge
+
+        Returns:
+            Array of shape (num_edges,)
+            Number of states for the variables connected to each edge
+        """
+        edge_num_states = np.array(
+            [variable.num_states for variable in self.variables], dtype=int
+        )
+        return edge_num_states
+
+    @utils.cached_property
+    def factor_configs_edge_states(self) -> np.ndarray:
+        """Array containing factor configs and edge states pairs
+
+        Returns:
+            Array of shape (num_factor_configs, 2)
+            factor_configs_edge_states[ii] contains a pair of global factor_config and edge_state indices
+            factor_configs_edge_states[ii, 0] contains the global factor config index
+            factor_configs_edge_states[ii, 1] contains the corresponding global edge_state index
+        """
+        edges_starts = np.insert(self.edges_num_states.cumsum(), 0, 0)[:-1]
+        factor_configs_edge_states = np.stack(
+            [
+                np.repeat(np.arange(self.configs.shape[0]), self.configs.shape[1]),
+                (self.configs + edges_starts[None]).flatten(),
+            ],
+            axis=1,
+        )
+        return factor_configs_edge_states
+
     def compile_wiring(
         self, vars_to_starts: Mapping[Variable, int]
     ) -> EnumerationWiring:
@@ -83,31 +118,14 @@ class EnumerationFactor:
         Returns:
             Enumeration wiring for the enumeration factor
         """
-        if not hasattr(self, "_edges_num_states"):
-            self._edges_num_states = np.array(
-                [variable.num_states for variable in self.variables], dtype=int
-            )
-
-        var_states_for_edges = utils.concatenate_arrays(
+        var_states_for_edges = np.concatenate(
             [
                 np.arange(variable.num_states) + vars_to_starts[variable]
                 for variable in self.variables
             ]
         )
-        if not hasattr(self, "_factor_configs_edge_states"):
-            configs = self.configs.copy()
-            configs.flags.writeable = True
-            edges_starts = np.insert(self._edges_num_states.cumsum(), 0, 0)[:-1]
-            self._factor_configs_edge_states = np.stack(
-                [
-                    np.repeat(np.arange(configs.shape[0]), configs.shape[1]),
-                    (configs + edges_starts[None]).flatten(),
-                ],
-                axis=1,
-            )
-
         return EnumerationWiring(
-            edges_num_states=self._edges_num_states,
+            edges_num_states=self.edges_num_states,
             var_states_for_edges=var_states_for_edges,
-            factor_configs_edge_states=self._factor_configs_edge_states,
+            factor_configs_edge_states=self.factor_configs_edge_states,
         )
