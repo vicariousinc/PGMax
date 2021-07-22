@@ -81,6 +81,11 @@ jobs:
     #----------------------------------------------
     - uses: actions/checkout@v2
     #----------------------------------------------
+    #      pip install rtd theme requirement
+    #----------------------------------------------
+    - name: Install rtd theme
+      run: pip install sphinx_rtd_theme
+    #----------------------------------------------
     #             build sphinx docs
     #----------------------------------------------
     - uses: ammaraskar/sphinx-action@master
