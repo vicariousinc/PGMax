@@ -7,11 +7,11 @@ import jax.numpy as jnp
 import numpy as np
 
 import pgmax.bp.infer as infer
+from pgmax import utils
 from pgmax.fg import fg_utils, nodes
-from pgmax.utils import cached_property
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class FactorGraph:
     """Base class to represent a factor graph.
 
@@ -42,7 +42,7 @@ class FactorGraph:
         )
         self.num_var_states = vars_num_states_cumsum[-1]
 
-    @cached_property
+    @utils.cached_property
     def wiring(self) -> nodes.EnumerationWiring:
         """Function to compile wiring for belief propagation..
 
