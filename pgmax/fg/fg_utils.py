@@ -2,7 +2,6 @@ from typing import Sequence
 
 import numpy as np
 
-from pgmax import utils
 from pgmax.fg.nodes import EnumerationWiring
 
 
@@ -39,11 +38,11 @@ def concatenate_enumeration_wirings(
         )
 
     return EnumerationWiring(
-        edges_num_states=utils.concatenate_arrays(
+        edges_num_states=np.concatenate(
             [wiring.edges_num_states for wiring in wirings]
         ),
-        var_states_for_edges=utils.concatenate_arrays(
+        var_states_for_edges=np.concatenate(
             [wiring.var_states_for_edges for wiring in wirings]
         ),
-        factor_configs_edge_states=utils.concatenate_arrays(factor_configs_edge_states),
+        factor_configs_edge_states=np.concatenate(factor_configs_edge_states, axis=0),
     )

@@ -226,7 +226,7 @@ for row in range(M - 1):
 # Now that we have created all the variables correctly, we can create all the grid EnumerationFactors correctly
 facs_list = []
 for _, var_neighbs in factors_neighbors_dict.items():
-    grid_fac = nodes.EnumerationFactor(var_neighbs, valid_configs_non_supp)
+    grid_fac = nodes.EnumerationFactor(tuple(var_neighbs), valid_configs_non_supp)
     facs_list.append(grid_fac)
 
 # Now that we have all the variables and know their connections with the existing factors are correct, we can define the suppression factors
@@ -241,7 +241,7 @@ while row < M - 1:
     ]
     for stride in range(N - SUPPRESSION_DIAMETER):
         curr_vert_supp_factor = nodes.EnumerationFactor(
-            vertical_vars_list, valid_configs_supp
+            tuple(vertical_vars_list), valid_configs_supp
         )
         facs_list.append(curr_vert_supp_factor)
         # IMPORTANT: This below line is necessary because otherwise, the underlying list will get modified
@@ -273,7 +273,7 @@ while col < N - 1:
 
     for stride in range(M - SUPPRESSION_DIAMETER):
         curr_horz_supp_factor = nodes.EnumerationFactor(
-            horizontal_vars_list, valid_configs_supp
+            tuple(horizontal_vars_list), valid_configs_supp
         )
         facs_list.append(curr_horz_supp_factor)
         # IMPORTANT: This below line is necessary because otherwise, the underlying list will get modified
@@ -315,32 +315,6 @@ class GridFactorGraph(graph.FactorGraph):
             start_index = self._vars_to_starts[var]
             evidence[start_index : start_index + var.num_states] = data[var]
         return jax.device_put(evidence)
-
-    def output_inference(
-        self, final_var_states: jnp.ndarray, context: Any = None
-    ) -> Any:
-        """Function to take the result of message passing and output the inference result for
-            each variable
-
-        Args:
-            final_var_states: an array of shape (num_var_states,) that is the result of belief
-                propagation
-            context: Optional context for using this array
-
-        Returns:
-            An evidence array of shape (num_var_states,)
-        """
-        # NOTE: An argument can be passed here to do different inferences for sum-product and
-        # max-product respectively
-        var_to_map_dict = {}
-        final_var_states_np = np.array(final_var_states)
-        for var in self.variables:
-            start_index = self._vars_to_starts[var]
-            var_to_map_dict[var] = np.argmax(
-                final_var_states_np[start_index : start_index + var.num_states]
-            )
-
-        return var_to_map_dict
 
 
 # %% tags=[]
@@ -385,30 +359,22 @@ for i in range(2):
 # %% [markdown]
 # ## Belief Propagation
 
-# %%
+# %% tags=[]
+# Create FG
 fg_creation_start_time = timer()
-fg = GridFactorGraph(vars_list, facs_list)
+fg = GridFactorGraph(tuple(vars_list), tuple(facs_list))
 fg_creation_end_time = timer()
 print(f"fg Creation time = {fg_creation_end_time - fg_creation_start_time}")
 
-# %% tags=[]
 # Run BP
 bp_start_time = timer()
 final_msgs = fg.run_bp(1000, 0.5, evidence_data=var_evidence_dict)
 bp_end_time = timer()
 print(f"time taken for bp {bp_end_time - bp_start_time}")
 
-# Run inference
-infer_start = timer()
-final_var_states = fg.decode_max_product_message_states(
-    final_msgs, evidence_data=var_evidence_dict
-)
-infer_end = timer()
-print(f"time taken for inference {infer_end - infer_start})")
-
-# Convert inference result to usable data structure
+# Run inference and convert result to human-readable data structure
 data_writeback_start_time = timer()
-map_message_dict = fg.output_inference(final_var_states)
+map_message_dict = fg.decode_map_states(final_msgs, evidence_data=var_evidence_dict)
 data_writeback_end_time = timer()
 print(
     f"time taken for data conversion of inference result {data_writeback_end_time - data_writeback_start_time}"
