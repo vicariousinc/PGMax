@@ -1,4 +1,4 @@
-name: full-tests
+name: continuous-integration
 
 on:
   push:
@@ -68,24 +68,14 @@ jobs:
       - name: Test with pytest
         run: |
           poetry run pytest
-
-  docs:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: [3.7]
-    if: ${{ github.event_name == 'pull_request' }}
-    steps:
-    #----------------------------------------------
-    #               check-out repo
-    #----------------------------------------------
-    - uses: actions/checkout@v2
-    #----------------------------------------------
-    #             build sphinx docs
-    #----------------------------------------------
-    - uses: ammaraskar/sphinx-action@master
-      with:
-        docs-folder: "docs/"
+      #----------------------------------------------
+      #        test docs build only on PR
+      #----------------------------------------------
+      - name: Test docs build
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          cd docs
+          poetry run make html
 
   check_format:
     runs-on: ubuntu-latest

@@ -1,3 +1,5 @@
+"""A module containing helper functions for constructing Factor Graphs."""
+
 from typing import Sequence
 
 import numpy as np

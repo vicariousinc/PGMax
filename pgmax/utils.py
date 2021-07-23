@@ -1,3 +1,5 @@
+"""A module containing helper functions useful while constructing Factor Graphs."""
+
 import dataclasses
 import functools
 from typing import Any, Callable

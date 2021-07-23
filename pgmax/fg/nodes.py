@@ -1,3 +1,5 @@
+"""A module containing classes that specify the components of a Factor Graph."""
+
 from dataclasses import dataclass
 from typing import Mapping, Tuple, Union
 

@@ -1,3 +1,5 @@
+"""A module containing the core message-passing functions for belief propagation"""
+
 import jax
 import jax.numpy as jnp
 
