@@ -1,3 +1,5 @@
+"""A module containing the core class to specify a Factor Graph."""
+
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Dict, Tuple

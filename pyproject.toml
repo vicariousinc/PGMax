@@ -15,9 +15,10 @@ scipy = "^1.6.3"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"
-Sphinx = "^4.0.2"
+Sphinx = "^3.0.0"
 pre-commit = "^2.13.0"
 jupytext = "^1.11.3"
+sphinx-rtd-theme = "^0.5.2"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
