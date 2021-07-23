@@ -126,9 +126,8 @@ jobs:
       #----------------------------------------------
       - name: Test docs build
         run: |
-          poetry shell
           cd docs
-          make html
+          poetry run make html
 
 
   check_format:
