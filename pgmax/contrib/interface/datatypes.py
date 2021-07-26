@@ -45,10 +45,19 @@ class GridFactorGraph2D:
         top_left_subgraph: FactorSubGraph,
         col_ext_del_connect_idx_mapping: Dict[nodes.EnumerationFactor, Tuple[int, int]],
     ) -> Sequence[FactorSubGraph]:
+        """Creates a row by duplicating a particular FactorSubGraph and connecting the new copies.
+
+        This method performs extension by duplicating top_left_subgraph num_columns - 1 times. For each
+        duplicate element, it deletes the variables corresponding to those specified in
+        col_ext_del_connect_idx_mapping and then connects factors from the duplicate to other variables
+        specified in col_ext_del_connect_idx_mapping. Note that this assumes that the row can be constructed
+        by replicating one particular subgraph multiple times, then deleting and linking particular factors and
+        variables for each replication.
+        """
+
         # factor_to_del_connect_idxs_mapping is a dict from a factor to a pair of ints representing the indices of the variables in factor.variables
         # to be deleted and connected to on copy respectively
 
-        # Build up a dictionary mapping every factor to be deleted/connected to an index in the top_left_subgraph.factors list. This will be useful in the below loops
         facs_list_idx_to_del_connect_idxs_mapping = {}
         for factor, idx_tuple in col_ext_del_connect_idx_mapping.items():
             facs_list_idx_to_del_connect_idxs_mapping[
@@ -77,6 +86,16 @@ class GridFactorGraph2D:
         first_row_subgraphs: Sequence[FactorSubGraph],
         row_ext_del_connect_idx_mapping: Dict[nodes.EnumerationFactor, Tuple[int, int]],
     ) -> List[Sequence[FactorSubGraph]]:
+        """Creates multiple rows by duplicating a particular sequence of FactorSubGraphs and connecting all the new copies.
+
+        This method performs extension by duplicating first_row_subgraphs num_rows - 1 times. For each
+        duplicate element, it deletes the variables corresponding to those specified in
+        row_ext_del_connect_idx_mapping and then connects factors from the duplicate to other variables
+        specified in row_ext_del_connect_idx_mapping. Note that this assumes that rows can be constructed
+        by replicating one particular row of subgraph multiple times, then deleting and linking particular factors and
+        variables for each replication.
+        """
+
         subgraph_fac_idxs_to_del_connect_idxs_mapping = {}
         for factor, idx_tuple in row_ext_del_connect_idx_mapping.items():
             subgraph_fac_idxs_to_del_connect_idxs_mapping[
@@ -108,12 +127,9 @@ class GridFactorGraph2D:
 
     def apply_and_modify_along_axis(
         self, func, axis, row_idx, elem_start_idx, elem_end_idx
-    ):
+    ) -> None:
         """Applies a function to certain elements of self.factor_grid along an axis and modifies those
         elements to be the function output.
-
-        IMPORTANT: Note that func must return the values to substitute into the array. If func does not return anything
-        the array will be substituted with Nones
         """
         mod_idxs = (
             slice(
@@ -126,7 +142,7 @@ class GridFactorGraph2D:
 
     def slide_apply_and_modify_row(
         self, func, axis, row_idx, slice_size, start=0, stop=-1, step=1
-    ):
+    ) -> None:
         """Applies a function 'convolutionally' across a specified 1D row of an axis."""
         # TODO: Throw exceptions for faulty input?
         if stop == -1 or stop >= self.factor_grid.shape[axis]:
@@ -146,7 +162,7 @@ class GridFactorGraph2D:
         row_elem_start=0,
         row_elem_stop=-1,
         row_elem_step=1,
-    ):
+    ) -> None:
         """Applies a function 'convolutionally' across specified 1D rows of a particular axis."""
         if row_idxs is None:
             row_idxs = range(self.factor_grid.shape[axis])
@@ -164,6 +180,7 @@ class GridFactorGraph2D:
     def output_vars_and_facs(
         self,
     ) -> Tuple[Tuple[nodes.Variable, ...], Tuple[nodes.EnumerationFactor, ...]]:
+        """Outputs the variables and factors that make up this specified factor graph."""
         fg_factors = self.non_grid_factors[:]
         fg_vars: Set[nodes.Variable] = set()
         for row in range(self.num_rows):
