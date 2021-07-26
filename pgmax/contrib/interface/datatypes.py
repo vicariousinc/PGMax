@@ -1,16 +1,18 @@
 import copy
 from dataclasses import dataclass
-from typing import Any, Dict, List, Sequence, Tuple
+from typing import Dict, List, Sequence, Set, Tuple
 
 import numpy as np
 
-import pgmax.fg.graph as graph
 import pgmax.fg.nodes as nodes
 
 
 @dataclass
 class FactorSubGraph:
     factors: Sequence[nodes.EnumerationFactor]
+
+    def __repr__(self):
+        return f"FactorSubGraph with {len(self.factors)} factors"
 
 
 class GridFactorGraph2D:
@@ -34,6 +36,7 @@ class GridFactorGraph2D:
         )
         for row_idx in range(1, self.num_rows):
             self.factor_grid[row_idx] = other_rows[row_idx - 1]
+        self.non_grid_factors: List[nodes.EnumerationFactor] = []
 
     # TODO: Run some checks on the input via __post_init__ to make sure it's actually valid
 
@@ -61,7 +64,7 @@ class GridFactorGraph2D:
                 fac_index,
                 connection_tuple,
             ) in facs_list_idx_to_del_connect_idxs_mapping.items():
-                fsg_to_be_connected.factors[fac_index].variables[  # type: ignore
+                fsg_to_be_connected.factors[fac_index].variables[
                     connection_tuple[0]
                 ] = fsg_to_connect_to.factors[fac_index].variables[connection_tuple[1]]
             fsg_to_connect_to = new_subgraphs[extension]
@@ -92,7 +95,7 @@ class GridFactorGraph2D:
                     fac_index,
                     connection_tuple,
                 ) in subgraph_fac_idxs_to_del_connect_idxs_mapping.items():
-                    row_to_be_connected[fsg_idx].factors[fac_index].variables[  # type: ignore
+                    row_to_be_connected[fsg_idx].factors[fac_index].variables[
                         connection_tuple[0]
                     ] = (
                         row_to_connect_to[fsg_idx]
@@ -103,10 +106,66 @@ class GridFactorGraph2D:
 
         return new_rows
 
-    def convert_to_factor_graph(self) -> graph.FactorGraph:
-        fg_factors = []
-        fg_vars = set()
+    def apply_and_modify_along_axis(
+        self, func, axis, row_idx, elem_start_idx, elem_end_idx
+    ):
+        """Applies a function to certain elements of self.factor_grid along an axis and modifies those
+        elements to be the function output.
 
+        IMPORTANT: Note that func must return the values to substitute into the array. If func does not return anything
+        the array will be substituted with Nones
+        """
+        mod_idxs = (
+            slice(
+                None,
+            ),
+        ) * axis + (row_idx,)
+        elems_to_mod = self.factor_grid[mod_idxs][elem_start_idx:elem_end_idx]
+        modded_elems = func(elems_to_mod, row_idx, elem_start_idx, elem_end_idx)
+        self.factor_grid[mod_idxs][elem_start_idx:elem_end_idx] = modded_elems
+
+    def slide_apply_and_modify_row(
+        self, func, axis, row_idx, slice_size, start=0, stop=-1, step=1
+    ):
+        """Applies a function 'convolutionally' across a specified 1D row of an axis."""
+        # TODO: Throw exceptions for faulty input?
+        if stop == -1 or stop >= self.factor_grid.shape[axis]:
+            stop = self.factor_grid.shape[axis]
+        while start + slice_size <= stop:
+            self.apply_and_modify_along_axis(
+                func, axis, row_idx, start, start + slice_size
+            )
+            start += step
+
+    def slide_apply_and_modify_axis(
+        self,
+        func,
+        axis,
+        row_slice_size,
+        row_idxs=None,
+        row_elem_start=0,
+        row_elem_stop=-1,
+        row_elem_step=1,
+    ):
+        """Applies a function 'convolutionally' across specified 1D rows of a particular axis."""
+        if row_idxs is None:
+            row_idxs = range(self.factor_grid.shape[axis])
+        for row_idx in row_idxs:
+            self.slide_apply_and_modify_row(
+                func,
+                axis,
+                row_idx,
+                row_slice_size,
+                row_elem_start,
+                row_elem_stop,
+                row_elem_step,
+            )
+
+    def output_vars_and_facs(
+        self,
+    ) -> Tuple[Tuple[nodes.Variable, ...], Tuple[nodes.EnumerationFactor, ...]]:
+        fg_factors = self.non_grid_factors[:]
+        fg_vars: Set[nodes.Variable] = set()
         for row in range(self.num_rows):
             for col in range(self.num_cols):
                 if self.factor_grid[row, col] is not None:
@@ -114,5 +173,4 @@ class GridFactorGraph2D:
                     for factor in self.factor_grid[row, col].factors:
                         for variable in factor.variables:
                             fg_vars.add(variable)
-
-        return graph.FactorGraph(tuple(fg_vars), tuple(fg_factors))
+        return (tuple(fg_vars), tuple(fg_factors))
