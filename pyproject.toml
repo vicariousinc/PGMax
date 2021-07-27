@@ -1,8 +1,17 @@
 [tool.poetry]
 name = "pgmax"
 version = "0.1.0"
-description = "A library to enable efficient MAP inference on Factor Graphs using JAX!"
+description = "Loopy belief propagation for factor graphs on discrete variables, in JAX!"
 authors = ["Nishanth Kumar <nkumar@vicarious.com>", "Stannis Zhou <stannis@vicarious.com>"]
+# Additional info
+license = "MIT"
+readme = "README.md"
+include = [
+    "LICENSE",
+]
+homepage = "https://github.com/vicariousinc/PGMax"
+repository = "https://github.com/vicariousinc/PGMax"
+keywords = ["PGMax", "jax"]
 
 [tool.poetry.dependencies]
 python = ">=3.7,<3.10"
