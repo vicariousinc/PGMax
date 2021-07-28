@@ -10,6 +10,7 @@ jobs:
     strategy:
       matrix:
         python-version: [3.7]
+        poetry-version: [1.1.6]
     steps:
       #----------------------------------------------
       #       check-out repo and set-up python
@@ -22,5 +23,6 @@ jobs:
       uses: JRubics/poetry-publish@v1.6
       with:
         python_version: ${{ matrix.python-version }}
+        poetry_version: ${{ matrix.poetry-version }}
         pypi_token: ${{ secrets.PYPI_TOKEN }}
         ignore_dev_requirements: "yes"
