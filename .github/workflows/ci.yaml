@@ -96,4 +96,3 @@ jobs:
       #              run pre-commit hooks
       #----------------------------------------------
       - uses: pre-commit/action@v2.0.3
-
