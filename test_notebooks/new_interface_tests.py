@@ -21,7 +21,7 @@ import pgmax.fg.graph as graph
 
 # Custom Imports
 import pgmax.fg.nodes as nodes  # isort:skip
-import pgmax.contrib.interface.datatypes_new as interface_datatypes  # isort:skip
+import pgmax.contrib.interface.datatypes as interface_datatypes  # isort:skip
 
 # Standard Package Imports
 import matplotlib.pyplot as plt  # isort:skip
@@ -69,7 +69,8 @@ ax[1].imshow(labels_img)
 ax[1].set_title("Label Image (yellow is higher depth than purple)")
 
 # %%
-M, N = depth_img.shape
+M: int = depth_img.shape[0]
+N: int = depth_img.shape[1]
 # Compute dI/dx (horizontal derivative)
 horizontal_depth_differences = depth_img[:-1] - depth_img[1:]
 # Compute dI/dy (vertical derivative)
@@ -161,13 +162,14 @@ SUPPRESSION_DIAMETER = 9
 valid_configs_supp = create_valid_suppression_config_arr(SUPPRESSION_DIAMETER)
 
 # %%
-# We create a GridVariableGroup such that the [0,i,j] entry corresponds to the  horizontal cut variable that's at that location in the
-# image, and the [1,i,j] entry corresponds to the  vertical cut variable that's at that location
+# We create a GridVariableGroup such that the [0,i,j] entry corresponds to the vertical cut variable (i.e, the one
+# attached horizontally to the factor) that's at that location in the image, and the [1,i,j] entry corresponds to
+# the horizontal cut variable (i.e, the one attached vertically to the factor) that's at that location
 grid_vars_group = interface_datatypes.GridVariableGroup(3, (2, M - 1, N - 1))
-for col in range(N - 1):
-    grid_vars_group.add_var((0, M - 1, col))
 for row in range(M - 1):
-    grid_vars_group.add_var((1, row, N - 1))
+    grid_vars_group.add_var((0, row, N - 1))
+for col in range(N - 1):
+    grid_vars_group.add_var((1, M - 1, col))
 
 # Now, we create the four factors
 four_factors_group = interface_datatypes.FactorGroup(valid_configs_non_supp)
@@ -175,32 +177,32 @@ for row in range(M - 1):
     for col in range(N - 1):
         four_factors_group.add_factor(
             [
-                ((1, row, col), grid_vars_group),
                 ((0, row, col), grid_vars_group),
-                ((1, row, col + 1), grid_vars_group),
-                ((0, row + 1, col), grid_vars_group),
+                ((1, row, col), grid_vars_group),
+                ((0, row, col + 1), grid_vars_group),
+                ((1, row + 1, col), grid_vars_group),
             ]
         )
 
 # Next, we create all the vertical suppression variables
 vert_suppression_group = interface_datatypes.FactorGroup(valid_configs_supp)
-for row in range(M - 1):
-    for start_col in range(N - SUPPRESSION_DIAMETER):
+for col in range(N):
+    for start_row in range(M - SUPPRESSION_DIAMETER):
         vert_suppression_group.add_factor(
             [
-                ((1, row, c), grid_vars_group)
-                for c in range(start_col, start_col + SUPPRESSION_DIAMETER)
+                ((0, r, col), grid_vars_group)
+                for r in range(start_row, start_row + SUPPRESSION_DIAMETER)
             ]
         )
 
 # Next, we create all the horizontal suppression variables
 horz_suppression_group = interface_datatypes.FactorGroup(valid_configs_supp)
-for col in range(N - 1):
-    for start_row in range(M - SUPPRESSION_DIAMETER):
+for row in range(M):
+    for start_col in range(N - SUPPRESSION_DIAMETER):
         horz_suppression_group.add_factor(
             [
-                ((1, r, col), grid_vars_group)
-                for r in range(start_row, start_row + SUPPRESSION_DIAMETER)
+                ((1, row, c), grid_vars_group)
+                for c in range(start_col, start_col + SUPPRESSION_DIAMETER)
             ]
         )
 
@@ -263,8 +265,8 @@ class ConcreteFactorGraph(graph.FactorGraph):
 # %%
 gt_has_cuts = gt_has_cuts.astype(np.int32)
 
-# First, we create an array such that the [0,i,j] entry corresponds to the  horizontal cut variable that's at that location in the
-# image, and the [1,i,j] entry corresponds to the  vertical cut variable that's at that location
+# Construct an np array of all the variables by simply querying the grid_vars_group.grid_vars_group.
+# This will be useful for display purposes.
 var_img_arr = np.full((2, N, M), None)
 
 # We then loop thru and generate all rows and column variables
@@ -272,10 +274,10 @@ for row in range(M - 1):
     for col in range(N - 1):
         var_img_arr[1, row, col] = grid_vars_group.query_var((1, row, col))
         var_img_arr[0, row, col] = grid_vars_group.query_var((0, row, col))
-for col in range(N - 1):
-    var_img_arr[0, M - 1, col] = grid_vars_group.query_var((0, M - 1, col))
 for row in range(M - 1):
-    var_img_arr[1, row, N - 1] = grid_vars_group.query_var((1, row, N - 1))
+    var_img_arr[0, row, N - 1] = grid_vars_group.query_var((0, row, N - 1))
+for col in range(N - 1):
+    var_img_arr[1, M - 1, col] = grid_vars_group.query_var((1, M - 1, col))
 
 
 # Now, we use this array along with the gt_has_cuts array computed earlier using the image in order to derive the evidence values

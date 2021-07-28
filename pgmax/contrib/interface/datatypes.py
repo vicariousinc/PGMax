@@ -69,7 +69,7 @@ class GridVariableGroup(VariableGroup):
     # contain the lengths of each dimension as each of the elements. E.g.
     # to instantiate a 3D grid with shape (3,3,2), key_tuple_dim_sizes must be
     # (3,3,2)
-    key_tuple_dim_sizes: Tuple[int]
+    key_tuple_dim_sizes: Tuple[int, ...]
 
     def __post_init__(self) -> None:
         self._key_to_var_mapping: Dict[Tuple[int], nodes.Variable] = {}
