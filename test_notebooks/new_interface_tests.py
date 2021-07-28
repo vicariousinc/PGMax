@@ -6,7 +6,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.11.3
+#       jupytext_version: 1.11.4
 #   kernelspec:
 #     display_name: 'Python 3.8.5 64-bit (''pgmax-JcKb81GE-py3.8'': poetry)'
 #     name: python3
@@ -31,8 +31,9 @@ import jax.numpy as jnp  # isort:skip
 from numpy.random import default_rng  # isort:skip
 from scipy import sparse  # isort:skip
 from scipy.ndimage import gaussian_filter  # isort:skip
-from typing import Any, Dict  # isort:skip
+from typing import Any, Dict, Tuple, List  # isort:skip
 from timeit import default_timer as timer  # isort:skip
+from dataclasses import dataclass  # isort:skip
 
 # fmt: on
 
@@ -161,57 +162,114 @@ valid_configs_non_supp.flags.writeable = False
 SUPPRESSION_DIAMETER = 9
 valid_configs_supp = create_valid_suppression_config_arr(SUPPRESSION_DIAMETER)
 
+
+# %%
+# Subclass FactorGroup into the 3 different groups that appear in this problem
+
+
+@dataclass
+class FourFactorGroup(interface_datatypes.FactorGroup):
+    num_rows: int
+    num_cols: int
+    grid_vars_group: interface_datatypes.GridVariableGroup
+
+    def _get_connected_var_keys_for_factors(
+        self,
+    ) -> List[List[Tuple[Tuple[int, ...], interface_datatypes.VariableGroup]]]:
+        ret_list: List[
+            List[Tuple[Tuple[int, ...], interface_datatypes.VariableGroup]]
+        ] = []
+        for row in range(self.num_rows - 1):
+            for col in range(self.num_cols - 1):
+                ret_list.append(
+                    [
+                        ((0, row, col), self.grid_vars_group),
+                        ((1, row, col), self.grid_vars_group),
+                        ((0, row, col + 1), self.grid_vars_group),
+                        ((1, row + 1, col), self.grid_vars_group),
+                    ]
+                )
+        return ret_list
+
+
+@dataclass
+class VertSuppressionFactorGroup(interface_datatypes.FactorGroup):
+    num_rows: int
+    num_cols: int
+    suppression_diameter: int
+    grid_vars_group: interface_datatypes.GridVariableGroup
+
+    def _get_connected_var_keys_for_factors(
+        self,
+    ) -> List[List[Tuple[Tuple[int, ...], interface_datatypes.VariableGroup]]]:
+        ret_list: List[
+            List[Tuple[Tuple[int, ...], interface_datatypes.VariableGroup]]
+        ] = []
+        for col in range(self.num_cols):
+            for start_row in range(self.num_rows - self.suppression_diameter):
+                ret_list.append(
+                    [
+                        ((0, r, col), self.grid_vars_group)
+                        for r in range(start_row, start_row + self.suppression_diameter)
+                    ]
+                )
+        return ret_list
+
+
+@dataclass
+class HorzSuppressionFactorGroup(interface_datatypes.FactorGroup):
+    num_rows: int
+    num_cols: int
+    suppression_diameter: int
+    grid_vars_group: interface_datatypes.GridVariableGroup
+
+    def _get_connected_var_keys_for_factors(
+        self,
+    ) -> List[List[Tuple[Tuple[int, ...], interface_datatypes.VariableGroup]]]:
+        ret_list: List[
+            List[Tuple[Tuple[int, ...], interface_datatypes.VariableGroup]]
+        ] = []
+        for row in range(self.num_rows):
+            for start_col in range(self.num_cols - self.suppression_diameter):
+                ret_list.append(
+                    [
+                        ((1, row, c), self.grid_vars_group)
+                        for c in range(start_col, start_col + self.suppression_diameter)
+                    ]
+                )
+        return ret_list
+
+
 # %%
 # We create a GridVariableGroup such that the [0,i,j] entry corresponds to the vertical cut variable (i.e, the one
 # attached horizontally to the factor) that's at that location in the image, and the [1,i,j] entry corresponds to
 # the horizontal cut variable (i.e, the one attached vertically to the factor) that's at that location
-grid_vars_group = interface_datatypes.GridVariableGroup(3, (2, M - 1, N - 1))
-for row in range(M - 1):
-    grid_vars_group.add_var((0, row, N - 1))
-for col in range(N - 1):
-    grid_vars_group.add_var((1, M - 1, col))
-
-# Now, we create the four factors
-four_factors_group = interface_datatypes.FactorGroup(valid_configs_non_supp)
-for row in range(M - 1):
-    for col in range(N - 1):
-        four_factors_group.add_factor(
-            [
-                ((0, row, col), grid_vars_group),
-                ((1, row, col), grid_vars_group),
-                ((0, row, col + 1), grid_vars_group),
-                ((1, row + 1, col), grid_vars_group),
-            ]
-        )
-
-# Next, we create all the vertical suppression variables
-vert_suppression_group = interface_datatypes.FactorGroup(valid_configs_supp)
-for col in range(N):
-    for start_row in range(M - SUPPRESSION_DIAMETER):
-        vert_suppression_group.add_factor(
-            [
-                ((0, r, col), grid_vars_group)
-                for r in range(start_row, start_row + SUPPRESSION_DIAMETER)
-            ]
-        )
-
-# Next, we create all the horizontal suppression variables
-horz_suppression_group = interface_datatypes.FactorGroup(valid_configs_supp)
-for row in range(M):
-    for start_col in range(N - SUPPRESSION_DIAMETER):
-        horz_suppression_group.add_factor(
-            [
-                ((1, row, c), grid_vars_group)
-                for c in range(start_col, start_col + SUPPRESSION_DIAMETER)
-            ]
-        )
-
-facs_tuple = tuple(
-    four_factors_group.get_all_factors()
-    + vert_suppression_group.get_all_factors()
-    + horz_suppression_group.get_all_factors()
+extra_row_keys: List[Tuple[int, ...]] = [(0, row, N - 1) for row in range(M - 1)]
+extra_col_keys: List[Tuple[int, ...]] = [(1, M - 1, col) for col in range(N - 1)]
+additional_keys = extra_row_keys + extra_col_keys
+grid_vars_group = interface_datatypes.GridVariableGroup(
+    3, (2, M - 1, N - 1), additional_keys
 )
-vars_tuple = tuple(grid_vars_group.get_all_vars())
+
+# %%
+# Now, we instantiate the four factors
+four_factors_group = FourFactorGroup(valid_configs_non_supp, M, N, grid_vars_group)
+# Next, we instantiate all the vertical suppression variables
+vert_suppression_group = VertSuppressionFactorGroup(
+    valid_configs_supp, M, N, SUPPRESSION_DIAMETER, grid_vars_group
+)
+# Next, we instantiate all the horizontal suppression variables
+horz_suppression_group = HorzSuppressionFactorGroup(
+    valid_configs_supp, M, N, SUPPRESSION_DIAMETER, grid_vars_group
+)
+
+# Finally, we construct the tuple of all the factors and variables involved in the problem.
+facs_tuple = tuple(
+    list(four_factors_group.get_all_factors())
+    + list(vert_suppression_group.get_all_factors())
+    + list(horz_suppression_group.get_all_factors())
+)
+vars_tuple = grid_vars_group.get_all_vars()
 
 
 # %%
@@ -265,27 +323,12 @@ class ConcreteFactorGraph(graph.FactorGraph):
 # %%
 gt_has_cuts = gt_has_cuts.astype(np.int32)
 
-# Construct an np array of all the variables by simply querying the grid_vars_group.grid_vars_group.
-# This will be useful for display purposes.
-var_img_arr = np.full((2, N, M), None)
-
-# We then loop thru and generate all rows and column variables
-for row in range(M - 1):
-    for col in range(N - 1):
-        var_img_arr[1, row, col] = grid_vars_group.query_var((1, row, col))
-        var_img_arr[0, row, col] = grid_vars_group.query_var((0, row, col))
-for row in range(M - 1):
-    var_img_arr[0, row, N - 1] = grid_vars_group.query_var((0, row, N - 1))
-for col in range(N - 1):
-    var_img_arr[1, M - 1, col] = grid_vars_group.query_var((1, M - 1, col))
-
-
 # Now, we use this array along with the gt_has_cuts array computed earlier using the image in order to derive the evidence values
 var_evidence_dict = {}
 for i in range(2):
     for row in range(M):
         for col in range(N):
-            # The dictionary key is in var_img_arr at loc [i,row,call] (the Variable is stored here!)
+            # The dictionary key is in grid_vars_group at loc [i,row,call]
             evidence_arr = np.zeros(
                 3
             )  # Note that we know num states for each variable is 3, so we can do this
@@ -298,8 +341,10 @@ for i in range(2):
             evidence_arr[1:] += 0.1 * rng.logistic(
                 size=evidence_arr[1:].shape
             )  # This adds logistic noise for every evidence entry
-            if var_img_arr[i, row, col] is not None:
-                var_evidence_dict[var_img_arr[i, row, col]] = evidence_arr
+            try:
+                var_evidence_dict[grid_vars_group[i, row, col]] = evidence_arr
+            except ValueError:
+                pass
 
 
 # %% [markdown]
@@ -336,11 +381,13 @@ bu_evidence = np.zeros((2, M, N, 3))
 for i in range(2):
     for row in range(M):
         for col in range(N):
-            if var_img_arr[i, row, col] is not None:
-                bp_values[i, row, col] = map_message_dict[var_img_arr[i, row, col]]
+            try:
+                bp_values[i, row, col] = map_message_dict[grid_vars_group[i, row, col]]
                 bu_evidence[i, row, col, :] = var_evidence_dict[
-                    var_img_arr[i, row, col]
+                    grid_vars_group[i, row, col]
                 ]
+            except ValueError:
+                pass
 
 
 # %%

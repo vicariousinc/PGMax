@@ -1,6 +1,7 @@
 import itertools
 from dataclasses import dataclass
-from typing import Any, Dict, List, Tuple
+from types import MappingProxyType
+from typing import Any, Dict, List, Mapping, Tuple
 
 import numpy as np
 
@@ -12,9 +13,11 @@ class VariableGroup:
     variable_size: int  # NOTE: all variables in a VariableGroup are assumed to have the same size
 
     def __post_init__(self) -> None:
-        self._key_to_var_mapping: Dict[Any, nodes.Variable] = {}
+        self._key_to_var_mapping: Mapping[Any, nodes.Variable] = MappingProxyType(
+            self._generate_vars()
+        )
 
-    def query_var(self, key) -> nodes.Variable:
+    def __getitem__(self, key) -> nodes.Variable:
         ret_var = self._key_to_var_mapping.get(key)
         if ret_var is None:
             raise ValueError(
@@ -23,44 +26,49 @@ class VariableGroup:
             )
         return ret_var
 
-    def add_var(self, key) -> None:
-        if self._key_to_var_mapping.get(key) is not None:
-            raise ValueError(
-                f"The key {key} is already present in this VariableGroup; please ensure "
-                + "it hasn't previously been added before adding it."
-            )
-        self._key_to_var_mapping[key] = nodes.Variable(self.variable_size)
+    def _generate_vars(self) -> Dict[Any, nodes.Variable]:
+        raise NotImplementedError(
+            "Please subclass the VariableGroup class and override this method"
+        )
 
-    def get_all_vars(self) -> List[nodes.Variable]:
-        all_vars = []
-        for var in self._key_to_var_mapping.values():
-            all_vars.append(var)
-        return all_vars
+    def get_all_vars(self) -> Tuple[nodes.Variable, ...]:
+        return tuple(self._key_to_var_mapping.values())
 
 
-# NOTE: A thought: maybe we should make the factors within a factorgroup optionally accessible via some form of
-# indexing similar to VariableGroups? This could potentially make it easier to build hierarchical graphs.
 @dataclass
 class FactorGroup:
     factor_configs: np.ndarray
 
     def __post_init__(self) -> None:
-        self._factor_list: List[nodes.EnumerationFactor] = []
+        factors_list = []
+        nested_keys_list = self._get_connected_var_keys_for_factors()
+        if len(nested_keys_list) == 0:
+            raise ValueError(
+                "The list returned by _get_connected_var_keys_for_factors is empty"
+            )
+        for keys_list in nested_keys_list:
+            vars_list = []
+            for key_vargroup_tuple in keys_list:
+                key, vargroup = key_vargroup_tuple
+                vars_list.append(vargroup[key])
+            if len(vars_list) == 0:
+                raise ValueError(
+                    "There was an empty sub-list in the output of _get_connected_var_keys_for_factors"
+                )
+            factors_list.append(
+                nodes.EnumerationFactor(tuple(vars_list), self.factor_configs)
+            )
+        self._factors: Tuple[nodes.EnumerationFactor, ...] = tuple(factors_list)
 
-    def add_factor(self, var_neighbor_keys_and_groups: List[Tuple]) -> None:
-        # var_neighbor_keys_and_groups is a list of size-2 tuples.
-        # In each tuple, the 0th elem is a key, and the 1st elem is a VariableGroup
-        # that contains the key
-        neighbor_vars = []
-        for key_and_group in var_neighbor_keys_and_groups:
-            key, group = key_and_group
-            neighbor_vars.append(group.query_var(key))
-        self._factor_list.append(
-            nodes.EnumerationFactor(tuple(neighbor_vars), self.factor_configs)
+    def _get_connected_var_keys_for_factors(
+        self,
+    ) -> List[List[Tuple[Any, VariableGroup]]]:
+        raise NotImplementedError(
+            "Please subclass the FactorGroup class and override this method"
         )
 
-    def get_all_factors(self) -> List[nodes.EnumerationFactor]:
-        return self._factor_list
+    def get_all_factors(self) -> Tuple[nodes.EnumerationFactor, ...]:
+        return self._factors
 
 
 @dataclass
@@ -70,10 +78,14 @@ class GridVariableGroup(VariableGroup):
     # to instantiate a 3D grid with shape (3,3,2), key_tuple_dim_sizes must be
     # (3,3,2)
     key_tuple_dim_sizes: Tuple[int, ...]
+    additional_keys: List[Tuple[int, ...]]
 
-    def __post_init__(self) -> None:
-        self._key_to_var_mapping: Dict[Tuple[int], nodes.Variable] = {}
+    def _generate_vars(self) -> Dict[Tuple[int, ...], nodes.Variable]:
+        key_to_var_mapping: Dict[Tuple[int, ...], nodes.Variable] = {}
         for key in itertools.product(
             *[list(range(k)) for k in self.key_tuple_dim_sizes]
         ):
-            self.add_var(key)
+            key_to_var_mapping[key] = nodes.Variable(self.variable_size)
+        for key in self.additional_keys:
+            key_to_var_mapping[key] = nodes.Variable(self.variable_size)
+        return key_to_var_mapping
