@@ -1,0 +1,26 @@
+name: PyPI-publish
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish_to_pypi:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.7]
+    steps:
+      #----------------------------------------------
+      #       check-out repo and set-up python
+      #----------------------------------------------
+    - uses: actions/checkout@v2
+      #------------------------------------------------
+      # Install poetry, then build and publish to PyPI
+      #------------------------------------------------
+    - name: Build and publish to pypi
+      uses: JRubics/poetry-publish@v1.6
+      with:
+        python_version: ${{ matrix.python-version }}
+        pypi_token: ${{ secrets.PYPI_TOKEN }}
+        ignore_dev_requirements: "yes"
