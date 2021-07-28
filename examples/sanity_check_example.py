@@ -226,7 +226,7 @@ for row in range(M - 1):
 # Now that we have created all the variables correctly, we can create all the grid EnumerationFactors correctly
 facs_list = []
 for _, var_neighbs in factors_neighbors_dict.items():
-    grid_fac = nodes.EnumerationFactor(var_neighbs, valid_configs_non_supp)
+    grid_fac = nodes.EnumerationFactor(tuple(var_neighbs), valid_configs_non_supp)
     facs_list.append(grid_fac)
 
 # Now that we have all the variables and know their connections with the existing factors are correct, we can define the suppression factors
@@ -241,7 +241,7 @@ while row < M - 1:
     ]
     for stride in range(N - SUPPRESSION_DIAMETER):
         curr_vert_supp_factor = nodes.EnumerationFactor(
-            vertical_vars_list, valid_configs_supp
+            tuple(vertical_vars_list), valid_configs_supp
         )
         facs_list.append(curr_vert_supp_factor)
         # IMPORTANT: This below line is necessary because otherwise, the underlying list will get modified
@@ -273,7 +273,7 @@ while col < N - 1:
 
     for stride in range(M - SUPPRESSION_DIAMETER):
         curr_horz_supp_factor = nodes.EnumerationFactor(
-            horizontal_vars_list, valid_configs_supp
+            tuple(horizontal_vars_list), valid_configs_supp
         )
         facs_list.append(curr_horz_supp_factor)
         # IMPORTANT: This below line is necessary because otherwise, the underlying list will get modified

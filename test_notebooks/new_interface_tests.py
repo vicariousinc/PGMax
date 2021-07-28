@@ -21,7 +21,7 @@ import pgmax.fg.graph as graph
 
 # Custom Imports
 import pgmax.fg.nodes as nodes  # isort:skip
-import pgmax.contrib.interface.datatypes as interface_datatypes  # isort:skip
+import pgmax.contrib.interface.datatypes_new as interface_datatypes  # isort:skip
 
 # Standard Package Imports
 import matplotlib.pyplot as plt  # isort:skip
@@ -161,63 +161,59 @@ SUPPRESSION_DIAMETER = 9
 valid_configs_supp = create_valid_suppression_config_arr(SUPPRESSION_DIAMETER)
 
 # %%
-# Create the grid FactorGraph
-var_neighbs = [nodes.Variable(3) for _ in range(4)]
-top_left_corner_factor = nodes.EnumerationFactor(var_neighbs, valid_configs_non_supp)
-col_ext_del_connect_idx_mapping = {top_left_corner_factor: (0, 2)}
-row_ext_del_connect_idx_mapping = {top_left_corner_factor: (1, 3)}
-top_left_corner = interface_datatypes.FactorSubGraph([top_left_corner_factor])
+# We create a GridVariableGroup such that the [0,i,j] entry corresponds to the  horizontal cut variable that's at that location in the
+# image, and the [1,i,j] entry corresponds to the  vertical cut variable that's at that location
+grid_vars_group = interface_datatypes.GridVariableGroup(3, (2, M - 1, N - 1))
+for col in range(N - 1):
+    grid_vars_group.add_var((0, M - 1, col))
+for row in range(M - 1):
+    grid_vars_group.add_var((1, row, N - 1))
 
-gridgraph = interface_datatypes.GridFactorGraph2D(
-    top_left_corner,
-    col_ext_del_connect_idx_mapping,
-    row_ext_del_connect_idx_mapping,
-    M - 1,
-    N - 1,
+# Now, we create the four factors
+four_factors_group = interface_datatypes.FactorGroup(valid_configs_non_supp)
+for row in range(M - 1):
+    for col in range(N - 1):
+        four_factors_group.add_factor(
+            [
+                ((1, row, col), grid_vars_group),
+                ((0, row, col), grid_vars_group),
+                ((1, row, col + 1), grid_vars_group),
+                ((0, row + 1, col), grid_vars_group),
+            ]
+        )
+
+# Next, we create all the vertical suppression variables
+vert_suppression_group = interface_datatypes.FactorGroup(valid_configs_supp)
+for row in range(M - 1):
+    for start_col in range(N - SUPPRESSION_DIAMETER):
+        vert_suppression_group.add_factor(
+            [
+                ((1, row, c), grid_vars_group)
+                for c in range(start_col, start_col + SUPPRESSION_DIAMETER)
+            ]
+        )
+
+# Next, we create all the horizontal suppression variables
+horz_suppression_group = interface_datatypes.FactorGroup(valid_configs_supp)
+for col in range(N - 1):
+    for start_row in range(M - SUPPRESSION_DIAMETER):
+        horz_suppression_group.add_factor(
+            [
+                ((1, r, col), grid_vars_group)
+                for r in range(start_row, start_row + SUPPRESSION_DIAMETER)
+            ]
+        )
+
+facs_tuple = tuple(
+    four_factors_group.get_all_factors()
+    + vert_suppression_group.get_all_factors()
+    + horz_suppression_group.get_all_factors()
 )
+vars_tuple = tuple(grid_vars_group.get_all_vars())
 
-
-def vert_supp_creation_func(fg_slice, row_idx, elem_start_idx, elem_end_idx):
-    supp_vars = [subgraph.factors[0].variables[0] for subgraph in fg_slice.tolist()]
-    vars_tuple = tuple(supp_vars)
-    new_supp_fac = nodes.EnumerationFactor(vars_tuple, valid_configs_supp)
-    gridgraph.non_grid_factors.append(new_supp_fac)
-
-    if elem_end_idx == gridgraph.num_rows:
-        _ = supp_vars.pop(0)
-        supp_vars.append(fg_slice.tolist()[-1].factors[0].variables[2])
-        new_vars_tuple = tuple(supp_vars)
-        new_new_supp_fac = nodes.EnumerationFactor(new_vars_tuple, valid_configs_supp)
-        gridgraph.non_grid_factors.append(new_new_supp_fac)
-
-    return fg_slice
-
-
-def horz_supp_creation_func(fg_slice, row_idx, elem_start_idx, elem_end_idx):
-    supp_vars = [subgraph.factors[0].variables[1] for subgraph in fg_slice.tolist()]
-    vars_tuple = tuple(supp_vars)
-    new_supp_fac = nodes.EnumerationFactor(vars_tuple, valid_configs_supp)
-    gridgraph.non_grid_factors.append(new_supp_fac)
-
-    if elem_end_idx == gridgraph.num_cols:
-        _ = supp_vars.pop(0)
-        supp_vars.append(fg_slice.tolist()[-1].factors[0].variables[3])
-        new_vars_tuple = tuple(supp_vars)
-        new_new_supp_fac = nodes.EnumerationFactor(new_vars_tuple, valid_configs_supp)
-        gridgraph.non_grid_factors.append(new_new_supp_fac)
-
-    return fg_slice
-
-
-gridgraph.slide_apply_and_modify_axis(vert_supp_creation_func, 1, SUPPRESSION_DIAMETER)
-gridgraph.slide_apply_and_modify_axis(horz_supp_creation_func, 0, SUPPRESSION_DIAMETER)
-
-print(len(gridgraph.non_grid_factors))
 
 # %%
 # Override and define a concrete FactorGraph Class with the get_evidence function implemented
-
-
 class ConcreteFactorGraph(graph.FactorGraph):
     def get_evidence(
         self, data: Dict[nodes.Variable, np.array], context: Any = None
@@ -271,24 +267,16 @@ gt_has_cuts = gt_has_cuts.astype(np.int32)
 # image, and the [1,i,j] entry corresponds to the  vertical cut variable that's at that location
 var_img_arr = np.full((2, N, M), None)
 
-num_vars = 0
 # We then loop thru and generate all rows and column variables
 for row in range(M - 1):
     for col in range(N - 1):
-        if row == 0:
-            var_img_arr[1, 0, col] = (
-                gridgraph.factor_grid[row, col].factors[0].variables[1]
-            )
-        var_img_arr[1, row + 1, col] = (
-            gridgraph.factor_grid[row, col].factors[0].variables[3]
-        )
-        if col == 0:
-            var_img_arr[0, row, 0] = (
-                gridgraph.factor_grid[row, col].factors[0].variables[0]
-            )
-        var_img_arr[0, row, col + 1] = (
-            gridgraph.factor_grid[row, col].factors[0].variables[2]
-        )
+        var_img_arr[1, row, col] = grid_vars_group.query_var((1, row, col))
+        var_img_arr[0, row, col] = grid_vars_group.query_var((0, row, col))
+for col in range(N - 1):
+    var_img_arr[0, M - 1, col] = grid_vars_group.query_var((0, M - 1, col))
+for row in range(M - 1):
+    var_img_arr[1, row, N - 1] = grid_vars_group.query_var((1, row, N - 1))
+
 
 # Now, we use this array along with the gt_has_cuts array computed earlier using the image in order to derive the evidence values
 var_evidence_dict = {}
@@ -317,7 +305,6 @@ for i in range(2):
 
 # %%
 # Create the factor graph
-vars_tuple, facs_tuple = gridgraph.output_vars_and_facs()
 fg_creation_start_time = timer()
 fg = ConcreteFactorGraph(vars_tuple, facs_tuple)
 fg_creation_end_time = timer()

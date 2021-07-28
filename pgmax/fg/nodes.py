@@ -1,7 +1,7 @@
 """A module containing classes that specify the components of a Factor Graph."""
 
 from dataclasses import dataclass
-from typing import List, Mapping, Union
+from typing import Mapping, Tuple, Union
 
 import jax.numpy as jnp
 import numpy as np
@@ -53,10 +53,7 @@ class EnumerationFactor:
             An array containing explicit enumeration of all valid configurations
     """
 
-    # NOTE: This used to be a Tuple to prevent accidental editing. Perhaps we can
-    # introduce a "freeze_vars" function that makes this uneditable after it's called in order to
-    # mimic this previous functionality?
-    variables: List[Variable]
+    variables: Tuple[Variable, ...]
     configs: np.ndarray
 
     def __post_init__(self):
