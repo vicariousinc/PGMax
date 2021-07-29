@@ -171,7 +171,8 @@ valid_configs_supp = create_valid_suppression_config_arr(SUPPRESSION_DIAMETER)
 class FourFactorGroup(interface_datatypes.FactorGroup):
     num_rows: int
     num_cols: int
-    grid_vars_group: interface_datatypes.GridVariableGroup
+    grid_vars_group: interface_datatypes.NDVariableArray
+    additional_keys_group: interface_datatypes.KeyTupleVariableGroup
 
     def _get_connected_var_keys_for_factors(
         self,
@@ -181,14 +182,43 @@ class FourFactorGroup(interface_datatypes.FactorGroup):
         ] = []
         for row in range(self.num_rows - 1):
             for col in range(self.num_cols - 1):
-                ret_list.append(
-                    [
-                        ((0, row, col), self.grid_vars_group),
-                        ((1, row, col), self.grid_vars_group),
-                        ((0, row, col + 1), self.grid_vars_group),
-                        ((1, row + 1, col), self.grid_vars_group),
-                    ]
-                )
+                if row != self.num_rows - 2 and col != self.num_cols - 2:
+                    ret_list.append(
+                        [
+                            ((0, row, col), self.grid_vars_group),
+                            ((1, row, col), self.grid_vars_group),
+                            ((0, row, col + 1), self.grid_vars_group),
+                            ((1, row + 1, col), self.grid_vars_group),
+                        ]
+                    )
+                elif row != self.num_rows - 2:
+                    ret_list.append(
+                        [
+                            ((0, row, col), self.grid_vars_group),
+                            ((1, row, col), self.grid_vars_group),
+                            ((0, row, col + 1), self.additional_keys_group),
+                            ((1, row + 1, col), self.grid_vars_group),
+                        ]
+                    )
+                elif col != self.num_cols - 2:
+                    ret_list.append(
+                        [
+                            ((0, row, col), self.grid_vars_group),
+                            ((1, row, col), self.grid_vars_group),
+                            ((0, row, col + 1), self.grid_vars_group),
+                            ((1, row + 1, col), self.additional_keys_group),
+                        ]
+                    )
+                else:
+                    ret_list.append(
+                        [
+                            ((0, row, col), self.grid_vars_group),
+                            ((1, row, col), self.grid_vars_group),
+                            ((0, row, col + 1), self.additional_keys_group),
+                            ((1, row + 1, col), self.additional_keys_group),
+                        ]
+                    )
+
         return ret_list
 
 
@@ -197,7 +227,8 @@ class VertSuppressionFactorGroup(interface_datatypes.FactorGroup):
     num_rows: int
     num_cols: int
     suppression_diameter: int
-    grid_vars_group: interface_datatypes.GridVariableGroup
+    grid_vars_group: interface_datatypes.NDVariableArray
+    additional_keys_group: interface_datatypes.KeyTupleVariableGroup
 
     def _get_connected_var_keys_for_factors(
         self,
@@ -207,12 +238,25 @@ class VertSuppressionFactorGroup(interface_datatypes.FactorGroup):
         ] = []
         for col in range(self.num_cols):
             for start_row in range(self.num_rows - self.suppression_diameter):
-                ret_list.append(
-                    [
-                        ((0, r, col), self.grid_vars_group)
-                        for r in range(start_row, start_row + self.suppression_diameter)
-                    ]
-                )
+                if col != self.num_cols - 1:
+                    ret_list.append(
+                        [
+                            ((0, r, col), self.grid_vars_group)
+                            for r in range(
+                                start_row, start_row + self.suppression_diameter
+                            )
+                        ]
+                    )
+                else:
+                    ret_list.append(
+                        [
+                            ((0, r, col), self.additional_keys_group)
+                            for r in range(
+                                start_row, start_row + self.suppression_diameter
+                            )
+                        ]
+                    )
+
         return ret_list
 
 
@@ -221,7 +265,8 @@ class HorzSuppressionFactorGroup(interface_datatypes.FactorGroup):
     num_rows: int
     num_cols: int
     suppression_diameter: int
-    grid_vars_group: interface_datatypes.GridVariableGroup
+    grid_vars_group: interface_datatypes.NDVariableArray
+    additional_keys_group: interface_datatypes.KeyTupleVariableGroup
 
     def _get_connected_var_keys_for_factors(
         self,
@@ -231,45 +276,71 @@ class HorzSuppressionFactorGroup(interface_datatypes.FactorGroup):
         ] = []
         for row in range(self.num_rows):
             for start_col in range(self.num_cols - self.suppression_diameter):
-                ret_list.append(
-                    [
-                        ((1, row, c), self.grid_vars_group)
-                        for c in range(start_col, start_col + self.suppression_diameter)
-                    ]
-                )
+                if row != self.num_rows - 1:
+                    ret_list.append(
+                        [
+                            ((1, row, c), self.grid_vars_group)
+                            for c in range(
+                                start_col, start_col + self.suppression_diameter
+                            )
+                        ]
+                    )
+                else:
+                    ret_list.append(
+                        [
+                            ((1, row, c), self.additional_keys_group)
+                            for c in range(
+                                start_col, start_col + self.suppression_diameter
+                            )
+                        ]
+                    )
         return ret_list
 
 
 # %%
-# We create a GridVariableGroup such that the [0,i,j] entry corresponds to the vertical cut variable (i.e, the one
+# We create a NDVariableArray such that the [0,i,j] entry corresponds to the vertical cut variable (i.e, the one
 # attached horizontally to the factor) that's at that location in the image, and the [1,i,j] entry corresponds to
 # the horizontal cut variable (i.e, the one attached vertically to the factor) that's at that location
-extra_row_keys: List[Tuple[int, ...]] = [(0, row, N - 1) for row in range(M - 1)]
-extra_col_keys: List[Tuple[int, ...]] = [(1, M - 1, col) for col in range(N - 1)]
-additional_keys = extra_row_keys + extra_col_keys
-grid_vars_group = interface_datatypes.GridVariableGroup(
-    3, (2, M - 1, N - 1), additional_keys
-)
+grid_vars_group = interface_datatypes.NDVariableArray(3, (2, M - 1, N - 1))
+
+extra_row_keys: List[Tuple[Any, ...]] = [(0, row, N - 1) for row in range(M - 1)]
+extra_col_keys: List[Tuple[Any, ...]] = [(1, M - 1, col) for col in range(N - 1)]
+additional_keys = tuple(extra_row_keys + extra_col_keys)
+additional_keys_group = interface_datatypes.KeyTupleVariableGroup(3, additional_keys)
 
 # %%
 # Now, we instantiate the four factors
-four_factors_group = FourFactorGroup(valid_configs_non_supp, M, N, grid_vars_group)
+four_factors_group = FourFactorGroup(
+    valid_configs_non_supp, M, N, grid_vars_group, additional_keys_group
+)
 # Next, we instantiate all the vertical suppression variables
 vert_suppression_group = VertSuppressionFactorGroup(
-    valid_configs_supp, M, N, SUPPRESSION_DIAMETER, grid_vars_group
+    valid_configs_supp,
+    M,
+    N,
+    SUPPRESSION_DIAMETER,
+    grid_vars_group,
+    additional_keys_group,
 )
 # Next, we instantiate all the horizontal suppression variables
 horz_suppression_group = HorzSuppressionFactorGroup(
-    valid_configs_supp, M, N, SUPPRESSION_DIAMETER, grid_vars_group
+    valid_configs_supp,
+    M,
+    N,
+    SUPPRESSION_DIAMETER,
+    grid_vars_group,
+    additional_keys_group,
 )
 
 # Finally, we construct the tuple of all the factors and variables involved in the problem.
 facs_tuple = tuple(
-    list(four_factors_group.get_all_factors())
-    + list(vert_suppression_group.get_all_factors())
-    + list(horz_suppression_group.get_all_factors())
+    list(four_factors_group.factors)
+    + list(vert_suppression_group.factors)
+    + list(horz_suppression_group.factors)
 )
-vars_tuple = grid_vars_group.get_all_vars()
+vars_tuple = tuple(
+    list(grid_vars_group.get_all_vars()) + list(additional_keys_group.get_all_vars())
+)
 
 
 # %%
@@ -344,7 +415,10 @@ for i in range(2):
             try:
                 var_evidence_dict[grid_vars_group[i, row, col]] = evidence_arr
             except ValueError:
-                pass
+                try:
+                    var_evidence_dict[additional_keys_group[i, row, col]] = evidence_arr
+                except ValueError:
+                    pass
 
 
 # %% [markdown]
@@ -382,12 +456,18 @@ for i in range(2):
     for row in range(M):
         for col in range(N):
             try:
-                bp_values[i, row, col] = map_message_dict[grid_vars_group[i, row, col]]
+                bp_values[i, row, col] = map_message_dict[grid_vars_group[i, row, col]]  # type: ignore
                 bu_evidence[i, row, col, :] = var_evidence_dict[
                     grid_vars_group[i, row, col]
                 ]
             except ValueError:
-                pass
+                try:
+                    bp_values[i, row, col] = map_message_dict[additional_keys_group[i, row, col]]  # type: ignore
+                    bu_evidence[i, row, col, :] = var_evidence_dict[
+                        additional_keys_group[i, row, col]
+                    ]
+                except ValueError:
+                    pass
 
 
 # %%
