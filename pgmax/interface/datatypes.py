@@ -10,7 +10,17 @@ import pgmax.fg.nodes as nodes
 
 @dataclass
 class VariableGroup:
-    variable_size: int  # NOTE: all variables in a VariableGroup are assumed to have the same size
+    """Base class to represent a group of variables.
+
+    All variables in the group are assumed to have the same size. Additionally, the
+    variables are indexed by a "key", and can be retrieved by direct indexing (even slicing)
+    of the VariableGroup.
+
+    Args:
+        variable_size: the number of states that the variable can be in.
+    """
+
+    variable_size: int
 
     def __post_init__(self) -> None:
         self._key_to_var: Mapping[Any, nodes.Variable] = MappingProxyType(
@@ -40,16 +50,42 @@ class VariableGroup:
             return var
 
     def _generate_vars(self) -> Dict[Any, nodes.Variable]:
+        """Function that generates a dictionary mapping keys to variables.
+
+        This function needs to be overriden by a concrete VariableGroup subclass.
+
+        Returns:
+            a dictionary mapping all possible keys to different variables.
+        """
         raise NotImplementedError(
             "Please subclass the VariableGroup class and override this method"
         )
 
     def get_all_vars(self) -> Tuple[nodes.Variable, ...]:
+        """Function to return a tuple of all variables in the group.
+
+        Returns:
+            tuple of all variable that are part of this VariableGroup
+        """
         return tuple(self._key_to_var.values())
 
 
 @dataclass
 class FactorGroup:
+    """Base class to represent a group of factors.
+
+    All factors in the group are assumed to have the same set of valid configurations and
+    the same potential function.
+
+    Args:
+        factor_configs: Array of shape (num_configs, num_variables)
+            An array containing explicit enumeration of all valid configurations
+
+    Attributes:
+        factors: a tuple of all the factors belonging to this group. These are constructed
+            internally by invoking the _get_connected_var_keys_for_factors method.
+    """
+
     factor_configs: np.ndarray
 
     def __post_init__(self) -> None:
@@ -80,6 +116,15 @@ class FactorGroup:
     def _get_connected_var_keys_for_factors(
         self,
     ) -> List[List[Tuple[Any, VariableGroup]]]:
+        """Fuction to generate indices of variables neighboring a factor.
+
+        This function needs to be overridden by a concrete implementation of a factor group.
+
+        Returns:
+            A list of lists of length-2 tuples, where the 0th tuple element is a key and the 1st
+                tuple element is a VariableGroup that contains that key. Each inner list represents
+                a particular factor to be added.
+        """
         raise NotImplementedError(
             "Please subclass the FactorGroup class and override this method"
         )
@@ -87,10 +132,13 @@ class FactorGroup:
 
 @dataclass
 class NDVariableArray(VariableGroup):
-    # this is a tuple that should have the same length as each key_tuple, but
-    # contain the lengths of each dimension as each of the elements. E.g.
-    # to instantiate a 3D grid with shape (3,3,2), shape must be
-    # (3,3,2)
+    """Concrete subclass of VariableGroup for n-dimensional grids of variables.
+
+    Args:
+        shape: a tuple specifying the size of each dimension of the grid (similar to
+            the notion of a NumPy ndarray shape)
+    """
+
     shape: Tuple[int, ...]
 
     def _generate_vars(self) -> Dict[Tuple[int, ...], nodes.Variable]:
@@ -102,7 +150,14 @@ class NDVariableArray(VariableGroup):
 
 @dataclass
 class KeyTupleVariableGroup(VariableGroup):
-    key_tuple: Tuple[Tuple[Any, ...], ...]
+    """Concrete subclass of VariableGroup for a group with explicitly-enumerated keys.
+
+    Args:
+        key_tuple: a tuple of any element, where each element represents a particular
+            variable key.
+    """
+
+    key_tuple: Tuple[Any, ...]
 
     def _generate_vars(self) -> Dict[Tuple[int, ...], nodes.Variable]:
         key_to_var_mapping: Dict[Tuple[Any, ...], nodes.Variable] = {}

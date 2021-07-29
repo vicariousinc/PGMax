@@ -21,7 +21,7 @@ import pgmax.fg.graph as graph
 
 # Custom Imports
 import pgmax.fg.nodes as nodes  # isort:skip
-import pgmax.contrib.interface.datatypes as interface_datatypes  # isort:skip
+import pgmax.interface.datatypes as interface_datatypes  # isort:skip
 
 # Standard Package Imports
 import matplotlib.pyplot as plt  # isort:skip
