@@ -71,11 +71,58 @@ class VariableGroup:
 
 
 @dataclass
+class CompositeVariableGroup:
+    """A class to encapsulate a collection of instantiated VariableGroups.
+
+    This class enables users to wrap various different VariableGroups and then index
+    them in a straightforward manner. To index into a CompositeVariableGroup, simply
+    provide the "key" of the VariableGroup within this CompositeVariableGroup followed
+    by the key to be indexed within the VariableGroup.
+
+    Args:
+        key_vargroup_pairs: a tuple of tuples where each inner tuple is a pair of
+
+    """
+
+    key_vargroup_pairs: Tuple[Tuple[Any, VariableGroup], ...]
+
+    def __post_init__(self):
+        key_vargroup_dict: Dict[Any, VariableGroup] = {}
+        for key_vargroup_tuple in self.key_vargroup_pairs:
+            key, vargroup = key_vargroup_tuple
+            key_vargroup_dict[key] = vargroup
+        self._key_to_vargroup: Mapping[Any, VariableGroup] = MappingProxyType(
+            key_vargroup_dict
+        )
+
+    def __getitem__(self, key):
+        var_group = self._key_to_vargroup.get(key[0])
+        if var_group is None:
+            raise ValueError(
+                f"The key {key[0]} is not present in the CompositeVariableGroup {type(self)}; please ensure "
+                "it's been added to the VariableGroup before trying to query it."
+            )
+        return var_group[key[1:]]
+
+    def get_all_vars(self) -> Tuple[nodes.Variable, ...]:
+        """Function to return a tuple of all variables from all VariableGroups in this group.
+
+        Returns:
+            tuple of all variable that are part of this VariableGroup
+        """
+        var_list: List[nodes.Variable] = []
+        for var_group in self._key_to_vargroup.values():
+            var_list.extend(list(var_group.get_all_vars()))
+        return tuple(var_list)
+
+
+@dataclass
 class FactorGroup:
     """Base class to represent a group of factors.
 
     All factors in the group are assumed to have the same set of valid configurations and
-    the same potential function.
+    the same potential function. Additionally, all factors in a group are assumed to be
+    connected to variables from VariableGroups within one CompositeVariableGroup
 
     Args:
         factor_configs: Array of shape (num_configs, num_variables)
@@ -87,6 +134,7 @@ class FactorGroup:
     """
 
     factor_configs: np.ndarray
+    compvar_group: CompositeVariableGroup
 
     def __post_init__(self) -> None:
         factors = []
@@ -97,13 +145,12 @@ class FactorGroup:
             )
         for keys_list in connected_var_keys_for_factors:
             vars_list: List[nodes.Variable] = []
-            for key_vargroup_tuple in keys_list:
-                key, vargroup = key_vargroup_tuple
-                var_query = vargroup[key]
+            for key_tuple in keys_list:
+                var_query = self.compvar_group[key_tuple]
                 if type(var_query) is List[nodes.Variable]:
                     vars_list.extend(var_query)
                 else:
-                    vars_list.append(var_query)  # type: ignore
+                    vars_list.append(var_query)
             if len(vars_list) == 0:
                 raise ValueError(
                     "There was an empty sub-list in the output of _get_connected_var_keys_for_factors"
@@ -115,15 +162,14 @@ class FactorGroup:
 
     def _get_connected_var_keys_for_factors(
         self,
-    ) -> List[List[Tuple[Any, VariableGroup]]]:
+    ) -> List[List[Tuple[Any, ...]]]:
         """Fuction to generate indices of variables neighboring a factor.
 
         This function needs to be overridden by a concrete implementation of a factor group.
 
         Returns:
-            A list of lists of length-2 tuples, where the 0th tuple element is a key and the 1st
-                tuple element is a VariableGroup that contains that key. Each inner list represents
-                a particular factor to be added.
+            A list of lists of tuples, where each tuple contains a key into a CompositeVariableGroup.
+                Each inner list represents a particular factor to be added.
         """
         raise NotImplementedError(
             "Please subclass the FactorGroup class and override this method"
