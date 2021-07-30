@@ -1,8 +1,9 @@
 """A module containing classes that specify the components of a Factor Graph."""
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Mapping, Tuple, Union
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 
@@ -18,7 +19,7 @@ class Variable:
     num_states: int
 
 
-@utils.register_pytree_node_dataclass
+@jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True, eq=False)
 class EnumerationWiring:
     """Wiring for enumeration factors.
@@ -40,7 +41,15 @@ class EnumerationWiring:
 
     def __post_init__(self):
         for field in self.__dataclass_fields__:
-            getattr(self, field).flags.writeable = False
+            if isinstance(getattr(self, field), np.ndarray):
+                getattr(self, field).flags.writeable = False
+
+    def tree_flatten(self):
+        return jax.tree_util.tree_flatten(asdict(self))
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        return cls(**aux_data.unflatten(children))
 
 
 @dataclass(frozen=True, eq=False)

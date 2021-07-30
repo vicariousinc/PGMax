@@ -117,17 +117,16 @@ class FactorGraph:
             msgs = init_msgs
         else:
             msgs = self.get_init_msgs(msgs_context)
+
+        wiring = jax.device_put(self.wiring)
         evidence = self.get_evidence(evidence_data, evidence_context)
-        edges_num_states = jax.device_put(self.wiring.edges_num_states)
-        var_states_for_edges = jax.device_put(self.wiring.var_states_for_edges)
-        factor_configs_edge_states = jax.device_put(
-            self.wiring.factor_configs_edge_states
-        )
-        max_msg_size = int(jnp.max(edges_num_states))
+        max_msg_size = int(jnp.max(wiring.edges_num_states))
 
         # Normalize the messages to ensure the maximum value is 0.
-        msgs = infer.normalize_and_clip_msgs(msgs, edges_num_states, max_msg_size)
-        num_val_configs = int(factor_configs_edge_states[-1, 0])
+        msgs = infer.normalize_and_clip_msgs(
+            msgs, wiring.edges_num_states, max_msg_size
+        )
+        num_val_configs = int(wiring.factor_configs_edge_states[-1, 0])
 
         @jax.jit
         def message_passing_step(msgs, _):
@@ -135,12 +134,12 @@ class FactorGraph:
             vtof_msgs = infer.pass_var_to_fac_messages(
                 msgs,
                 evidence,
-                var_states_for_edges,
+                wiring.var_states_for_edges,
             )
             # Compute new factor to variable messages by message passing
             ftov_msgs = infer.pass_fac_to_var_messages(
                 vtof_msgs,
-                factor_configs_edge_states,
+                wiring.factor_configs_edge_states,
                 num_val_configs,
             )
             # Use the results of message passing to perform damping and
@@ -151,7 +150,7 @@ class FactorGraph:
             # them.
             msgs = infer.normalize_and_clip_msgs(
                 msgs,
-                edges_num_states,
+                wiring.edges_num_states,
                 max_msg_size,
             )
             return msgs, None
@@ -180,8 +179,6 @@ class FactorGraph:
         # NOTE: Having to regenerate the evidence here is annoying - there must be a better way to handle evidence and
         # message initialization.
         evidence = self.get_evidence(evidence_data, evidence_context)
-        # TODO: Once issue #20 is resolved, just grab this from self.wiring instead of
-        # casting it to a jnp.array
         var_states_for_edges = jax.device_put(self.wiring.var_states_for_edges)
         final_var_states = evidence.at[var_states_for_edges].add(msgs)
         var_to_map_dict = {}
