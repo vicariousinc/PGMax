@@ -28,10 +28,9 @@ class VariableGroup:
         )
 
     def __getitem__(self, key) -> Union[nodes.Variable, List[nodes.Variable]]:
-        if type(key) is slice:
-            start, stop, step = key.indices(len(self._key_to_var.keys()))
+        if type(key) is list:
             vars_list: List[nodes.Variable] = []
-            for k in range(start, stop, step):
+            for k in key:
                 var = self._key_to_var.get(k)
                 if var is None:
                     raise ValueError(
@@ -95,14 +94,26 @@ class CompositeVariableGroup:
             key_vargroup_dict
         )
 
-    def __getitem__(self, key):
-        var_group = self._key_to_vargroup.get(key[0])
-        if var_group is None:
-            raise ValueError(
-                f"The key {key[0]} is not present in the CompositeVariableGroup {type(self)}; please ensure "
-                "it's been added to the VariableGroup before trying to query it."
-            )
-        return var_group[key[1:]]
+    def __getitem__(self, key) -> Union[nodes.Variable, List[nodes.Variable]]:
+        if type(key) is list:
+            vars_list: List[nodes.Variable] = []
+            for k in key:
+                var_group = self._key_to_vargroup.get(k[0])
+                if var_group is None:
+                    raise ValueError(
+                        f"The key {key[0]} is not present in the CompositeVariableGroup {type(self)}; please ensure "
+                        "it's been added to the VariableGroup before trying to query it."
+                    )
+                vars_list.append(var_group[k[1:]])  # type: ignore
+            return vars_list
+        else:
+            var_group = self._key_to_vargroup.get(key[0])
+            if var_group is None:
+                raise ValueError(
+                    f"The key {key[0]} is not present in the CompositeVariableGroup {type(self)}; please ensure "
+                    "it's been added to the VariableGroup before trying to query it."
+                )
+            return var_group[key[1:]]
 
     def get_all_vars(self) -> Tuple[nodes.Variable, ...]:
         """Function to return a tuple of all variables from all VariableGroups in this group.
@@ -110,10 +121,10 @@ class CompositeVariableGroup:
         Returns:
             tuple of all variable that are part of this VariableGroup
         """
-        var_list: List[nodes.Variable] = []
-        for var_group in self._key_to_vargroup.values():
-            var_list.extend(list(var_group.get_all_vars()))
-        return tuple(var_list)
+        return sum(
+            [var_group.get_all_vars() for var_group in self._key_to_vargroup.values()],
+            (),
+        )
 
 
 @dataclass
@@ -131,36 +142,30 @@ class FactorGroup:
     Attributes:
         factors: a tuple of all the factors belonging to this group. These are constructed
             internally by invoking the _get_connected_var_keys_for_factors method.
+        vargroup: either a VariableGroup or - if the elements of more than one VariableGroup
+            are connected to this FactorGroup - then a CompositeVariableGroup. This holds
+            all the variables that are connected to this FactorGroup
     """
 
     factor_configs: np.ndarray
-    compvar_group: CompositeVariableGroup
+    var_group: Union[CompositeVariableGroup, VariableGroup]
 
     def __post_init__(self) -> None:
-        factors = []
-        connected_var_keys_for_factors = self._get_connected_var_keys_for_factors()
+        connected_var_keys_for_factors = self.connected_variables()
         if len(connected_var_keys_for_factors) == 0:
             raise ValueError(
                 "The list returned by _get_connected_var_keys_for_factors is empty"
             )
-        for keys_list in connected_var_keys_for_factors:
-            vars_list: List[nodes.Variable] = []
-            for key_tuple in keys_list:
-                var_query = self.compvar_group[key_tuple]
-                if type(var_query) is List[nodes.Variable]:
-                    vars_list.extend(var_query)
-                else:
-                    vars_list.append(var_query)
-            if len(vars_list) == 0:
-                raise ValueError(
-                    "There was an empty sub-list in the output of _get_connected_var_keys_for_factors"
+        self.factors: Tuple[nodes.EnumerationFactor, ...] = tuple(
+            [
+                nodes.EnumerationFactor(
+                    tuple(self.var_group[keys_list]), self.factor_configs  # type: ignore
                 )
-            factors.append(
-                nodes.EnumerationFactor(tuple(vars_list), self.factor_configs)
-            )
-        self.factors: Tuple[nodes.EnumerationFactor, ...] = tuple(factors)
+                for keys_list in connected_var_keys_for_factors
+            ]
+        )
 
-    def _get_connected_var_keys_for_factors(
+    def connected_variables(
         self,
     ) -> List[List[Tuple[Any, ...]]]:
         """Fuction to generate indices of variables neighboring a factor.
@@ -188,6 +193,13 @@ class NDVariableArray(VariableGroup):
     shape: Tuple[int, ...]
 
     def _generate_vars(self) -> Dict[Tuple[int, ...], nodes.Variable]:
+        """Function that generates a dictionary mapping keys to variables.
+
+        This is an overriden function from the parent class.
+
+        Returns:
+            a dictionary mapping all possible keys to different variables.
+        """
         key_to_var_mapping: Dict[Tuple[int, ...], nodes.Variable] = {}
         for key in itertools.product(*[list(range(k)) for k in self.shape]):
             key_to_var_mapping[key] = nodes.Variable(self.variable_size)
@@ -195,12 +207,13 @@ class NDVariableArray(VariableGroup):
 
 
 @dataclass
-class KeyTupleVariableGroup(VariableGroup):
-    """Concrete subclass of VariableGroup for a group with explicitly-enumerated keys.
+class GenericVariableGroup(VariableGroup):
+    """Function that generates a dictionary mapping keys to variables.
 
-    Args:
-        key_tuple: a tuple of any element, where each element represents a particular
-            variable key.
+    This is an overriden function from the parent class.
+
+    Returns:
+        a dictionary mapping all possible keys to different variables.
     """
 
     key_tuple: Tuple[Any, ...]
