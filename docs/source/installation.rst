@@ -15,17 +15,22 @@ User
 Developer
 ~~~~~~~~~
 
-1. Clone this project's `GitHub
-   Repository <https://github.com/vicariousinc/PGMax>`__
-2. Install Poetry by following `these
+1. Fork the PGMax repository by clicking the **Fork** button on the
+   `repository page <https://github.com/vicariousinc/PGMax>`__. This
+   creates a copy of the PGMax repository in your own GitHub account.
+2. Create a branch where you will develop from:
+
+   ``bash    git checkout -b name-of-change``
+
+1. Install Poetry by following `these
    instructions <https://python-poetry.org/docs/master/>`__. Note: you
    may need to logout and log back in after running the install command
    for the ``poetry --version`` command to work in your shell
    environment.
-3. Navigate to this project's directory and activate a poetry shell via
+2. Navigate to this project's directory and activate a poetry shell via
    the command ``poetry shell``. This creates and activates a virtual
    environment for you to use with this project.
-4. Install the project's dependencies into your virtual environment with
+3. Install the project's dependencies into your virtual environment with
    the command ``poetry install``. Your environment will now contain
    both developer and user dependencies!
 
@@ -34,4 +39,4 @@ Developer
       the official instructions
       `here <https://github.com/google/jax#pip-installation-gpu-cuda>`__.
 
-5. Do ``pre-commit install`` to initialize pre-commit hooks
+4. Do ``pre-commit install`` to initialize pre-commit hooks
