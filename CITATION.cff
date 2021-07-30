@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+license: MIT
+authors:
+  - family-names: "Kumar"
+    given-names: "Nishanth"
+    orcid: "https://orcid.org/0000-0001-9291-3728"
+  - family-names: "Zhou"
+    given-names: "Guangyao"
+  - family-names: "Lehrach"
+    given-names: "Wolfgang"
+  - family-names: "Lazaro-{G}redilla"
+    given-names: Miguel
+    orcid: "https://orcid.org/0000-0002-4528-5084"
+title: "PGMax: Efficient loopy belief propagation for factor graphs on discrete variables"
+version: 0.2.0
+date-released: 2021-08-13
+url: "https://github.com/vicariousinc/PGMax"
