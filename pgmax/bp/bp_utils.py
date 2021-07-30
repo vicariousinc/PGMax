@@ -18,8 +18,8 @@ def segment_max_opt(
 
     Args:
         data: Array of shape (a_len,) where a_len is an arbitrary integer.
-        segments_lengths: Array of shape (num_segments,), where num_segments <= a_len.
-            segments_lengths.sum() should yield a_len.
+        segments_lengths: Array of shape (num_segments,), where 0 < num_segments <= a_len.
+            segments_lengths.sum() should yield a_len, and all elements must be > 0.
         max_segment_length: The maximum value in segments_lengths.
 
     Returns:
