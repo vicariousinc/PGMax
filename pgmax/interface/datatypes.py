@@ -206,7 +206,7 @@ class NDVariableArray(VariableGroup):
 
 @dataclass
 class GenericVariableGroup(VariableGroup):
-    """Function that generates a dictionary mapping keys to variables.
+    """A generic variable group that contains a set of variables of the same size
 
     This is an overriden function from the parent class.
 
