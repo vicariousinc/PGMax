@@ -23,7 +23,11 @@ class VariableGroup:
     variable_size: int
 
     def __post_init__(self) -> None:
-        """Initialize a private, immuable mapping from keys to Variables."""
+        """Initialize a private, immuable mapping from keys to Variables.
+
+        This function calls the _generate_vars() method to generate the immutable
+        mapping.
+        """
         self._key_to_var: Mapping[Any, nodes.Variable] = MappingProxyType(
             self._generate_vars()
         )
@@ -37,6 +41,10 @@ class VariableGroup:
         Returns:
             a single variable if the "key" argument is a single key. Otherwise, returns a list of
                 variables corresponding to each key in the "key" argument.
+
+        Raises:
+            ValueError if any element of the 'key' argument was not previously added by the _generate_vars
+                method
         """
 
         if type(key) is list:
@@ -64,6 +72,9 @@ class VariableGroup:
 
         Returns:
             a dictionary mapping all possible keys to different variables.
+
+        Raises:
+            NotImplementedError if this is not overriden upon inheritance
         """
         raise NotImplementedError(
             "Please subclass the VariableGroup class and override this method"
@@ -115,6 +126,10 @@ class CompositeVariableGroup:
         Returns:
             a single variable if the "key" argument is a single key. Otherwise, returns a list of
                 variables corresponding to each key in the "key" argument.
+
+        Raises:
+            ValueError if any element of the 'key' argument was not part of the key_vargroup_pairs
+                argument when the class was initialized
         """
         if type(key) is list:
             vars_list: List[nodes.Variable] = []
