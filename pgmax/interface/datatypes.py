@@ -23,11 +23,22 @@ class VariableGroup:
     variable_size: int
 
     def __post_init__(self) -> None:
+        """Initialize a private, immuable mapping from keys to Variables."""
         self._key_to_var: Mapping[Any, nodes.Variable] = MappingProxyType(
             self._generate_vars()
         )
 
     def __getitem__(self, key) -> Union[nodes.Variable, List[nodes.Variable]]:
+        """Given a key, retrieve the associated Variable.
+
+        Args:
+            key: a single key corresponding to a single variable, or a list of such keys
+
+        Returns:
+            a single variable if the "key" argument is a single key. Otherwise, returns a list of
+                variables corresponding to each key in the "key" argument.
+        """
+
         if type(key) is list:
             vars_list: List[nodes.Variable] = []
             for k in key:
@@ -77,13 +88,15 @@ class CompositeVariableGroup:
     by the key to be indexed within the VariableGroup.
 
     Args:
-        key_vargroup_pairs: a tuple of tuples where each inner tuple is a pair of
+        key_vargroup_pairs: a tuple of tuples where each inner tuple is a (key, VariableGroup)
+            pair
 
     """
 
     key_vargroup_pairs: Tuple[Tuple[Any, VariableGroup], ...]
 
     def __post_init__(self):
+        """Initialize a private, immuable mapping from keys to VariableGroups."""
         key_vargroup_dict: Dict[Any, VariableGroup] = {}
         for key_vargroup_tuple in self.key_vargroup_pairs:
             key, vargroup = key_vargroup_tuple
@@ -93,6 +106,16 @@ class CompositeVariableGroup:
         )
 
     def __getitem__(self, key) -> Union[nodes.Variable, List[nodes.Variable]]:
+        """Given a key, retrieve the associated Variable from the associated VariableGroup.
+
+        Args:
+            key: a single key corresponding to a single Variable within a VariableGroup, or a list
+                of such keys
+
+        Returns:
+            a single variable if the "key" argument is a single key. Otherwise, returns a list of
+                variables corresponding to each key in the "key" argument.
+        """
         if type(key) is list:
             vars_list: List[nodes.Variable] = []
             for k in key:
@@ -149,6 +172,7 @@ class FactorGroup:
     var_group: Union[CompositeVariableGroup, VariableGroup]
 
     def __post_init__(self) -> None:
+        """Initializes a tuple of all the factors contained within this FactorGroup."""
         connected_var_keys_for_factors = self.connected_variables()
         if len(connected_var_keys_for_factors) == 0:
             raise ValueError(
@@ -193,8 +217,6 @@ class NDVariableArray(VariableGroup):
     def _generate_vars(self) -> Dict[Tuple[int, ...], nodes.Variable]:
         """Function that generates a dictionary mapping keys to variables.
 
-        This is an overriden function from the parent class.
-
         Returns:
             a dictionary mapping all possible keys to different variables.
         """
@@ -217,6 +239,11 @@ class GenericVariableGroup(VariableGroup):
     key_tuple: Tuple[Any, ...]
 
     def _generate_vars(self) -> Dict[Tuple[int, ...], nodes.Variable]:
+        """Function that generates a dictionary mapping keys to variables.
+
+        Returns:
+            a dictionary mapping all possible keys to different variables.
+        """
         key_to_var_mapping: Dict[Tuple[Any, ...], nodes.Variable] = {}
         for key in self.key_tuple:
             key_to_var_mapping[key] = nodes.Variable(self.variable_size)
