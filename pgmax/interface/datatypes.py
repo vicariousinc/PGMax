@@ -176,7 +176,7 @@ class FactorGroup:
         connected_var_keys_for_factors = self.connected_variables()
         if len(connected_var_keys_for_factors) == 0:
             raise ValueError(
-                "The list returned by _get_connected_var_keys_for_factors is empty"
+                "The list returned by the connected_variables method is empty"
             )
         self.factors: Tuple[nodes.EnumerationFactor, ...] = tuple(
             [

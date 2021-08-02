@@ -21,7 +21,6 @@ def test_with_ones():
     )
 
 
-# NOTE: This test is slow - need to speed up...
 def test_common_case():
     assert jnp.allclose(
         bp_utils.segment_max_opt(

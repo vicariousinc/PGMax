@@ -162,7 +162,7 @@ class FactorGraph:
     def decode_map_states(
         self, msgs: jnp.ndarray, evidence_data: Any = None, evidence_context: Any = None
     ) -> Dict[nodes.Variable, int]:
-        """Function to computes the output of MAP inference on input messages.
+        """Function to compute the output of MAP inference on input messages.
 
         The final states are computed based on evidence obtained from the self.get_evidence
         method as well as the internal wiring.
