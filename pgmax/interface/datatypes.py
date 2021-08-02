@@ -13,8 +13,8 @@ class VariableGroup:
     """Base class to represent a group of variables.
 
     All variables in the group are assumed to have the same size. Additionally, the
-    variables are indexed by a "key", and can be retrieved by direct indexing (even slicing)
-    of the VariableGroup.
+    variables are indexed by a "key", and can be retrieved by direct indexing (even indexing
+    a list of keys) of the VariableGroup.
 
     Args:
         variable_size: the number of states that the variable can be in.
@@ -50,8 +50,6 @@ class VariableGroup:
 
     def _generate_vars(self) -> Dict[Any, nodes.Variable]:
         """Function that generates a dictionary mapping keys to variables.
-
-        This function needs to be overriden by a concrete VariableGroup subclass.
 
         Returns:
             a dictionary mapping all possible keys to different variables.
