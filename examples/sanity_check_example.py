@@ -6,7 +6,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.11.3
+#       jupytext_version: 1.11.4
 #   kernelspec:
 #     display_name: 'Python 3.8.5 64-bit (''pgmax-JcKb81GE-py3.8'': poetry)'
 #     name: python3
@@ -17,9 +17,11 @@
 # fmt: off
 import os
 
-# Custom Imports
 import pgmax.fg.graph as graph
-import pgmax.fg.nodes as nodes
+
+# Custom Imports
+import pgmax.fg.nodes as nodes  # isort:skip
+import pgmax.interface.datatypes as interface_datatypes  # isort:skip
 
 # Standard Package Imports
 import matplotlib.pyplot as plt  # isort:skip
@@ -29,8 +31,10 @@ import jax.numpy as jnp  # isort:skip
 from numpy.random import default_rng  # isort:skip
 from scipy import sparse  # isort:skip
 from scipy.ndimage import gaussian_filter  # isort:skip
-from typing import Any, Dict  # isort:skip
+from typing import Any, Dict, Tuple, List  # isort:skip
 from timeit import default_timer as timer  # isort:skip
+from dataclasses import dataclass  # isort:skip
+
 # fmt: on
 
 # %% [markdown]
@@ -66,7 +70,8 @@ ax[1].imshow(labels_img)
 ax[1].set_title("Label Image (yellow is higher depth than purple)")
 
 # %%
-M, N = depth_img.shape
+M: int = depth_img.shape[0]
+N: int = depth_img.shape[1]
 # Compute dI/dx (horizontal derivative)
 horizontal_depth_differences = depth_img[:-1] - depth_img[1:]
 # Compute dI/dy (vertical derivative)
@@ -112,11 +117,8 @@ def create_valid_suppression_config_arr(suppression_diameter):
     return ret_arr
 
 
-# %% tags=[]
-# Creating the Factor Graph by instantiating Factor and Variable Nodes and writing out neighbors
-
-# We start by creating the two distinct factor types that are contained in this graph
-# We need to specify all the valid configurations for the non-suppression factors
+# %%
+# Before constructing a Factor Graph, we specify all the valid configurations for the non-suppression factors
 """
       1v
 0h  factor  2h
@@ -160,144 +162,184 @@ valid_configs_non_supp.flags.writeable = False
 SUPPRESSION_DIAMETER = 9
 valid_configs_supp = create_valid_suppression_config_arr(SUPPRESSION_DIAMETER)
 
-# Start by creating all the necessary variables
-vars_list = []
-vars_dict = {}
-factors_neighbors_dict = {}  # type: ignore
-NUM_VAR_STATES = 3
-# We start by creating all the various variables and assigning them as neighbors to factors
-# NOTE: The naming scheme for variables is not thorough. For instance, V1,1,down should be the same node as
-# V2,1,up however this is not the case because a variable can only have one name...
-for row in range(M - 1):
-    for col in range(N - 1):
-        if col == 0:
-            left_var_name = f"V{row},{col},left"
-            left_var = nodes.Variable(NUM_VAR_STATES)
-            factors_neighbors_dict[f"F{row},{col}"] = factors_neighbors_dict.get(
-                f"F{row},{col}", []
-            ) + [left_var]
-            vars_list.append(left_var)
-            vars_dict[left_var_name] = left_var
 
-        if row == 0:
-            up_var_name = f"V{row},{col},up"
-            up_var = nodes.Variable(NUM_VAR_STATES)
-            factors_neighbors_dict[f"F{row},{col}"] = factors_neighbors_dict.get(
-                f"F{row},{col}", []
-            ) + [up_var]
-            vars_list.append(up_var)
-            vars_dict[up_var_name] = up_var
+# %%
+# We create a NDVariableArray such that the [0,i,j] entry corresponds to the vertical cut variable (i.e, the one
+# attached horizontally to the factor) that's at that location in the image, and the [1,i,j] entry corresponds to
+# the horizontal cut variable (i.e, the one attached vertically to the factor) that's at that location
+grid_vars_group = interface_datatypes.NDVariableArray(3, (2, M - 1, N - 1))
 
-        right_var_name = f"V{row},{col},right"
-        right_var = nodes.Variable(NUM_VAR_STATES)
-        factors_neighbors_dict[f"F{row},{col}"] = factors_neighbors_dict.get(
-            f"F{row},{col}", []
-        ) + [right_var]
-        # If the right_var is not at the last column, it will also have another factor neighbor
-        if col != N - 2:
-            factors_neighbors_dict[f"F{row},{col+1}"] = factors_neighbors_dict.get(
-                f"F{row},{col+1}", []
-            ) + [right_var]
-        vars_list.append(right_var)
-        vars_dict[right_var_name] = right_var
+# Make a group of additional variables for the edges of the grid
+extra_row_keys: List[Tuple[Any, ...]] = [(0, row, N - 1) for row in range(M - 1)]
+extra_col_keys: List[Tuple[Any, ...]] = [(1, M - 1, col) for col in range(N - 1)]
+additional_keys = tuple(extra_row_keys + extra_col_keys)
+additional_keys_group = interface_datatypes.GenericVariableGroup(3, additional_keys)
 
-        down_var_name = f"V{row},{col},down"
-        down_var = nodes.Variable(NUM_VAR_STATES)
-        factors_neighbors_dict[f"F{row},{col}"] = factors_neighbors_dict.get(
-            f"F{row},{col}", []
-        ) + [down_var]
-        # If the down_var is not at the last row, it will also have another factor neighbor
-        if row != M - 2:
-            factors_neighbors_dict[f"F{row+1},{col}"] = factors_neighbors_dict.get(
-                f"F{row+1},{col}", []
-            ) + [down_var]
-        vars_list.append(down_var)
-        vars_dict[down_var_name] = down_var
+# Combine these two VariableGroups into one CompositeVariableGroup
+composite_grid_group = interface_datatypes.CompositeVariableGroup(
+    (("grid_vars", grid_vars_group), ("additional_vars", additional_keys_group))
+)
 
-        # To make sure the factor neighbors are ALWAYS in the same order (i.e [left_var, up_var, right_var, down_var]),
-        # we need to perform a swap on factor_neighbors_dict for all rows except the first in the graph
-        if row != 0:
-            neighbors_list = factors_neighbors_dict[f"F{row},{col}"]
-            zero_index_neighbor = neighbors_list[0]
-            neighbors_list[0] = neighbors_list[1]
-            neighbors_list[1] = zero_index_neighbor
-            factors_neighbors_dict[f"F{row},{col}"] = neighbors_list
 
-# Now that we have created all the variables correctly, we can create all the grid EnumerationFactors correctly
-facs_list = []
-for _, var_neighbs in factors_neighbors_dict.items():
-    grid_fac = nodes.EnumerationFactor(tuple(var_neighbs), valid_configs_non_supp)
-    facs_list.append(grid_fac)
+# %%
+# Subclass FactorGroup into the 3 different groups that appear in this problem
 
-# Now that we have all the variables and know their connections with the existing factors are correct, we can define the suppression factors
-# as well as their connections
 
-# Start by adding factors for all the vertical variables
-row = 0
-up_or_down = "up"
-while row < M - 1:
-    vertical_vars_list = [
-        vars_dict[f"V{row},{col}," + up_or_down] for col in range(SUPPRESSION_DIAMETER)
-    ]
-    for stride in range(N - SUPPRESSION_DIAMETER):
-        curr_vert_supp_factor = nodes.EnumerationFactor(
-            tuple(vertical_vars_list), valid_configs_supp
-        )
-        facs_list.append(curr_vert_supp_factor)
-        # IMPORTANT: This below line is necessary because otherwise, the underlying list will get modified
-        # and cause the Factor's neighbors to change!
-        vertical_vars_list = vertical_vars_list[:]
+@dataclass
+class FourFactorGroup(interface_datatypes.FactorGroup):
+    num_rows: int
+    num_cols: int
 
-        # Unless we're on the last column, where we can't slide to the right, remove the first element and
-        # add another one to effectively slide the suppression to the right
-        if stride < N - SUPPRESSION_DIAMETER - 1:
-            _ = vertical_vars_list.pop(0)  # type:ignore
-            vertical_vars_list.append(
-                vars_dict[f"V{row},{stride + SUPPRESSION_DIAMETER}," + up_or_down]
-            )
+    def connected_variables(
+        self,
+    ) -> List[List[Tuple[Any, ...]]]:
+        ret_list: List[List[Tuple[Any, ...]]] = []
+        for row in range(self.num_rows - 1):
+            for col in range(self.num_cols - 1):
+                if row != self.num_rows - 2 and col != self.num_cols - 2:
+                    ret_list.append(
+                        [
+                            ("grid_vars", 0, row, col),
+                            ("grid_vars", 1, row, col),
+                            ("grid_vars", 0, row, col + 1),
+                            ("grid_vars", 1, row + 1, col),
+                        ]
+                    )
+                elif row != self.num_rows - 2:
+                    ret_list.append(
+                        [
+                            ("grid_vars", 0, row, col),
+                            ("grid_vars", 1, row, col),
+                            ("additional_vars", 0, row, col + 1),
+                            ("grid_vars", 1, row + 1, col),
+                        ]
+                    )
+                elif col != self.num_cols - 2:
+                    ret_list.append(
+                        [
+                            ("grid_vars", 0, row, col),
+                            ("grid_vars", 1, row, col),
+                            ("grid_vars", 0, row, col + 1),
+                            ("additional_vars", 1, row + 1, col),
+                        ]
+                    )
+                else:
+                    ret_list.append(
+                        [
+                            ("grid_vars", 0, row, col),
+                            ("grid_vars", 1, row, col),
+                            ("additional_vars", 0, row, col + 1),
+                            ("additional_vars", 1, row + 1, col),
+                        ]
+                    )
 
-    # If the loop just went thru 'up' vars for row 0, make it go down
-    if row == 0 and up_or_down == "up":
-        up_or_down = "down"
-    else:
-        row += 1
+        return ret_list
 
-# Add factors for all the horizontal variables
-col = 0
-left_or_right = "left"
-while col < N - 1:
-    horizontal_vars_list = [
-        vars_dict[f"V{row},{col}," + left_or_right]
-        for row in range(SUPPRESSION_DIAMETER)
-    ]
 
-    for stride in range(M - SUPPRESSION_DIAMETER):
-        curr_horz_supp_factor = nodes.EnumerationFactor(
-            tuple(horizontal_vars_list), valid_configs_supp
-        )
-        facs_list.append(curr_horz_supp_factor)
-        # IMPORTANT: This below line is necessary because otherwise, the underlying list will get modified
-        # and cause the Factor's neighbors to change!
-        horizontal_vars_list = horizontal_vars_list[:]
+@dataclass
+class VertSuppressionFactorGroup(interface_datatypes.FactorGroup):
+    num_rows: int
+    num_cols: int
+    suppression_diameter: int
 
-        # Unless we're on the last column, where we can't slide down, remove the first element and
-        # add another one to effectively slide the suppression down
-        if stride < M - 1 - SUPPRESSION_DIAMETER:
-            _ = horizontal_vars_list.pop(0)  # type:ignore
-            horizontal_vars_list.append(
-                vars_dict[f"V{stride + SUPPRESSION_DIAMETER},{col}," + left_or_right]
-            )
+    def connected_variables(
+        self,
+    ) -> List[List[Tuple[Any, ...]]]:
+        ret_list: List[List[Tuple[Any, ...]]] = []
+        for col in range(self.num_cols):
+            for start_row in range(self.num_rows - self.suppression_diameter):
+                if col != self.num_cols - 1:
+                    ret_list.append(
+                        [
+                            ("grid_vars", 0, r, col)
+                            for r in range(
+                                start_row, start_row + self.suppression_diameter
+                            )
+                        ]
+                    )
+                else:
+                    ret_list.append(
+                        [
+                            ("additional_vars", 0, r, col)
+                            for r in range(
+                                start_row, start_row + self.suppression_diameter
+                            )
+                        ]
+                    )
 
-    # If the loop just went thru 'up' vars for row 0, make it go down
-    if col == 0 and left_or_right == "left":
-        left_or_right = "right"
-    else:
-        col += 1
+        return ret_list
+
+
+@dataclass
+class HorzSuppressionFactorGroup(interface_datatypes.FactorGroup):
+    num_rows: int
+    num_cols: int
+    suppression_diameter: int
+
+    def connected_variables(
+        self,
+    ) -> List[List[Tuple[Any, ...]]]:
+        ret_list: List[List[Tuple[Any, ...]]] = []
+        for row in range(self.num_rows):
+            for start_col in range(self.num_cols - self.suppression_diameter):
+                if row != self.num_rows - 1:
+                    ret_list.append(
+                        [
+                            ("grid_vars", 1, row, c)
+                            for c in range(
+                                start_col, start_col + self.suppression_diameter
+                            )
+                        ]
+                    )
+                else:
+                    ret_list.append(
+                        [
+                            ("additional_vars", 1, row, c)
+                            for c in range(
+                                start_col, start_col + self.suppression_diameter
+                            )
+                        ]
+                    )
+        return ret_list
+
+
+# %%
+# Now, we instantiate the four factors
+four_factors_group = FourFactorGroup(
+    valid_configs_non_supp,
+    composite_grid_group,
+    M,
+    N,
+)
+# Next, we instantiate all the vertical suppression variables
+vert_suppression_group = VertSuppressionFactorGroup(
+    valid_configs_supp,
+    composite_grid_group,
+    M,
+    N,
+    SUPPRESSION_DIAMETER,
+)
+# Next, we instantiate all the horizontal suppression variables
+horz_suppression_group = HorzSuppressionFactorGroup(
+    valid_configs_supp,
+    composite_grid_group,
+    M,
+    N,
+    SUPPRESSION_DIAMETER,
+)
+
+# Finally, we construct the tuple of all the factors and variables involved in the problem.
+facs_tuple = tuple(
+    list(four_factors_group.factors)
+    + list(vert_suppression_group.factors)
+    + list(horz_suppression_group.factors)
+)
+vars_tuple = composite_grid_group.get_all_vars()
 
 
 # %%
 # Override and define a concrete FactorGraph Class with the get_evidence function implemented
-class GridFactorGraph(graph.FactorGraph):
+class ConcreteFactorGraph(graph.FactorGraph):
     def get_evidence(
         self, data: Dict[nodes.Variable, np.array], context: Any = None
     ) -> jnp.ndarray:
@@ -316,30 +358,42 @@ class GridFactorGraph(graph.FactorGraph):
             evidence[start_index : start_index + var.num_states] = data[var]
         return jax.device_put(evidence)
 
+    def output_inference(
+        self, final_var_states: jnp.ndarray, context: Any = None
+    ) -> Any:
+        """Function to take the result of message passing and output the inference result for
+            each variable
 
-# %% tags=[]
+        Args:
+            final_var_states: an array of shape (num_var_states,) that is the result of belief
+                propagation
+            context: Optional context for using this array
+
+        Returns:
+            An evidence array of shape (num_var_states,)
+        """
+        # NOTE: An argument can be passed here to do different inferences for sum-product and
+        # max-product respectively
+        var_to_map_dict = {}
+        final_var_states_np = np.array(final_var_states)
+        for var in self.variables:
+            start_index = self._vars_to_starts[var]
+            var_to_map_dict[var] = np.argmax(
+                final_var_states_np[start_index : start_index + var.num_states]
+            )
+
+        return var_to_map_dict
+
+
+# %%
 gt_has_cuts = gt_has_cuts.astype(np.int32)
-
-# First, we create an array such that the [0,i,j] entry corresponds to the  horizontal cut variable that's at that location in the
-# image, and the [1,i,j] entry corresponds to the  vertical cut variable that's at that location
-var_img_arr = np.full((2, N, M), None)
-
-# We then loop thru and generate all rows and column variables
-for row in range(M - 1):
-    for col in range(N - 1):
-        if row == 0:
-            var_img_arr[1, 0, col] = vars_dict[f"V0,{col},up"]
-        var_img_arr[1, row + 1, col] = vars_dict[f"V{row},{col},down"]
-        if col == 0:
-            var_img_arr[0, row, 0] = vars_dict[f"V{row},0,left"]
-        var_img_arr[0, row, col + 1] = vars_dict[f"V{row},{col},right"]
 
 # Now, we use this array along with the gt_has_cuts array computed earlier using the image in order to derive the evidence values
 var_evidence_dict = {}
 for i in range(2):
     for row in range(M):
         for col in range(N):
-            # The dictionary key is in var_img_arr at loc [i,row,call] (the Variable is stored here!)
+            # The dictionary key is in composite_grid_group at loc [i,row,call]
             evidence_arr = np.zeros(
                 3
             )  # Note that we know num states for each variable is 3, so we can do this
@@ -352,17 +406,26 @@ for i in range(2):
             evidence_arr[1:] += 0.1 * rng.logistic(
                 size=evidence_arr[1:].shape
             )  # This adds logistic noise for every evidence entry
-            if var_img_arr[i, row, col] is not None:
-                var_evidence_dict[var_img_arr[i, row, col]] = evidence_arr
+            try:
+                var_evidence_dict[
+                    composite_grid_group["grid_vars", i, row, col]
+                ] = evidence_arr
+            except ValueError:
+                try:
+                    var_evidence_dict[
+                        composite_grid_group["additional_vars", i, row, col]
+                    ] = evidence_arr
+                except ValueError:
+                    pass
 
 
 # %% [markdown]
 # ## Belief Propagation
 
-# %% tags=[]
-# Create FG
+# %%
+# Create the factor graph
 fg_creation_start_time = timer()
-fg = GridFactorGraph(tuple(vars_list), tuple(facs_list))
+fg = ConcreteFactorGraph(vars_tuple, facs_tuple)
 fg_creation_end_time = timer()
 print(f"fg Creation time = {fg_creation_end_time - fg_creation_start_time}")
 
@@ -380,7 +443,6 @@ print(
     f"time taken for data conversion of inference result {data_writeback_end_time - data_writeback_start_time}"
 )
 
-
 # %% [markdown]
 # ## Visualization of Results
 
@@ -391,11 +453,19 @@ bu_evidence = np.zeros((2, M, N, 3))
 for i in range(2):
     for row in range(M):
         for col in range(N):
-            if var_img_arr[i, row, col] is not None:
-                bp_values[i, row, col] = map_message_dict[var_img_arr[i, row, col]]
+            try:
+                bp_values[i, row, col] = map_message_dict[composite_grid_group["grid_vars", i, row, col]]  # type: ignore
                 bu_evidence[i, row, col, :] = var_evidence_dict[
-                    var_img_arr[i, row, col]
+                    grid_vars_group[i, row, col]
                 ]
+            except ValueError:
+                try:
+                    bp_values[i, row, col] = map_message_dict[composite_grid_group["additional_vars", i, row, col]]  # type: ignore
+                    bu_evidence[i, row, col, :] = var_evidence_dict[
+                        additional_keys_group[i, row, col]
+                    ]
+                except ValueError:
+                    pass
 
 
 # %%
