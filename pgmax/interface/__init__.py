@@ -1,1 +1,1 @@
-"""A container package for a new user-facing interface for easily specifying Factor Graphs"""
+"""A container package for a user-facing interface for easily specifying Factor Graphs."""

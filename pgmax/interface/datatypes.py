@@ -1,3 +1,5 @@
+"""A module containing classes for users to specify groups of Variables and Factors to facilitate easy FactorGraph construction"""
+
 import itertools
 from dataclasses import dataclass
 from types import MappingProxyType
