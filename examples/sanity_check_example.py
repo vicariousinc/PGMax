@@ -162,6 +162,10 @@ valid_configs_non_supp.flags.writeable = False
 SUPPRESSION_DIAMETER = 9
 valid_configs_supp = create_valid_suppression_config_arr(SUPPRESSION_DIAMETER)
 
+# Finally, we make uniform-0 potential functions to be used by the different FactorGroups
+non_supp_potential = np.zeros((3, 3, 3, 3), dtype=float)
+supp_potential = np.zeros(tuple([3 for _ in range(SUPPRESSION_DIAMETER)]), dtype=float)
+
 
 # %%
 # We create a NDVariableArray such that the [0,i,j] entry corresponds to the vertical cut variable (i.e, the one
@@ -307,6 +311,7 @@ class HorzSuppressionFactorGroup(interface_datatypes.FactorGroup):
 # Now, we instantiate the four factors
 four_factors_group = FourFactorGroup(
     valid_configs_non_supp,
+    non_supp_potential,
     composite_grid_group,
     M,
     N,
@@ -314,6 +319,7 @@ four_factors_group = FourFactorGroup(
 # Next, we instantiate all the vertical suppression variables
 vert_suppression_group = VertSuppressionFactorGroup(
     valid_configs_supp,
+    supp_potential,
     composite_grid_group,
     M,
     N,
@@ -322,6 +328,7 @@ vert_suppression_group = VertSuppressionFactorGroup(
 # Next, we instantiate all the horizontal suppression variables
 horz_suppression_group = HorzSuppressionFactorGroup(
     valid_configs_supp,
+    supp_potential,
     composite_grid_group,
     M,
     N,
@@ -335,6 +342,9 @@ facs_tuple = tuple(
     + list(horz_suppression_group.factors)
 )
 vars_tuple = composite_grid_group.get_all_vars()
+
+print(len(facs_tuple))
+print(len(vars_tuple))
 
 
 # %%
@@ -442,6 +452,7 @@ data_writeback_end_time = timer()
 print(
     f"time taken for data conversion of inference result {data_writeback_end_time - data_writeback_start_time}"
 )
+
 
 # %% [markdown]
 # ## Visualization of Results

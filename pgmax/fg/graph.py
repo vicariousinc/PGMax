@@ -126,7 +126,7 @@ class FactorGraph:
         msgs = infer.normalize_and_clip_msgs(
             msgs, wiring.edges_num_states, max_msg_size
         )
-        num_val_configs = int(wiring.factor_configs_edge_states[-1, 0])
+        num_val_configs = int(wiring.factor_configs_edge_states[-1, 0]) + 1
 
         @jax.jit
         def message_passing_step(msgs, _):
@@ -140,6 +140,7 @@ class FactorGraph:
             ftov_msgs = infer.pass_fac_to_var_messages(
                 vtof_msgs,
                 wiring.factor_configs_edge_states,
+                wiring.factor_configs_potentials,
                 num_val_configs,
             )
             # Use the results of message passing to perform damping and

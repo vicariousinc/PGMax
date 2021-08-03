@@ -169,6 +169,7 @@ class FactorGroup:
     """
 
     factor_configs: np.ndarray
+    potential_func: np.ndarray
     var_group: Union[CompositeVariableGroup, VariableGroup]
 
     def __post_init__(self) -> None:
@@ -181,7 +182,7 @@ class FactorGroup:
         self.factors: Tuple[nodes.EnumerationFactor, ...] = tuple(
             [
                 nodes.EnumerationFactor(
-                    tuple(self.var_group[keys_list]), self.factor_configs  # type: ignore
+                    tuple(self.var_group[keys_list]), self.factor_configs, self.potential_func  # type: ignore
                 )
                 for keys_list in connected_var_keys_for_factors
             ]

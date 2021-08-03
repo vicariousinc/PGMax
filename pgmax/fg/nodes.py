@@ -33,11 +33,14 @@ class EnumerationWiring:
             factor_configs_edge_states[ii] contains a pair of global factor_config and edge_state indices
             factor_configs_edge_states[ii, 0] contains the global factor config index
             factor_configs_edge_states[ii, 1] contains the corresponding global edge_state index
+        factor_configs_potentials: Array of shape (num_val_configs, ). An entry at index i is the potential
+            function value for the configuration with global factor config index i.
     """
 
     edges_num_states: Union[np.ndarray, jnp.ndarray]
     var_states_for_edges: Union[np.ndarray, jnp.ndarray]
     factor_configs_edge_states: Union[np.ndarray, jnp.ndarray]
+    factor_configs_potentials: Union[np.ndarray, jnp.ndarray]
 
     def __post_init__(self):
         for field in self.__dataclass_fields__:
@@ -59,11 +62,13 @@ class EnumerationFactor:
     Args:
         variables: List of involved variables
         configs: Array of shape (num_configs, num_variables)
-            An array containing explicit enumeration of all valid configurations
+            An array containing an explicit enumeration of all valid configurations
     """
 
+    # TODO: Add errors raised to the docstring!
     variables: Tuple[Variable, ...]
     configs: np.ndarray
+    potential: np.ndarray  # TODO: Run checks on this and add it to wiring, etc. to be passed to belief prop!
 
     def __post_init__(self):
         self.configs.flags.writeable = False
@@ -72,10 +77,24 @@ class EnumerationFactor:
                 f"Configurations should be integers. Got {self.configs.dtype}."
             )
 
+        if not np.issubdtype(self.potential.dtype, np.floating):
+            raise ValueError(f"Potential should be floats. Got {self.potential.dtype}.")
+
         if len(self.variables) != self.configs.shape[1]:
             raise ValueError(
                 f"Number of variables {len(self.variables)} doesn't match given configurations {self.configs.shape}"
             )
+
+        if self.configs.shape[1] != len(self.potential.shape):
+            raise ValueError(
+                f"The potential array has {len(self.potential.shape)} axes, which is not equal to the size of each configuration ({self.configs.shape[1]})"
+            )
+
+        for i, var in enumerate(self.variables):
+            if self.potential.shape[i] != var.num_states:
+                raise ValueError(
+                    f"Invalid potential function: axis {i} has length {self.potential.shape[i]}, but the corresponding variable has {var.num_states} states"
+                )
 
         vars_num_states = np.array([variable.num_states for variable in self.variables])
         if not np.logical_and(
@@ -116,6 +135,19 @@ class EnumerationFactor:
         )
         return factor_configs_edge_states
 
+    @utils.cached_property
+    def factor_configs_potentials(self) -> np.ndarray:
+        """Array containing the potential value for every valid factor configuration.
+
+        Returns:
+            Array of shape (num_val_configs, ). An entry at index i is the potential function value for
+                the configuration with global factor config index i.
+        """
+        config_potentials = np.zeros(self.configs.shape[0], dtype=float)
+        for row in range(self.configs.shape[0]):
+            config_potentials[row] = self.potential[tuple(self.configs[row].tolist())]
+        return config_potentials
+
     def compile_wiring(
         self, vars_to_starts: Mapping[Variable, int]
     ) -> EnumerationWiring:
@@ -139,4 +171,5 @@ class EnumerationFactor:
             edges_num_states=self.edges_num_states,
             var_states_for_edges=var_states_for_edges,
             factor_configs_edge_states=self.factor_configs_edge_states,
+            factor_configs_potentials=self.factor_configs_potentials,
         )

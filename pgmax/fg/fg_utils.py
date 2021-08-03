@@ -43,6 +43,9 @@ def concatenate_enumeration_wirings(
         edges_num_states=np.concatenate(
             [wiring.edges_num_states for wiring in wirings]
         ),
+        factor_configs_potentials=np.concatenate(
+            [wiring.factor_configs_potentials for wiring in wirings]
+        ),
         var_states_for_edges=np.concatenate(
             [wiring.var_states_for_edges for wiring in wirings]
         ),

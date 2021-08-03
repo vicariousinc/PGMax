@@ -27,6 +27,7 @@ from scipy.ndimage import gaussian_filter  # isort:skip
 from typing import Any, Dict, Tuple, List  # isort:skip
 from timeit import default_timer as timer  # isort:skip
 from dataclasses import dataclass  # isort:skip
+import itertools  # isort:skip
 
 # Custom Imports
 import pgmax.fg.nodes as nodes  # isort:skip
@@ -40,7 +41,7 @@ im_size = (30, 30)
 
 pixel_vars = interface_datatypes.NDVariableArray(3, im_size)
 hidden_vars = interface_datatypes.NDVariableArray(
-    3, (im_size[0] - 2, im_size[1] - 2)
+    17, (im_size[0] - 2, im_size[1] - 2)
 )  # Each hidden var is connected to a 3x3 patch of pixel vars
 composite_vargroup = interface_datatypes.CompositeVariableGroup(
     ((0, pixel_vars), (1, hidden_vars))
@@ -52,34 +53,44 @@ composite_vargroup = interface_datatypes.CompositeVariableGroup(
 class BinaryFactorGroup(interface_datatypes.FactorGroup):
     num_hidden_rows: int
     num_hidden_cols: int
-    num_kernel_rows: int
-    num_kernel_cols: int
+    kernel_row: int
+    kernel_col: int
 
     def connected_variables(self) -> List[List[Tuple[Any, ...]]]:
         ret_list: List[List[Tuple[Any, ...]]] = []
         for h_row in range(self.num_hidden_rows):
             for h_col in range(self.num_hidden_cols):
-                for k_row in range(self.num_kernel_rows):
-                    for k_col in range(self.num_kernel_cols):
-                        ret_list.append(
-                            [
-                                (
-                                    self.var_group[1, h_row, h_col],
-                                    self.var_group[0, h_row + k_row, h_col + k_col],
-                                )
-                            ]
-                        )
+                ret_list.append(
+                    [
+                        (1, h_row, h_col),
+                        (0, h_row + self.kernel_row, h_col + self.kernel_col),
+                    ]
+                )
         return ret_list
 
 
 # %%
-# TODO: Figure out all the configurations and then instantiate the BinaryFactorGroup.
-# TODO: Figure out how to set the potential function correctly from the given weights, then make it so that BP actually uses a potential function!
+crbm_weights = np.load("crbm_mnist_weights_surfaces_pmap002.npz")
+W, _, _ = crbm_weights["W"], crbm_weights["bX"], crbm_weights["bH"]
+W = W.swapaxes(0, 1)
+print(W.shape)
 
 # %%
-crbm_weights = np.load("crbm_mnist_weights_surfaces_pmap002.npz")
-W, bX, bH = crbm_weights["W"], crbm_weights["bX"], crbm_weights["bH"]
+# We know there are 17 states for every hidden var and 3 for every pixel var, so we just need to get a list of their inner product
+factor_valid_configs = np.array([[h_s, p_s] for h_s in range(17) for p_s in range(3)])
+# We make 1 BinaryFactorGroup for every index in the 3x3 convolutional kernel grid
+binary_factor_group_list = [
+    BinaryFactorGroup(
+        factor_valid_configs,
+        W[..., k_row, k_col],
+        composite_vargroup,
+        28,
+        28,
+        k_row,
+        k_col,
+    )
+    for k_row in range(3)
+    for k_col in range(3)
+]
 
-print(W.shape)
-print(bX.shape)
-print(bH.shape)
+# TODO: Instantiate a concrete Factor Graph for these data.
