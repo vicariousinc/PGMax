@@ -21,17 +21,13 @@ import matplotlib.pyplot as plt  # isort:skip
 import numpy as np  # isort:skip
 import jax  # isort:skip
 import jax.numpy as jnp  # isort:skip
-from numpy.random import default_rng  # isort:skip
-from scipy import sparse  # isort:skip
-from scipy.ndimage import gaussian_filter  # isort:skip
-from typing import Any, Dict, Tuple, List  # isort:skip
+from typing import Any, Tuple, List  # isort:skip
 from timeit import default_timer as timer  # isort:skip
 from dataclasses import dataclass  # isort:skip
-import itertools  # isort:skip
 
 # Custom Imports
-import pgmax.fg.nodes as nodes  # isort:skip
 import pgmax.interface.datatypes as interface_datatypes  # isort:skip
+import pgmax.fg.graph as graph  # isort:skip
 
 # fmt: on
 
@@ -93,4 +89,87 @@ binary_factor_group_list = [
     for k_col in range(3)
 ]
 
-# TODO: Instantiate a concrete Factor Graph for these data.
+# %%
+# Generate tuples of all the factors and variables
+vars_tuple = composite_vargroup.get_all_vars()
+facs_tuple = sum([fac_group.factors for fac_group in binary_factor_group_list], ())
+
+
+# %%
+class ConcreteHereticGraph(graph.FactorGraph):
+    def get_evidence(self, data: Any = None, context: Any = None) -> jnp.ndarray:
+        """Function to generate evidence array. Need to be overwritten for concrete factor graphs
+
+        Args:
+            data: Data for generating evidence
+            context: Optional context for generating evidence
+
+        Returns:
+            Array of shape (num_var_states,) representing the flattened evidence for each variable
+        """
+        prng_key = jax.random.PRNGKey(42)
+        return jax.random.gumbel(prng_key, (self.num_var_states,))
+
+
+# %%
+# Create the factor graph
+fg_creation_start_time = timer()
+fg = ConcreteHereticGraph(vars_tuple, facs_tuple)
+fg_creation_end_time = timer()
+print(f"fg Creation time = {fg_creation_end_time - fg_creation_start_time}")
+
+# Run BP
+bp_start_time = timer()
+final_msgs = fg.run_bp(500, 1.0)
+bp_end_time = timer()
+print(f"time taken for bp {bp_end_time - bp_start_time}")
+
+# Run inference and convert result to human-readable data structure
+data_writeback_start_time = timer()
+map_message_dict = fg.decode_map_states(final_msgs)
+data_writeback_end_time = timer()
+print(
+    f"time taken for data conversion of inference result {data_writeback_end_time - data_writeback_start_time}"
+)
+
+
+# %%
+# Viz function from @lazarox's code
+def plot_images(images, zoom_times=0, filename=None, display=True, return_image=False):
+    n_images, H, W = images.shape
+    images = images - images.min()
+    images /= images.max() + 1e-10
+
+    nr = nc = np.ceil(np.sqrt(n_images)).astype(int)
+    big_image = np.ones(((H + 1) * nr + 1, (W + 1) * nc + 1, 3))
+    big_image[..., :2] = 0
+    im = 0
+    for r in range(nr):
+        for c in range(nc):
+            if im < n_images:
+                big_image[
+                    (H + 1) * r + 1 : (H + 1) * r + 1 + H,
+                    (W + 1) * c + 1 : (W + 1) * c + 1 + W,
+                    :,
+                ] = images[im, :, :, None]
+            im += 1
+
+    if display and filename is None:
+        plt.figure(figsize=(10, 10))
+        plt.imshow(big_image, interpolation="none")
+    for i in range(zoom_times):
+        big_image = ndimage.zoom(big_image, [2, 2, 1], order=0)
+    if filename:
+        imwrite(filename, img_as_ubyte(big_image))
+    if return_image:
+        return big_image
+
+
+# %%
+img_arr = np.zeros((1, im_size[0], im_size[1]))
+
+for row in range(im_size[0]):
+    for col in range(im_size[1]):
+        img_arr[0, row, col] = map_message_dict[composite_vargroup[0, row, col]]  # type: ignore
+
+plot_images(img_arr)

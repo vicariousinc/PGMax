@@ -360,39 +360,13 @@ class ConcreteFactorGraph(graph.FactorGraph):
             context: Optional context for generating evidence
 
         Returns:
-            None, but must set the self._evidence attribute to a jnp.array of shape (num_var_states,)
+            Array of shape (num_var_states,) representing the flattened evidence for each variable
         """
         evidence = np.zeros(self.num_var_states)
         for var in self.variables:
             start_index = self._vars_to_starts[var]
             evidence[start_index : start_index + var.num_states] = data[var]
         return jax.device_put(evidence)
-
-    def output_inference(
-        self, final_var_states: jnp.ndarray, context: Any = None
-    ) -> Any:
-        """Function to take the result of message passing and output the inference result for
-            each variable
-
-        Args:
-            final_var_states: an array of shape (num_var_states,) that is the result of belief
-                propagation
-            context: Optional context for using this array
-
-        Returns:
-            An evidence array of shape (num_var_states,)
-        """
-        # NOTE: An argument can be passed here to do different inferences for sum-product and
-        # max-product respectively
-        var_to_map_dict = {}
-        final_var_states_np = np.array(final_var_states)
-        for var in self.variables:
-            start_index = self._vars_to_starts[var]
-            var_to_map_dict[var] = np.argmax(
-                final_var_states_np[start_index : start_index + var.num_states]
-            )
-
-        return var_to_map_dict
 
 
 # %%
