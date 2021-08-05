@@ -96,11 +96,16 @@ rnH = jax.random.gumbel(
 bHn = bH[None, :, :, :, :, None, None] + T * rnH
 
 # Create the evidence array by concatenating bXn and bHn
-# bXn_concat = bXn.reshape((3, 30, 30)).flatten('F')
-# bHn_concat = bHn.reshape((17, 28, 28)).flatten('F')
-# evidence = jnp.concatenate((bXn_concat, bHn_concat))
+bXn_concat = bXn.reshape((3, 30, 30)).flatten("F")
+bHn_concat = bHn.reshape((17, 28, 28)).flatten("F")
+evidence = jnp.concatenate((bXn_concat, bHn_concat))
+
 
 # %%
+# NOTE: This part is the slowest part of the entire program, and all it's really doing is flattening the two arrays in a specific way.
+# There *must* be some nice vectorized way to do this!
+
+
 def custom_flatten_ordering(Mdown, Mup):
     flat_idx = 0
     flat_Mdown = Mdown.flatten()
@@ -168,6 +173,38 @@ facs_tuple = sum([fac_group.factors for fac_group in binary_factor_group_list], 
 
 # %%
 class ConcreteHereticGraph(graph.FactorGraph):
+    # def get_evidence(self, data: Any = None, context: Any = None) -> jnp.ndarray:
+    #     """Function to generate evidence array. Need to be overwritten for concrete factor graphs
+
+    #     Args:
+    #         data: Data for generating evidence
+    #         context: Optional context for generating evidence
+
+    #     Returns:
+    #         Array of shape (num_var_states,) representing the flattened evidence for each variable
+    #     """
+    #     bXn, bHn = data  # type: ignore
+    #     evidence_arr = np.zeros(
+    #         self.num_var_states,
+    #     )
+    #     pixel_grid_shape, hidden_grid_shape, composite_vargroup = context  # type: ignore
+    #     for row in range(pixel_grid_shape[0]):
+    #         for col in range(pixel_grid_shape[1]):
+    #             curr_var = composite_vargroup[0, row, col]
+    #             evidence_arr[
+    #                 self._vars_to_starts[curr_var] : self._vars_to_starts[curr_var]
+    #                 + curr_var.num_states
+    #             ] = bXn[0, :, 0, 0, 0, row, col]
+    #     for row in range(hidden_grid_shape[0]):
+    #         for col in range(hidden_grid_shape[1]):
+    #             curr_var = composite_vargroup[1, row, col]
+    #             evidence_arr[
+    #                 self._vars_to_starts[curr_var] : self._vars_to_starts[curr_var]
+    #                 + curr_var.num_states
+    #             ] = bHn[0, 0, :, 0, 0, row, col]
+
+    #     return jax.device_put(evidence_arr)
+
     def get_evidence(self, data: Any = None, context: Any = None) -> jnp.ndarray:
         """Function to generate evidence array. Need to be overwritten for concrete factor graphs
 
@@ -178,27 +215,7 @@ class ConcreteHereticGraph(graph.FactorGraph):
         Returns:
             Array of shape (num_var_states,) representing the flattened evidence for each variable
         """
-        bXn, bHn = data  # type: ignore
-        evidence_arr = np.zeros(
-            self.num_var_states,
-        )
-        pixel_grid_shape, hidden_grid_shape, composite_vargroup = context  # type: ignore
-        for row in range(pixel_grid_shape[0]):
-            for col in range(pixel_grid_shape[1]):
-                curr_var = composite_vargroup[0, row, col]
-                evidence_arr[
-                    self._vars_to_starts[curr_var] : self._vars_to_starts[curr_var]
-                    + curr_var.num_states
-                ] = bXn[0, :, 0, 0, 0, row, col]
-        for row in range(hidden_grid_shape[0]):
-            for col in range(hidden_grid_shape[1]):
-                curr_var = composite_vargroup[1, row, col]
-                evidence_arr[
-                    self._vars_to_starts[curr_var] : self._vars_to_starts[curr_var]
-                    + curr_var.num_states
-                ] = bHn[0, 0, :, 0, 0, row, col]
-
-        return jax.device_put(evidence_arr)
+        return data
 
 
 # %%
@@ -210,11 +227,17 @@ print(f"fg Creation time = {fg_creation_end_time - fg_creation_start_time}")
 
 # Run BP
 bp_start_time = timer()
+# final_msgs = fg.run_bp(
+#     500,
+#     0.5,
+#     evidence_data=(bXn, bHn),
+#     evidence_context=(im_size, (im_size[0] - 2, im_size[1] - 2), composite_vargroup),
+#     init_msgs=init_msgs,
+# )
 final_msgs = fg.run_bp(
     500,
     0.5,
-    evidence_data=(bXn, bHn),
-    evidence_context=(im_size, (im_size[0] - 2, im_size[1] - 2), composite_vargroup),
+    evidence_data=evidence,
     init_msgs=init_msgs,
 )
 bp_end_time = timer()
@@ -224,8 +247,9 @@ print(f"time taken for bp {bp_end_time - bp_start_time}")
 data_writeback_start_time = timer()
 map_message_dict = fg.decode_map_states(
     final_msgs,
-    evidence_data=(bXn, bHn),
-    evidence_context=(im_size, (im_size[0] - 2, im_size[1] - 2), composite_vargroup),
+    evidence_data=evidence,
+    # evidence_data=(bXn, bHn),
+    # evidence_context=(im_size, (im_size[0] - 2, im_size[1] - 2), composite_vargroup),
 )
 data_writeback_end_time = timer()
 print(
