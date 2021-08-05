@@ -63,9 +63,21 @@ class EnumerationFactor:
         potential: Array of shape (variables[0].num_states, variables[1].num_states,
             ...., variables[num_variables-1].num_states). For any valid configuration,
             potential[config] should yield the value of the potential function.
+
+    Raises:
+        ValueError: If:
+            (1) the dtype of the configs array is not int
+            (2) the dtype of the potential array is not float
+            (3) configs array doesn't have the same number of columns
+            as there are variables
+            (4) the potential array doesn't have the same number of
+            dimensions as there are variables
+            (5) each column of the potential array doesn't have the
+            same size as the corresponding variable in variables
+            (6) any value in the configs array is greater than the size
+            of the corresponding variable or less than 0.
     """
 
-    # TODO: Add errors raised to the docstring!
     variables: Tuple[Variable, ...]
     configs: np.ndarray
     potential: np.ndarray
