@@ -33,14 +33,11 @@ class EnumerationWiring:
             factor_configs_edge_states[ii] contains a pair of global factor_config and edge_state indices
             factor_configs_edge_states[ii, 0] contains the global factor config index
             factor_configs_edge_states[ii, 1] contains the corresponding global edge_state index
-        factor_configs_potentials: Array of shape (num_val_configs, ). An entry at index i is the potential
-            function value for the configuration with global factor config index i.
     """
 
     edges_num_states: Union[np.ndarray, jnp.ndarray]
     var_states_for_edges: Union[np.ndarray, jnp.ndarray]
     factor_configs_edge_states: Union[np.ndarray, jnp.ndarray]
-    factor_configs_potentials: Union[np.ndarray, jnp.ndarray]
 
     def __post_init__(self):
         for field in self.__dataclass_fields__:
@@ -63,12 +60,15 @@ class EnumerationFactor:
         variables: List of involved variables
         configs: Array of shape (num_configs, num_variables)
             An array containing an explicit enumeration of all valid configurations
+        potential: Array of shape (variables[0].num_states, variables[1].num_states,
+            ...., variables[num_variables-1].num_states). For any valid configuration,
+            potential[config] should yield the value of the potential function.
     """
 
     # TODO: Add errors raised to the docstring!
     variables: Tuple[Variable, ...]
     configs: np.ndarray
-    potential: np.ndarray  # TODO: Run checks on this and add it to wiring, etc. to be passed to belief prop!
+    potential: np.ndarray
 
     def __post_init__(self):
         self.configs.flags.writeable = False
@@ -171,5 +171,4 @@ class EnumerationFactor:
             edges_num_states=self.edges_num_states,
             var_states_for_edges=var_states_for_edges,
             factor_configs_edge_states=self.factor_configs_edge_states,
-            factor_configs_potentials=self.factor_configs_potentials,
         )

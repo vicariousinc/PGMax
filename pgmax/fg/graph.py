@@ -46,15 +46,33 @@ class FactorGraph:
 
     @utils.cached_property
     def wiring(self) -> nodes.EnumerationWiring:
-        """Function to compile wiring for belief propagation..
+        """Function to compile wiring for belief propagation.
 
         If wiring has already beeen compiled, do nothing.
+
+        Returns:
+            compiled wiring from each individual factor
         """
         wirings = [
             factor.compile_wiring(self._vars_to_starts) for factor in self.factors
         ]
         wiring = fg_utils.concatenate_enumeration_wirings(wirings)
         return wiring
+
+    @utils.cached_property
+    def factor_configs_potentials(self) -> jnp.ndarray:
+        """Function to compile potential array for belief propagation..
+
+        If potential array has already beeen compiled, do nothing.
+
+        Returns:
+            a jnp array representing the potential
+        """
+        return jax.device_put(
+            np.concatenate(
+                [factor.factor_configs_potentials for factor in self.factors]
+            )
+        )
 
     def get_evidence(self, data: Any, context: Any = None) -> jnp.ndarray:
         """Function to generate evidence array. Need to be overwritten for concrete factor graphs
@@ -140,7 +158,7 @@ class FactorGraph:
             ftov_msgs = infer.pass_fac_to_var_messages(
                 vtof_msgs,
                 wiring.factor_configs_edge_states,
-                wiring.factor_configs_potentials,
+                self.factor_configs_potentials,
                 num_val_configs,
             )
             # Use the results of message passing to perform damping and
