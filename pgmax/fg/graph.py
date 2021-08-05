@@ -78,7 +78,7 @@ class FactorGraph:
             context: Optional context for initializing messages
 
         Returns:
-            array of shape (num_edge_state,) representing initialized factor to variable
+            array of shape (num_edge_states,) representing initialized factor to variable
                 messages
         """
         return jnp.zeros(self.wiring.var_states_for_edges.shape[0])

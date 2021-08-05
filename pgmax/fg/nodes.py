@@ -68,7 +68,7 @@ class EnumerationFactor:
     # TODO: Add errors raised to the docstring!
     variables: Tuple[Variable, ...]
     configs: np.ndarray
-    potential: np.ndarray  # TODO: Run checks on this and add it to wiring, etc. to be passed to belief prop!
+    potential: np.ndarray
 
     def __post_init__(self):
         self.configs.flags.writeable = False

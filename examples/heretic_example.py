@@ -34,6 +34,7 @@ import pgmax.fg.graph as graph  # isort:skip
 # %%
 # Instantiate all the Variables in the factor graph via VariableGroups
 im_size = (30, 30)
+prng_key = jax.random.PRNGKey(42)
 
 pixel_vars = interface_datatypes.NDVariableArray(3, im_size)
 hidden_vars = interface_datatypes.NDVariableArray(
@@ -66,19 +67,89 @@ class BinaryFactorGroup(interface_datatypes.FactorGroup):
 
 
 # %%
+# Load weights and create evidence (taken directly from @lazarox's code)
 crbm_weights = np.load("crbm_mnist_weights_surfaces_pmap002.npz")
-W, _, _ = crbm_weights["W"], crbm_weights["bX"], crbm_weights["bH"]
-W = W.swapaxes(0, 1)
-print(W.shape)
+W_orig, bX, bH = crbm_weights["W"], crbm_weights["bX"], crbm_weights["bH"]
+n_samples = 1
+T = 1
+
+im_height, im_width = im_size
+n_cat_X, n_cat_H, f_s = W_orig.shape[:3]
+W = W_orig.reshape(1, n_cat_X, n_cat_H, f_s, f_s, 1, 1)
+bXn = jnp.zeros((n_samples, n_cat_X, 1, 1, 1, im_height, im_width))
+border = jnp.zeros((1, n_cat_X, 1, 1, 1) + im_size)
+border = border.at[:, 1:, :, :, :, :1, :].set(-10)
+border = border.at[:, 1:, :, :, :, -1:, :].set(-10)
+border = border.at[:, 1:, :, :, :, :, :1].set(-10)
+border = border.at[:, 1:, :, :, :, :, -1:].set(-10)
+bXn = bXn + border
+rng, rng_input = jax.random.split(prng_key)
+rnX = jax.random.gumbel(
+    rng_input, shape=(n_samples, n_cat_X, 1, 1, 1, im_height, im_width)
+)
+bXn = bXn + bX[None, :, :, :, :, None, None] + T * rnX
+rng, rng_input = jax.random.split(rng)
+rnH = jax.random.gumbel(
+    rng_input,
+    shape=(n_samples, 1, n_cat_H, 1, 1, im_height - f_s + 1, im_width - f_s + 1),
+)
+bHn = bH[None, :, :, :, :, None, None] + T * rnH
+
+# Create the evidence array by concatenating bXn and bHn
+# bXn_concat = bXn.reshape((3, 30, 30)).flatten('F')
+# bHn_concat = bHn.reshape((17, 28, 28)).flatten('F')
+# evidence = jnp.concatenate((bXn_concat, bHn_concat))
 
 # %%
+def custom_flatten_ordering(Mdown, Mup):
+    flat_idx = 0
+    flat_Mdown = Mdown.flatten()
+    flat_Mup = Mup.flatten()
+    flattened_arr = np.zeros(
+        (flat_Mdown.shape[0] + flat_Mup.shape[0]),
+    )
+    for kernel_row in range(Mdown.shape[1]):
+        for kernel_col in range(Mdown.shape[2]):
+            for row in range(Mdown.shape[3]):
+                for col in range(Mdown.shape[4]):
+                    flattened_arr[flat_idx : flat_idx + Mup.shape[0]] = Mup[
+                        :, kernel_row, kernel_col, row, col
+                    ]
+                    flat_idx += Mup.shape[0]
+                    flattened_arr[flat_idx : flat_idx + Mdown.shape[0]] = Mdown[
+                        :, kernel_row, kernel_col, row, col
+                    ]
+                    flat_idx += Mdown.shape[0]
+    return flattened_arr
+
+
+# Create initial messages using bXn and bHn messages from
+# features to pixels (taken directly from @lazarox's code)
+rng, rng_input = jax.random.split(rng)
+Mdown = jnp.zeros(
+    (n_samples, n_cat_X, 1, f_s, f_s, im_height - f_s + 1, im_width - f_s + 1)
+)
+Mup = jnp.zeros(
+    (n_samples, 1, n_cat_H, f_s, f_s, im_height - f_s + 1, im_width - f_s + 1)
+)
+# Make beliefs zero initially (seems critical for low energy solution)
+Mdown = Mdown - bXn[:, :, :, :, :, 1:-1, 1:-1] / f_s ** 2
+Mup = Mup - bHn / f_s ** 2
+
+reshaped_Mdown = Mdown.reshape(3, 3, 3, 28, 28)
+reshaped_Mup = Mup.reshape(17, 3, 3, 28, 28)
+
+init_msgs = jax.device_put(custom_flatten_ordering(reshaped_Mdown, reshaped_Mup))
+
+# %%
+W_pot = W_orig.swapaxes(0, 1)
 # We know there are 17 states for every hidden var and 3 for every pixel var, so we just need to get a list of their inner product
 factor_valid_configs = np.array([[h_s, p_s] for h_s in range(17) for p_s in range(3)])
 # We make 1 BinaryFactorGroup for every index in the 3x3 convolutional kernel grid
 binary_factor_group_list = [
     BinaryFactorGroup(
         factor_valid_configs,
-        W[..., k_row, k_col],
+        W_pot[..., k_row, k_col],
         composite_vargroup,
         28,
         28,
@@ -107,8 +178,27 @@ class ConcreteHereticGraph(graph.FactorGraph):
         Returns:
             Array of shape (num_var_states,) representing the flattened evidence for each variable
         """
-        prng_key = jax.random.PRNGKey(42)
-        return jax.random.gumbel(prng_key, (self.num_var_states,))
+        bXn, bHn = data  # type: ignore
+        evidence_arr = np.zeros(
+            self.num_var_states,
+        )
+        pixel_grid_shape, hidden_grid_shape, composite_vargroup = context  # type: ignore
+        for row in range(pixel_grid_shape[0]):
+            for col in range(pixel_grid_shape[1]):
+                curr_var = composite_vargroup[0, row, col]
+                evidence_arr[
+                    self._vars_to_starts[curr_var] : self._vars_to_starts[curr_var]
+                    + curr_var.num_states
+                ] = bXn[0, :, 0, 0, 0, row, col]
+        for row in range(hidden_grid_shape[0]):
+            for col in range(hidden_grid_shape[1]):
+                curr_var = composite_vargroup[1, row, col]
+                evidence_arr[
+                    self._vars_to_starts[curr_var] : self._vars_to_starts[curr_var]
+                    + curr_var.num_states
+                ] = bHn[0, 0, :, 0, 0, row, col]
+
+        return jax.device_put(evidence_arr)
 
 
 # %%
@@ -120,13 +210,23 @@ print(f"fg Creation time = {fg_creation_end_time - fg_creation_start_time}")
 
 # Run BP
 bp_start_time = timer()
-final_msgs = fg.run_bp(500, 1.0)
+final_msgs = fg.run_bp(
+    500,
+    0.5,
+    evidence_data=(bXn, bHn),
+    evidence_context=(im_size, (im_size[0] - 2, im_size[1] - 2), composite_vargroup),
+    init_msgs=init_msgs,
+)
 bp_end_time = timer()
 print(f"time taken for bp {bp_end_time - bp_start_time}")
 
 # Run inference and convert result to human-readable data structure
 data_writeback_start_time = timer()
-map_message_dict = fg.decode_map_states(final_msgs)
+map_message_dict = fg.decode_map_states(
+    final_msgs,
+    evidence_data=(bXn, bHn),
+    evidence_context=(im_size, (im_size[0] - 2, im_size[1] - 2), composite_vargroup),
+)
 data_writeback_end_time = timer()
 print(
     f"time taken for data conversion of inference result {data_writeback_end_time - data_writeback_start_time}"
