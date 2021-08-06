@@ -96,16 +96,12 @@ rnH = jax.random.gumbel(
 bHn = bH[None, :, :, :, :, None, None] + T * rnH
 
 # Create the evidence array by concatenating bXn and bHn
-bXn_concat = bXn.reshape((3, 30, 30)).flatten("F")
-bHn_concat = bHn.reshape((17, 28, 28)).flatten("F")
-evidence = jnp.concatenate((bXn_concat, bHn_concat))
+# bXn_concat = bXn.reshape((3, 30, 30)).flatten("F")
+# bHn_concat = bHn.reshape((17, 28, 28)).flatten("F")
+# evidence = jnp.concatenate((bXn_concat, bHn_concat))
 
 
 # %%
-# NOTE: This part is the slowest part of the entire program, and all it's really doing is flattening the two arrays in a specific way.
-# There *must* be some nice vectorized way to do this!
-
-
 def custom_flatten_ordering(Mdown, Mup):
     flat_idx = 0
     flat_Mdown = Mdown.flatten()
@@ -141,10 +137,16 @@ Mup = jnp.zeros(
 Mdown = Mdown - bXn[:, :, :, :, :, 1:-1, 1:-1] / f_s ** 2
 Mup = Mup - bHn / f_s ** 2
 
+# init_weights = np.load("init_weights_mnist_surfaces_pmap002.npz")
+# Mdown, Mup = init_weights["Mdown"], init_weights["Mup"]
+# reshaped_Mdown = Mdown.reshape(3, 3, 3, 30, 30)
+# reshaped_Mdown = reshaped_Mdown[:,:,:,1:-1, 1:-1]
 reshaped_Mdown = Mdown.reshape(3, 3, 3, 28, 28)
 reshaped_Mup = Mup.reshape(17, 3, 3, 28, 28)
 
-init_msgs = jax.device_put(custom_flatten_ordering(reshaped_Mdown, reshaped_Mup))
+init_msgs = jax.device_put(
+    custom_flatten_ordering(np.array(reshaped_Mdown), np.array(reshaped_Mup))
+)
 
 # %%
 W_pot = W_orig.swapaxes(0, 1)
@@ -173,38 +175,6 @@ facs_tuple = sum([fac_group.factors for fac_group in binary_factor_group_list], 
 
 # %%
 class ConcreteHereticGraph(graph.FactorGraph):
-    # def get_evidence(self, data: Any = None, context: Any = None) -> jnp.ndarray:
-    #     """Function to generate evidence array. Need to be overwritten for concrete factor graphs
-
-    #     Args:
-    #         data: Data for generating evidence
-    #         context: Optional context for generating evidence
-
-    #     Returns:
-    #         Array of shape (num_var_states,) representing the flattened evidence for each variable
-    #     """
-    #     bXn, bHn = data  # type: ignore
-    #     evidence_arr = np.zeros(
-    #         self.num_var_states,
-    #     )
-    #     pixel_grid_shape, hidden_grid_shape, composite_vargroup = context  # type: ignore
-    #     for row in range(pixel_grid_shape[0]):
-    #         for col in range(pixel_grid_shape[1]):
-    #             curr_var = composite_vargroup[0, row, col]
-    #             evidence_arr[
-    #                 self._vars_to_starts[curr_var] : self._vars_to_starts[curr_var]
-    #                 + curr_var.num_states
-    #             ] = bXn[0, :, 0, 0, 0, row, col]
-    #     for row in range(hidden_grid_shape[0]):
-    #         for col in range(hidden_grid_shape[1]):
-    #             curr_var = composite_vargroup[1, row, col]
-    #             evidence_arr[
-    #                 self._vars_to_starts[curr_var] : self._vars_to_starts[curr_var]
-    #                 + curr_var.num_states
-    #             ] = bHn[0, 0, :, 0, 0, row, col]
-
-    #     return jax.device_put(evidence_arr)
-
     def get_evidence(self, data: Any = None, context: Any = None) -> jnp.ndarray:
         """Function to generate evidence array. Need to be overwritten for concrete factor graphs
 
@@ -215,7 +185,27 @@ class ConcreteHereticGraph(graph.FactorGraph):
         Returns:
             Array of shape (num_var_states,) representing the flattened evidence for each variable
         """
-        return data
+        bXn, bHn = data  # type: ignore
+        evidence_arr = np.zeros(
+            self.num_var_states,
+        )
+        pixel_grid_shape, hidden_grid_shape, composite_vargroup = context  # type: ignore
+        for row in range(pixel_grid_shape[0]):
+            for col in range(pixel_grid_shape[1]):
+                curr_var = composite_vargroup[0, row, col]
+                evidence_arr[
+                    self._vars_to_starts[curr_var] : self._vars_to_starts[curr_var]
+                    + curr_var.num_states
+                ] = bXn[0, :, 0, 0, 0, row, col]
+        for row in range(hidden_grid_shape[0]):
+            for col in range(hidden_grid_shape[1]):
+                curr_var = composite_vargroup[1, row, col]
+                evidence_arr[
+                    self._vars_to_starts[curr_var] : self._vars_to_starts[curr_var]
+                    + curr_var.num_states
+                ] = bHn[0, 0, :, 0, 0, row, col]
+
+        return jax.device_put(evidence_arr)
 
 
 # %%
@@ -227,17 +217,11 @@ print(f"fg Creation time = {fg_creation_end_time - fg_creation_start_time}")
 
 # Run BP
 bp_start_time = timer()
-# final_msgs = fg.run_bp(
-#     500,
-#     0.5,
-#     evidence_data=(bXn, bHn),
-#     evidence_context=(im_size, (im_size[0] - 2, im_size[1] - 2), composite_vargroup),
-#     init_msgs=init_msgs,
-# )
 final_msgs = fg.run_bp(
     500,
     0.5,
-    evidence_data=evidence,
+    evidence_data=(np.array(bXn), np.array(bHn)),
+    evidence_context=(im_size, (im_size[0] - 2, im_size[1] - 2), composite_vargroup),
     init_msgs=init_msgs,
 )
 bp_end_time = timer()
@@ -247,9 +231,8 @@ print(f"time taken for bp {bp_end_time - bp_start_time}")
 data_writeback_start_time = timer()
 map_message_dict = fg.decode_map_states(
     final_msgs,
-    evidence_data=evidence,
-    # evidence_data=(bXn, bHn),
-    # evidence_context=(im_size, (im_size[0] - 2, im_size[1] - 2), composite_vargroup),
+    evidence_data=(np.array(bXn), np.array(bHn)),
+    evidence_context=(im_size, (im_size[0] - 2, im_size[1] - 2), composite_vargroup),
 )
 data_writeback_end_time = timer()
 print(
@@ -259,7 +242,7 @@ print(
 
 # %%
 # Viz function from @lazarox's code
-def plot_images(images, zoom_times=0, filename=None, display=True, return_image=False):
+def plot_images(images):
     n_images, H, W = images.shape
     images = images - images.min()
     images /= images.max() + 1e-10
@@ -278,15 +261,8 @@ def plot_images(images, zoom_times=0, filename=None, display=True, return_image=
                 ] = images[im, :, :, None]
             im += 1
 
-    if display and filename is None:
-        plt.figure(figsize=(10, 10))
-        plt.imshow(big_image, interpolation="none")
-    for i in range(zoom_times):
-        big_image = ndimage.zoom(big_image, [2, 2, 1], order=0)
-    if filename:
-        imwrite(filename, img_as_ubyte(big_image))
-    if return_image:
-        return big_image
+    plt.figure(figsize=(10, 10))
+    plt.imshow(big_image, interpolation="none")
 
 
 # %%
@@ -294,6 +270,9 @@ img_arr = np.zeros((1, im_size[0], im_size[1]))
 
 for row in range(im_size[0]):
     for col in range(im_size[1]):
-        img_arr[0, row, col] = map_message_dict[composite_vargroup[0, row, col]]  # type: ignore
+        img_val = float(map_message_dict[composite_vargroup[0, row, col]])  # type: ignore
+        if img_val == 2.0:
+            img_val = 0.4
+        img_arr[0, row, col] = img_val * 1.0
 
 plot_images(img_arr)
