@@ -162,33 +162,38 @@ class FactorGroup:
         var_group: either a VariableGroup or - if the elements of more than one VariableGroup
             are connected to this FactorGroup - then a CompositeVariableGroup. This holds
             all the variables that are connected to this FactorGroup
-        factor_configs_log_potentials: Either an array of shape (num_val_configs,), or None.
-            If it's an array, then it must contain the log of the potential value for every
-            possible configuration. If none, it is assumed the log potential is uniform 0.
 
     Attributes:
         factors: a tuple of all the factors belonging to this group. These are constructed
             internally by invoking the _get_connected_var_keys_for_factors method.
+        factor_configs_log_potentials: Can be specified by an inheriting class, or just left
+            unspecified (equivalent to specifying None). If specified, must have (num_val_configs,).
+            and contain the log of the potential value for every possible configuration.
+            If none, it is assumed the log potential is uniform 0 and such an array is automatically
+            initialized.
 
     Raises:
-        ValueError: if the connected_variables() method returns an empty list.
+        ValueError: if the connected_variables() method returns an empty list
     """
 
     factor_configs: np.ndarray
     var_group: Union[CompositeVariableGroup, VariableGroup]
-    factor_configs_log_potentials: Union[np.ndarray, None]
 
     def __post_init__(self) -> None:
         """Initializes a tuple of all the factors contained within this FactorGroup."""
         connected_var_keys_for_factors = self.connected_variables()
         if len(connected_var_keys_for_factors) == 0:
             raise ValueError("The list returned by self.connected_variables() is empty")
-        if self.factor_configs_log_potentials is None:
+        if (
+            not hasattr(self, "factor_configs_log_potentials")
+            or hasattr(self, "factor_configs_log_potentials")
+            and self.factor_configs_log_potentials is None  # type: ignore
+        ):
             factor_configs_log_potentials = np.zeros(
                 self.factor_configs.shape[0], dtype=float
             )
         else:
-            factor_configs_log_potentials = self.factor_configs_log_potentials
+            factor_configs_log_potentials = self.factor_configs_log_potentials  # type: ignore
         self.factors: Tuple[nodes.EnumerationFactor, ...] = tuple(
             [
                 nodes.EnumerationFactor(

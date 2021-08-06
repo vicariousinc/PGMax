@@ -60,7 +60,7 @@ class FactorGraph:
         return wiring
 
     @utils.cached_property
-    def factor_configs_log_potentials(self) -> jnp.ndarray:
+    def factor_configs_log_potentials(self) -> np.ndarray:
         """Function to compile potential array for belief propagation..
 
         If potential array has already beeen compiled, do nothing.
@@ -69,10 +69,8 @@ class FactorGraph:
             a jnp array representing the log of the potential function for each
                 valid configuration
         """
-        return jax.device_put(
-            np.concatenate(
-                [factor.factor_configs_log_potentials for factor in self.factors]
-            )
+        return np.concatenate(
+            [factor.factor_configs_log_potentials for factor in self.factors]
         )
 
     def get_evidence(self, data: Any, context: Any = None) -> jnp.ndarray:
@@ -138,6 +136,9 @@ class FactorGraph:
             msgs = self.get_init_msgs(msgs_context)
 
         wiring = jax.device_put(self.wiring)
+        factor_configs_log_potentials = jax.device_put(
+            self.factor_configs_log_potentials
+        )
         evidence = self.get_evidence(evidence_data, evidence_context)
         max_msg_size = int(jnp.max(wiring.edges_num_states))
 
@@ -159,7 +160,7 @@ class FactorGraph:
             ftov_msgs = infer.pass_fac_to_var_messages(
                 vtof_msgs,
                 wiring.factor_configs_edge_states,
-                self.factor_configs_log_potentials,
+                factor_configs_log_potentials,
                 num_val_configs,
             )
             # Use the results of message passing to perform damping and
