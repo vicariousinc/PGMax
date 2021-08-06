@@ -31,7 +31,7 @@ import jax.numpy as jnp  # isort:skip
 from numpy.random import default_rng  # isort:skip
 from scipy import sparse  # isort:skip
 from scipy.ndimage import gaussian_filter  # isort:skip
-from typing import Any, Dict, Tuple, List  # isort:skip
+from typing import Any, Dict, Tuple, List, Optional  # isort:skip
 from timeit import default_timer as timer  # isort:skip
 from dataclasses import dataclass  # isort:skip
 
@@ -47,8 +47,6 @@ rng = default_rng(23)
 # Make sure these environment variables are set correctly to get an accurate picture of memory usage
 os.environ["XLA_PYTHON_ALLOCATOR"] = "platform"
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
-print(os.getenv("XLA_PYTHON_ALLOCATOR", "default").lower())
-print(os.getenv("XLA_PYTHON_CLIENT_PREALLOCATE"))
 
 # Create a synthetic depth image for testing purposes
 im_size = 32
@@ -189,6 +187,7 @@ composite_grid_group = interface_datatypes.CompositeVariableGroup(
 class FourFactorGroup(interface_datatypes.FactorGroup):
     num_rows: int
     num_cols: int
+    factor_configs_log_potentials: Optional[np.ndarray] = None
 
     def connected_variables(
         self,
@@ -241,6 +240,7 @@ class VertSuppressionFactorGroup(interface_datatypes.FactorGroup):
     num_rows: int
     num_cols: int
     suppression_diameter: int
+    factor_configs_log_potentials: Optional[np.ndarray] = None
 
     def connected_variables(
         self,
@@ -275,6 +275,7 @@ class HorzSuppressionFactorGroup(interface_datatypes.FactorGroup):
     num_rows: int
     num_cols: int
     suppression_diameter: int
+    factor_configs_log_potentials: Optional[np.ndarray] = None
 
     def connected_variables(
         self,
@@ -350,39 +351,13 @@ class ConcreteFactorGraph(graph.FactorGraph):
             context: Optional context for generating evidence
 
         Returns:
-            None, but must set the self._evidence attribute to a jnp.array of shape (num_var_states,)
+            Array of shape (num_var_states,) representing the flattened evidence for each variable
         """
         evidence = np.zeros(self.num_var_states)
         for var in self.variables:
             start_index = self._vars_to_starts[var]
             evidence[start_index : start_index + var.num_states] = data[var]
         return jax.device_put(evidence)
-
-    def output_inference(
-        self, final_var_states: jnp.ndarray, context: Any = None
-    ) -> Any:
-        """Function to take the result of message passing and output the inference result for
-            each variable
-
-        Args:
-            final_var_states: an array of shape (num_var_states,) that is the result of belief
-                propagation
-            context: Optional context for using this array
-
-        Returns:
-            An evidence array of shape (num_var_states,)
-        """
-        # NOTE: An argument can be passed here to do different inferences for sum-product and
-        # max-product respectively
-        var_to_map_dict = {}
-        final_var_states_np = np.array(final_var_states)
-        for var in self.variables:
-            start_index = self._vars_to_starts[var]
-            var_to_map_dict[var] = np.argmax(
-                final_var_states_np[start_index : start_index + var.num_states]
-            )
-
-        return var_to_map_dict
 
 
 # %%
@@ -442,6 +417,7 @@ data_writeback_end_time = timer()
 print(
     f"time taken for data conversion of inference result {data_writeback_end_time - data_writeback_start_time}"
 )
+
 
 # %% [markdown]
 # ## Visualization of Results
