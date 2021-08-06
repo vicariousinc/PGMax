@@ -329,14 +329,6 @@ horz_suppression_group = HorzSuppressionFactorGroup(
     SUPPRESSION_DIAMETER,
 )
 
-# Finally, we construct the tuple of all the factors and variables involved in the problem.
-facs_tuple = tuple(
-    list(four_factors_group.factors)
-    + list(vert_suppression_group.factors)
-    + list(horz_suppression_group.factors)
-)
-vars_tuple = composite_grid_group.get_all_vars()
-
 
 # %%
 # Override and define a concrete FactorGraph Class with the get_evidence function implemented
@@ -400,7 +392,9 @@ for i in range(2):
 # %%
 # Create the factor graph
 fg_creation_start_time = timer()
-fg = ConcreteFactorGraph(vars_tuple, facs_tuple)
+fg = ConcreteFactorGraph(
+    (four_factors_group, vert_suppression_group, horz_suppression_group)
+)
 fg_creation_end_time = timer()
 print(f"fg Creation time = {fg_creation_end_time - fg_creation_start_time}")
 

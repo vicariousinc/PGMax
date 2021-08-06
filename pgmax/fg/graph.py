@@ -9,8 +9,10 @@ import jax.numpy as jnp
 import numpy as np
 
 import pgmax.bp.infer as infer
+import pgmax.fg.fg_utils as fg_utils
+import pgmax.fg.nodes as nodes
+import pgmax.interface.datatypes as interface_datatypes
 from pgmax import utils
-from pgmax.fg import fg_utils, nodes
 
 
 @dataclass(frozen=True, eq=False)
@@ -21,14 +23,32 @@ class FactorGraph:
     the evidence array, and optionally init_msgs (default to initializing all messages to 0)
 
     Args:
-        variables: List of involved variables
-        factors: List of involved factors
+        factor_groups: a tuple containing all the FactorGroups that are part of this FactorGraph
+
+    Attributes:
+        variables: tuple. contains involved variables
+        factors: tuple. contains involved factors
+        num_var_states: int. represents the sum of all variable states of all variables in the
+            FactorGraph
+        _vars_to_starts: MappingProxyType[nodes.Variable, int]. maps every variable to an int
+            representing an index in the evidence array at which the first entry of the evidence
+            for that particular variable should be placed.
     """
 
-    variables: Tuple[nodes.Variable, ...]
-    factors: Tuple[nodes.EnumerationFactor, ...]
+    factor_groups: Tuple[interface_datatypes.FactorGroup, ...]
 
     def __post_init__(self):
+        self.factors = sum(
+            [factor_group.factors for factor_group in self.factor_groups], ()
+        )
+        self.variables = sum(
+            [
+                factor_group.var_group.get_all_vars()
+                for factor_group in self.factor_groups
+            ],
+            (),
+        )
+
         vars_num_states_cumsum = np.insert(
             np.array(
                 [variable.num_states for variable in self.variables], dtype=int
