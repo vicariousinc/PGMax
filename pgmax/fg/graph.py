@@ -23,8 +23,16 @@ class FactorGraph:
     the evidence array, and optionally init_msgs (default to initializing all messages to 0)
 
     Args:
-        variables: List of involved variables
-        factors: List of involved factors
+        factor_groups: a tuple containing all the FactorGroups that are part of this FactorGraph
+
+    Attributes:
+        variables: tuple. contains involved variables
+        factors: tuple. contains involved factors
+        num_var_states: int. represents the sum of all variable states of all variables in the
+            FactorGraph
+        _vars_to_starts: MappingProxyType[nodes.Variable, int]. maps every variable to an int
+            representing an index in the evidence array at which the first entry of the evidence
+            for that particular variable should be placed.
     """
 
     factor_groups: Tuple[interface_datatypes.FactorGroup, ...]
