@@ -52,6 +52,7 @@ class BinaryFactorGroup(interface_datatypes.FactorGroup):
     num_hidden_cols: int
     kernel_row: int
     kernel_col: int
+    factor_configs_log_potentials: np.array
 
     def connected_variables(self) -> List[List[Tuple[Any, ...]]]:
         ret_list: List[List[Tuple[Any, ...]]] = []
@@ -99,6 +100,7 @@ bHn = bH[None, :, :, :, :, None, None] + T * rnH
 # bXn_concat = bXn.reshape((3, 30, 30)).flatten("F")
 # bHn_concat = bHn.reshape((17, 28, 28)).flatten("F")
 # evidence = jnp.concatenate((bXn_concat, bHn_concat))
+print(W_orig.shape)
 
 
 # %%
@@ -149,23 +151,37 @@ init_msgs = jax.device_put(
 )
 
 # %%
-W_pot = W_orig.swapaxes(0, 1)
 # We know there are 17 states for every hidden var and 3 for every pixel var, so we just need to get a list of their inner product
 factor_valid_configs = np.array([[h_s, p_s] for h_s in range(17) for p_s in range(3)])
-# We make 1 BinaryFactorGroup for every index in the 3x3 convolutional kernel grid
-binary_factor_group_list = [
-    BinaryFactorGroup(
-        factor_valid_configs,
-        W_pot[..., k_row, k_col],
-        composite_vargroup,
-        28,
-        28,
-        k_row,
-        k_col,
-    )
-    for k_row in range(3)
-    for k_col in range(3)
-]
+
+W_pot = W_orig.swapaxes(0, 1)
+binary_factor_group_list: List[BinaryFactorGroup] = []
+for k_row in range(3):
+    for k_col in range(3):
+        # Use W_pot to make the correct 1D factor_configs_log_potentials
+        factor_configs_log_potentials = np.zeros(
+            (factor_valid_configs.shape[0],), dtype=float
+        )
+        for config_i in range(factor_valid_configs.shape[0]):
+            factor_configs_log_potentials[config_i] = W_pot[
+                factor_valid_configs[config_i][0],
+                factor_valid_configs[config_i][1],
+                k_row,
+                k_col,
+            ]
+
+        binary_factor_group_list.append(
+            BinaryFactorGroup(
+                factor_configs=factor_valid_configs,
+                var_group=composite_vargroup,
+                num_hidden_rows=28,
+                num_hidden_cols=28,
+                kernel_row=k_row,
+                kernel_col=k_col,
+                factor_configs_log_potentials=factor_configs_log_potentials,
+            )
+        )
+
 
 # %%
 # Generate tuples of all the factors and variables
