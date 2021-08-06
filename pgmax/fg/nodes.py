@@ -58,11 +58,10 @@ class EnumerationFactor:
 
     Args:
         variables: List of involved variables
-        configs: Array of shape (num_configs, num_variables)
+        configs: Array of shape (num_val_configs, num_variables)
             An array containing an explicit enumeration of all valid configurations
-        potential: Array of shape (variables[0].num_states, variables[1].num_states,
-            ...., variables[num_variables-1].num_states). For any valid configuration,
-            potential[config] should yield the value of the potential function.
+        factor_configs_log_potentials: Array of shape (num_val_configs,). An array containing
+            the log of the potential value for every possible configuration
 
     Raises:
         ValueError: If:
@@ -71,16 +70,14 @@ class EnumerationFactor:
             (3) configs array doesn't have the same number of columns
             as there are variables
             (4) the potential array doesn't have the same number of
-            dimensions as there are variables
-            (5) each column of the potential array doesn't have the
-            same size as the corresponding variable in variables
-            (6) any value in the configs array is greater than the size
+            rows as the configs array
+            (5) any value in the configs array is greater than the size
             of the corresponding variable or less than 0.
     """
 
     variables: Tuple[Variable, ...]
     configs: np.ndarray
-    potential: np.ndarray
+    factor_configs_log_potentials: np.ndarray
 
     def __post_init__(self):
         self.configs.flags.writeable = False
@@ -89,24 +86,20 @@ class EnumerationFactor:
                 f"Configurations should be integers. Got {self.configs.dtype}."
             )
 
-        if not np.issubdtype(self.potential.dtype, np.floating):
-            raise ValueError(f"Potential should be floats. Got {self.potential.dtype}.")
+        if not np.issubdtype(self.factor_configs_log_potentials.dtype, np.floating):
+            raise ValueError(
+                f"Potential should be floats. Got {self.factor_configs_log_potentials.dtype}."
+            )
 
         if len(self.variables) != self.configs.shape[1]:
             raise ValueError(
                 f"Number of variables {len(self.variables)} doesn't match given configurations {self.configs.shape}"
             )
 
-        if self.configs.shape[1] != len(self.potential.shape):
+        if self.configs.shape[0] != self.factor_configs_log_potentials.shape[0]:
             raise ValueError(
-                f"The potential array has {len(self.potential.shape)} axes, which is not equal to the size of each configuration ({self.configs.shape[1]})"
+                f"The potential array has {self.factor_configs_log_potentials.shape[0]} rows, which is not equal to the number of configurations ({self.configs.shape[0]})"
             )
-
-        for i, var in enumerate(self.variables):
-            if self.potential.shape[i] != var.num_states:
-                raise ValueError(
-                    f"Invalid potential function: axis {i} has length {self.potential.shape[i]}, but the corresponding variable has {var.num_states} states"
-                )
 
         vars_num_states = np.array([variable.num_states for variable in self.variables])
         if not np.logical_and(
@@ -146,19 +139,6 @@ class EnumerationFactor:
             axis=1,
         )
         return factor_configs_edge_states
-
-    @utils.cached_property
-    def factor_configs_potentials(self) -> np.ndarray:
-        """Array containing the potential value for every valid factor configuration.
-
-        Returns:
-            Array of shape (num_val_configs, ). An entry at index i is the potential function value for
-                the configuration with global factor config index i.
-        """
-        config_potentials = np.zeros(self.configs.shape[0], dtype=float)
-        for row in range(self.configs.shape[0]):
-            config_potentials[row] = self.potential[tuple(self.configs[row].tolist())]
-        return config_potentials
 
     def compile_wiring(
         self, vars_to_starts: Mapping[Variable, int]
