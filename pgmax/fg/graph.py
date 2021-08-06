@@ -46,15 +46,32 @@ class FactorGraph:
 
     @utils.cached_property
     def wiring(self) -> nodes.EnumerationWiring:
-        """Function to compile wiring for belief propagation..
+        """Function to compile wiring for belief propagation.
 
         If wiring has already beeen compiled, do nothing.
+
+        Returns:
+            compiled wiring from each individual factor
         """
         wirings = [
             factor.compile_wiring(self._vars_to_starts) for factor in self.factors
         ]
         wiring = fg_utils.concatenate_enumeration_wirings(wirings)
         return wiring
+
+    @utils.cached_property
+    def factor_configs_log_potentials(self) -> np.ndarray:
+        """Function to compile potential array for belief propagation..
+
+        If potential array has already beeen compiled, do nothing.
+
+        Returns:
+            a jnp array representing the log of the potential function for each
+                valid configuration
+        """
+        return np.concatenate(
+            [factor.factor_configs_log_potentials for factor in self.factors]
+        )
 
     def get_evidence(self, data: Any, context: Any = None) -> jnp.ndarray:
         """Function to generate evidence array. Need to be overwritten for concrete factor graphs
@@ -78,7 +95,7 @@ class FactorGraph:
             context: Optional context for initializing messages
 
         Returns:
-            array of shape (num_edge_states,) representing initialized factor to variable
+            array of shape (num_edge_state,) representing initialized factor to variable
                 messages
         """
         return jnp.zeros(self.wiring.var_states_for_edges.shape[0])
@@ -119,6 +136,9 @@ class FactorGraph:
             msgs = self.get_init_msgs(msgs_context)
 
         wiring = jax.device_put(self.wiring)
+        factor_configs_log_potentials = jax.device_put(
+            self.factor_configs_log_potentials
+        )
         evidence = self.get_evidence(evidence_data, evidence_context)
         max_msg_size = int(jnp.max(wiring.edges_num_states))
 
@@ -140,7 +160,7 @@ class FactorGraph:
             ftov_msgs = infer.pass_fac_to_var_messages(
                 vtof_msgs,
                 wiring.factor_configs_edge_states,
-                wiring.factor_configs_potentials,
+                factor_configs_log_potentials,
                 num_val_configs,
             )
             # Use the results of message passing to perform damping and
