@@ -269,7 +269,8 @@ class PairwiseEnumeratedFactorGroup(FactorGroup):
 
     Raises:
         ValueError: if the connected_variables() method returns an empty list or if self.var_group (inherited arg)
-            is not a CompositeVariableGroup made up of 2 VariableGroup's
+            is not a CompositeVariableGroup made up of 2 VariableGroup's, or if the shape of the log_potential_matrix
+            is not the same as the variable sizes for each VariableGroup in the CompositeVariableGroup
     """
 
     log_potential_matrix: np.ndarray
