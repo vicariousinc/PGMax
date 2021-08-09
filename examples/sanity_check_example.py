@@ -184,7 +184,7 @@ composite_grid_group = interface_datatypes.CompositeVariableGroup(
 
 
 @dataclass
-class FourFactorGroup(interface_datatypes.FactorGroup):
+class FourFactorGroup(interface_datatypes.EnumerationFactorGroup):
     num_rows: int
     num_cols: int
     factor_configs_log_potentials: Optional[np.ndarray] = None
@@ -236,7 +236,7 @@ class FourFactorGroup(interface_datatypes.FactorGroup):
 
 
 @dataclass
-class VertSuppressionFactorGroup(interface_datatypes.FactorGroup):
+class VertSuppressionFactorGroup(interface_datatypes.EnumerationFactorGroup):
     num_rows: int
     num_cols: int
     suppression_diameter: int
@@ -271,7 +271,7 @@ class VertSuppressionFactorGroup(interface_datatypes.FactorGroup):
 
 
 @dataclass
-class HorzSuppressionFactorGroup(interface_datatypes.FactorGroup):
+class HorzSuppressionFactorGroup(interface_datatypes.EnumerationFactorGroup):
     num_rows: int
     num_cols: int
     suppression_diameter: int
@@ -307,26 +307,26 @@ class HorzSuppressionFactorGroup(interface_datatypes.FactorGroup):
 # %%
 # Now, we instantiate the four factors
 four_factors_group = FourFactorGroup(
-    valid_configs_non_supp,
-    composite_grid_group,
-    M,
-    N,
+    var_group=composite_grid_group,
+    factor_configs=valid_configs_non_supp,
+    num_rows=M,
+    num_cols=N,
 )
 # Next, we instantiate all the vertical suppression variables
 vert_suppression_group = VertSuppressionFactorGroup(
-    valid_configs_supp,
-    composite_grid_group,
-    M,
-    N,
-    SUPPRESSION_DIAMETER,
+    var_group=composite_grid_group,
+    factor_configs=valid_configs_supp,
+    num_rows=M,
+    num_cols=N,
+    suppression_diameter=SUPPRESSION_DIAMETER,
 )
 # Next, we instantiate all the horizontal suppression variables
 horz_suppression_group = HorzSuppressionFactorGroup(
-    valid_configs_supp,
-    composite_grid_group,
-    M,
-    N,
-    SUPPRESSION_DIAMETER,
+    var_group=composite_grid_group,
+    factor_configs=valid_configs_supp,
+    num_rows=M,
+    num_cols=N,
+    suppression_diameter=SUPPRESSION_DIAMETER,
 )
 
 

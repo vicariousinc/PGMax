@@ -1,7 +1,7 @@
 import itertools
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Dict, List, Mapping, Tuple, Union
+from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
 import numpy as np
 
@@ -152,16 +152,54 @@ class CompositeVariableGroup:
 class FactorGroup:
     """Base class to represent a group of factors.
 
+    All factors in a group are assumed to be connected to variables from VariableGroups within
+        one CompositeVariableGroup
+
+    Args:
+        var_group: either a VariableGroup or - if the elements of more than one VariableGroup
+            are connected to this FactorGroup - then a CompositeVariableGroup. This holds
+            all the variables that are connected to this FactorGroup
+
+    Raises:
+        ValueError: if the connected_variables() method returns an empty list
+    """
+
+    var_group: Union[CompositeVariableGroup, VariableGroup]
+
+    def __post_init__(self) -> None:
+        """Initializes a tuple of all the factors contained within this FactorGroup."""
+        connected_var_keys_for_factors = self.connected_variables()
+        if len(connected_var_keys_for_factors) == 0:
+            raise ValueError("The list returned by self.connected_variables() is empty")
+
+    def connected_variables(
+        self,
+    ) -> List[List[Tuple[Any, ...]]]:
+        """Fuction to generate indices of variables neighboring a factor.
+
+        This function needs to be overridden by a concrete implementation of a factor group.
+
+        Returns:
+            A list of lists of tuples, where each tuple contains a key into a CompositeVariableGroup.
+                Each inner list represents a particular factor to be added.
+        """
+        raise NotImplementedError(
+            "Please subclass the FactorGroup class and override this method"
+        )
+
+
+@dataclass
+class EnumerationFactorGroup(FactorGroup):
+    """Base class to represent a group of EnumerationFactors.
+
     All factors in the group are assumed to have the same set of valid configurations and
     the same potential function. Additionally, all factors in a group are assumed to be
-    connected to variables from VariableGroups within one CompositeVariableGroup
+    connected to variables from VariableGroups within one CompositeVariableGroup (because of
+    inheritance from the FactorGroup class)
 
     Args:
         factor_configs: Array of shape (num_val_configs, num_variables)
             An array containing explicit enumeration of all valid configurations
-        var_group: either a VariableGroup or - if the elements of more than one VariableGroup
-            are connected to this FactorGroup - then a CompositeVariableGroup. This holds
-            all the variables that are connected to this FactorGroup
 
     Attributes:
         factors: a tuple of all the factors belonging to this group. These are constructed
@@ -177,7 +215,6 @@ class FactorGroup:
     """
 
     factor_configs: np.ndarray
-    var_group: Union[CompositeVariableGroup, VariableGroup]
 
     def __post_init__(self) -> None:
         """Initializes a tuple of all the factors contained within this FactorGroup."""
@@ -203,19 +240,83 @@ class FactorGroup:
             ]
         )
 
-    def connected_variables(
-        self,
-    ) -> List[List[Tuple[Any, ...]]]:
-        """Fuction to generate indices of variables neighboring a factor.
 
-        This function needs to be overridden by a concrete implementation of a factor group.
+@dataclass
+class PairwiseEnumeratedFactorGroup(FactorGroup):
+    """Base class to represent a group of EnumerationFactors where each factor connects to
+    two different variables.
 
-        Returns:
-            A list of lists of tuples, where each tuple contains a key into a CompositeVariableGroup.
-                Each inner list represents a particular factor to be added.
-        """
-        raise NotImplementedError(
-            "Please subclass the FactorGroup class and override this method"
+    All factors in the group are assumed to have the same set of valid configurations and
+    the same potential function. Additionally, all factors in a group are assumed to be
+    connected to variables from VariableGroups within one CompositeVariableGroup (because of
+    inheritance from the FactorGroup class)
+
+    Args:
+        factor_configs: optional array of shape (num_val_configs, num_variables)
+            An array containing explicit enumeration of all valid configurations. If not specified,
+            then it is assumed that all configurations are valid.
+
+    Attributes:
+        factors: a tuple of all the factors belonging to this group. These are constructed
+            internally by invoking the _get_connected_var_keys_for_factors method.
+        factor_configs_log_potentials: Can be specified by an inheriting class, or just left
+            unspecified (equivalent to specifying None). If specified, must have (num_val_configs,).
+            and contain the log of the potential value for every possible configuration.
+            If none, it is assumed the log potential is uniform 0 and such an array is automatically
+            initialized.
+
+    Raises:
+        ValueError: if the connected_variables() method returns an empty list or if self.var_group (inherited arg)
+            is not a CompositeVariableGroup made up of 2 VariableGroup's
+    """
+
+    factor_configs: Optional[np.ndarray] = None
+
+    def __post_init__(self) -> None:
+        """Initializes a tuple of all the factors contained within this FactorGroup."""
+        connected_var_keys_for_factors = self.connected_variables()
+        if len(connected_var_keys_for_factors) == 0:
+            raise ValueError("The list returned by self.connected_variables() is empty")
+
+        if not isinstance(self.var_group, CompositeVariableGroup):
+            raise ValueError(
+                "PairwiseEnumeratedFactorGroup expects var_group that is a CompositeVariableGroup"
+            )
+
+        if len(self.var_group.key_vargroup_pairs) != 2:
+            raise ValueError(
+                "PairwiseEnumeratedFactorGroup expects a var_group that is a CompositeVariableGroup with"
+                + f"only 2 contained VariableGroups. However, there were {len(self.var_group.key_vargroup_pairs)}"
+            )
+
+        if self.factor_configs is None:
+            var1_num_states = self.var_group.key_vargroup_pairs[0][1].variable_size
+            var2_num_states = self.var_group.key_vargroup_pairs[1][1].variable_size
+            self.factor_configs = np.array(
+                [
+                    [v1_s, v2_s]
+                    for v1_s in range(var1_num_states)
+                    for v2_s in range(var2_num_states)
+                ]
+            )
+
+        if (
+            not hasattr(self, "factor_configs_log_potentials")
+            or hasattr(self, "factor_configs_log_potentials")
+            and self.factor_configs_log_potentials is None  # type: ignore
+        ):
+            factor_configs_log_potentials = np.zeros(
+                self.factor_configs.shape[0], dtype=float
+            )
+        else:
+            factor_configs_log_potentials = self.factor_configs_log_potentials  # type: ignore
+        self.factors: Tuple[nodes.EnumerationFactor, ...] = tuple(
+            [
+                nodes.EnumerationFactor(
+                    tuple(self.var_group[keys_list]), self.factor_configs, factor_configs_log_potentials  # type: ignore
+                )
+                for keys_list in connected_var_keys_for_factors
+            ]
         )
 
 
