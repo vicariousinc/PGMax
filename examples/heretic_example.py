@@ -100,10 +100,11 @@ bHn = bH[None, :, :, :, :, None, None] + T * rnH
 # bXn_concat = bXn.reshape((3, 30, 30)).flatten("F")
 # bHn_concat = bHn.reshape((17, 28, 28)).flatten("F")
 # evidence = jnp.concatenate((bXn_concat, bHn_concat))
-print(W_orig.shape)
-
+# print(W_orig.shape)
 
 # %%
+
+
 def custom_flatten_ordering(Mdown, Mup):
     flat_idx = 0
     flat_Mdown = Mdown.flatten()
@@ -184,12 +185,6 @@ for k_row in range(3):
 
 
 # %%
-# Generate tuples of all the factors and variables
-vars_tuple = composite_vargroup.get_all_vars()
-facs_tuple = sum([fac_group.factors for fac_group in binary_factor_group_list], ())
-
-
-# %%
 class ConcreteHereticGraph(graph.FactorGraph):
     def get_evidence(self, data: Any = None, context: Any = None) -> jnp.ndarray:
         """Function to generate evidence array. Need to be overwritten for concrete factor graphs
@@ -227,7 +222,7 @@ class ConcreteHereticGraph(graph.FactorGraph):
 # %%
 # Create the factor graph
 fg_creation_start_time = timer()
-fg = ConcreteHereticGraph(vars_tuple, facs_tuple)
+fg = ConcreteHereticGraph(tuple(binary_factor_group_list))
 fg_creation_end_time = timer()
 print(f"fg Creation time = {fg_creation_end_time - fg_creation_start_time}")
 
