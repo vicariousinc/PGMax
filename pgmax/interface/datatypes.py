@@ -1,7 +1,7 @@
 import itertools
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
+from typing import Any, Dict, List, Mapping, Tuple, Union
 
 import numpy as np
 
@@ -194,8 +194,9 @@ class EnumerationFactorGroup(FactorGroup):
 
     All factors in the group are assumed to have the same set of valid configurations and
     the same potential function. Additionally, all factors in a group are assumed to be
-    connected to variables from VariableGroups within one CompositeVariableGroup (because of
-    inheritance from the FactorGroup class)
+    connected to variables from VariableGroups within one CompositeVariableGroup. Note that
+    the log potential function is assumed to be uniform 0 unless the inheriting class
+    includes a factor_configs_log_potentials argument.
 
     Args:
         factor_configs: Array of shape (num_val_configs, num_variables)
@@ -246,15 +247,16 @@ class PairwiseEnumeratedFactorGroup(FactorGroup):
     """Base class to represent a group of EnumerationFactors where each factor connects to
     two different variables.
 
-    All factors in the group are assumed to have the same set of valid configurations and
-    the same potential function. Additionally, all factors in a group are assumed to be
-    connected to variables from VariableGroups within one CompositeVariableGroup (because of
-    inheritance from the FactorGroup class)
+    All factors in the group are assumed to be such that all possible configuration of the two
+    variable's states are valid. Additionally, all factors in the group are assumed to share
+    the same potential function and to be connected to variables from VariableGroups within
+    one CompositeVariableGroup.
 
     Args:
-        factor_configs: optional array of shape (num_val_configs, num_variables)
-            An array containing explicit enumeration of all valid configurations. If not specified,
-            then it is assumed that all configurations are valid.
+        log_potential_matrix: array of shape (var1.variable_size, var2.variable_size),
+            where var1 and var2 are the only 2 VariableGroups contained within self.var_group.
+            log_potential_matrix[i,j] must contain the log potential for the configuration where
+            var1 is in state i and var2 is in state j.
 
     Attributes:
         factors: a tuple of all the factors belonging to this group. These are constructed
@@ -270,7 +272,7 @@ class PairwiseEnumeratedFactorGroup(FactorGroup):
             is not a CompositeVariableGroup made up of 2 VariableGroup's
     """
 
-    factor_configs: Optional[np.ndarray] = None
+    log_potential_matrix: np.ndarray
 
     def __post_init__(self) -> None:
         """Initializes a tuple of all the factors contained within this FactorGroup."""
@@ -289,27 +291,33 @@ class PairwiseEnumeratedFactorGroup(FactorGroup):
                 + f"only 2 contained VariableGroups. However, there were {len(self.var_group.key_vargroup_pairs)}"
             )
 
-        if self.factor_configs is None:
-            var1_num_states = self.var_group.key_vargroup_pairs[0][1].variable_size
-            var2_num_states = self.var_group.key_vargroup_pairs[1][1].variable_size
-            self.factor_configs = np.array(
-                [
-                    [v1_s, v2_s]
-                    for v1_s in range(var1_num_states)
-                    for v2_s in range(var2_num_states)
-                ]
+        var1_num_states = self.var_group.key_vargroup_pairs[0][1].variable_size
+        var2_num_states = self.var_group.key_vargroup_pairs[1][1].variable_size
+
+        if not (
+            self.log_potential_matrix.shape == (var1_num_states, var2_num_states)
+            or self.log_potential_matrix.shape == (var2_num_states, var1_num_states)
+        ):
+            raise ValueError(
+                f"self.log_potential_matrix must have shape {(var1_num_states, var2_num_states)} (in any order) based "
+                + f"on self.var_group provided. Instead, it has shape {self.log_potential_matrix.shape}"
             )
 
-        if (
-            not hasattr(self, "factor_configs_log_potentials")
-            or hasattr(self, "factor_configs_log_potentials")
-            and self.factor_configs_log_potentials is None  # type: ignore
-        ):
-            factor_configs_log_potentials = np.zeros(
-                self.factor_configs.shape[0], dtype=float
-            )
-        else:
-            factor_configs_log_potentials = self.factor_configs_log_potentials  # type: ignore
+        self.factor_configs = np.array(
+            [
+                [v1_s, v2_s]
+                for v1_s in range(self.log_potential_matrix.shape[0])
+                for v2_s in range(self.log_potential_matrix.shape[1])
+            ]
+        )
+        factor_configs_log_potentials = np.zeros(
+            self.factor_configs.shape[0], dtype=float
+        )
+        for row_i in range(self.factor_configs.shape[0]):
+            factor_configs_log_potentials[row_i] = self.log_potential_matrix[
+                tuple(self.factor_configs[row_i])
+            ]
+
         self.factors: Tuple[nodes.EnumerationFactor, ...] = tuple(
             [
                 nodes.EnumerationFactor(
