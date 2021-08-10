@@ -152,16 +152,50 @@ class CompositeVariableGroup:
 class FactorGroup:
     """Base class to represent a group of factors.
 
+    Args:
+        var_group: either a VariableGroup or - if the elements of more than one VariableGroup
+            are connected to this FactorGroup - then a CompositeVariableGroup. This holds
+            all the variables that are connected to this FactorGroup
+
+    Raises:
+        ValueError: if the connected_variables() method returns an empty list
+    """
+
+    var_group: Union[CompositeVariableGroup, VariableGroup]
+
+    def __post_init__(self) -> None:
+        """Initializes a tuple of all the factors contained within this FactorGroup."""
+        connected_var_keys_for_factors = self.connected_variables()
+        if len(connected_var_keys_for_factors) == 0:
+            raise ValueError("The list returned by self.connected_variables() is empty")
+
+    def connected_variables(
+        self,
+    ) -> List[List[Tuple[Any, ...]]]:
+        """Fuction to generate indices of variables neighboring a factor.
+
+        This function needs to be overridden by a concrete implementation of a factor group.
+
+        Returns:
+            A list of lists of tuples, where each tuple contains a key into a CompositeVariableGroup.
+                Each inner list represents a particular factor to be added.
+        """
+        raise NotImplementedError(
+            "Please subclass the FactorGroup class and override this method"
+        )
+
+
+@dataclass
+class EnumerationFactorGroup(FactorGroup):
+    """Base class to represent a group of EnumerationFactors.
+
     All factors in the group are assumed to have the same set of valid configurations and
-    the same potential function. Additionally, all factors in a group are assumed to be
-    connected to variables from VariableGroups within one CompositeVariableGroup
+    the same potential function. Note that the log potential function is assumed to be
+    uniform 0 unless the inheriting class includes a factor_configs_log_potentials argument.
 
     Args:
         factor_configs: Array of shape (num_val_configs, num_variables)
             An array containing explicit enumeration of all valid configurations
-        var_group: either a VariableGroup or - if the elements of more than one VariableGroup
-            are connected to this FactorGroup - then a CompositeVariableGroup. This holds
-            all the variables that are connected to this FactorGroup
 
     Attributes:
         factors: a tuple of all the factors belonging to this group. These are constructed
@@ -177,13 +211,10 @@ class FactorGroup:
     """
 
     factor_configs: np.ndarray
-    var_group: Union[CompositeVariableGroup, VariableGroup]
 
     def __post_init__(self) -> None:
         """Initializes a tuple of all the factors contained within this FactorGroup."""
         connected_var_keys_for_factors = self.connected_variables()
-        if len(connected_var_keys_for_factors) == 0:
-            raise ValueError("The list returned by self.connected_variables() is empty")
         if (
             not hasattr(self, "factor_configs_log_potentials")
             or hasattr(self, "factor_configs_log_potentials")
@@ -203,19 +234,79 @@ class FactorGroup:
             ]
         )
 
-    def connected_variables(
-        self,
-    ) -> List[List[Tuple[Any, ...]]]:
-        """Fuction to generate indices of variables neighboring a factor.
 
-        This function needs to be overridden by a concrete implementation of a factor group.
+@dataclass
+class PairwiseFactorGroup(FactorGroup):
+    """Base class to represent a group of EnumerationFactors where each factor connects to
+    two different variables.
 
-        Returns:
-            A list of lists of tuples, where each tuple contains a key into a CompositeVariableGroup.
-                Each inner list represents a particular factor to be added.
-        """
-        raise NotImplementedError(
-            "Please subclass the FactorGroup class and override this method"
+    All factors in the group are assumed to be such that all possible configuration of the two
+    variable's states are valid. Additionally, all factors in the group are assumed to share
+    the same potential function and to be connected to variables from VariableGroups within
+    one CompositeVariableGroup.
+
+    Args:
+        log_potential_matrix: array of shape (var1.variable_size, var2.variable_size),
+            where var1 and var2 are the 2 VariableGroups (that may refer to the same
+            VariableGroup) whose keys are present in each sub-list of the list returned by
+            the connected_variables() method.
+
+    Attributes:
+        factors: a tuple of all the factors belonging to this group. These are constructed
+            internally by invoking the connected_variables() method.
+        factor_configs_log_potentials: array of shape (num_val_configs,), where
+            num_val_configs = var1.variable_size* var2.variable_size. This flattened array
+            contains the log of the potential value for every possible configuration.
+
+    Raises:
+        ValueError: if the connected_variables() method returns an empty list or if every sub-list within the
+            list returned by connected_variables() has len != 2, or if the shape of the log_potential_matrix
+            is not the same as the variable sizes for each variable referenced in each sub-list of the list
+            returned by connected_variables()
+    """
+
+    log_potential_matrix: np.ndarray
+
+    def __post_init__(self) -> None:
+        """Initializes a tuple of all the factors contained within this FactorGroup."""
+        connected_var_keys_for_factors = self.connected_variables()
+
+        for fac_list in connected_var_keys_for_factors:
+            if len(fac_list) != 2:
+                raise ValueError(
+                    "All pairwise factors should connect to exactly 2 variables. Got a factor connecting to"
+                    f" more or less than 2 variables ({fac_list})."
+                )
+            if not (
+                self.log_potential_matrix.shape
+                == (
+                    self.var_group[fac_list[0]].num_states,  # type: ignore
+                    self.var_group[fac_list[1]].num_states,  # type: ignore
+                )
+            ):
+                raise ValueError(
+                    "self.log_potential_matrix must have shape"
+                    + f"{(self.var_group[fac_list[0]].num_states, self.var_group[fac_list[1]].num_states)} "  # type: ignore
+                    + f"based on the return value of self.connected_variables(). Instead, it has shape {self.log_potential_matrix.shape}"
+                )
+        self.factor_configs = np.array(
+            np.meshgrid(
+                np.arange(self.log_potential_matrix.shape[0]),
+                np.arange(self.log_potential_matrix.shape[1]),
+            )
+        ).T.reshape((-1, 2))
+
+        factor_configs_log_potentials = self.log_potential_matrix[
+            self.factor_configs[:, 0], self.factor_configs[:, 1]
+        ]
+
+        self.factors: Tuple[nodes.EnumerationFactor, ...] = tuple(
+            [
+                nodes.EnumerationFactor(
+                    tuple(self.var_group[keys_list]), self.factor_configs, factor_configs_log_potentials  # type: ignore
+                )
+                for keys_list in connected_var_keys_for_factors
+            ]
         )
 
 
