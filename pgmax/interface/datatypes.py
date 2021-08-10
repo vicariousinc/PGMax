@@ -152,9 +152,6 @@ class CompositeVariableGroup:
 class FactorGroup:
     """Base class to represent a group of factors.
 
-    All factors in a group are assumed to be connected to variables from VariableGroups within
-        one CompositeVariableGroup
-
     Args:
         var_group: either a VariableGroup or - if the elements of more than one VariableGroup
             are connected to this FactorGroup - then a CompositeVariableGroup. This holds
@@ -243,7 +240,7 @@ class EnumerationFactorGroup(FactorGroup):
 
 
 @dataclass
-class PairwiseEnumeratedFactorGroup(FactorGroup):
+class PairwiseFactorGroup(FactorGroup):
     """Base class to represent a group of EnumerationFactors where each factor connects to
     two different variables.
 
@@ -261,11 +258,9 @@ class PairwiseEnumeratedFactorGroup(FactorGroup):
     Attributes:
         factors: a tuple of all the factors belonging to this group. These are constructed
             internally by invoking the connected_variables() method.
-        factor_configs_log_potentials: Can be specified by an inheriting class, or just left
-            unspecified (equivalent to specifying None). If specified, must have (num_val_configs,).
-            and contain the log of the potential value for every possible configuration.
-            If none, it is assumed the log potential is uniform 0 and such an array is automatically
-            initialized.
+        factor_configs_log_potentials: array of shape (num_val_configs,), where
+            num_val_configs = var1.variable_size* var2.variable_size. This flattened array
+            contains the log of the potential value for every possible configuration.
 
     Raises:
         ValueError: if the connected_variables() method returns an empty list or if every sub-list within the
@@ -301,13 +296,13 @@ class PairwiseEnumeratedFactorGroup(FactorGroup):
                 + f"on the return value of self.connected_variables(). Instead, it has shape {self.log_potential_matrix.shape}"
             )
 
-        self.factor_configs = np.array(
-            [
-                [v1_s, v2_s]
-                for v1_s in range(self.log_potential_matrix.shape[0])
-                for v2_s in range(self.log_potential_matrix.shape[1])
-            ]
-        )
+        X, Y = np.mgrid[
+            0 : self.log_potential_matrix.shape[0],
+            0 : self.log_potential_matrix.shape[1],
+        ]
+        self.factor_configs = np.vstack([X.ravel(), Y.ravel()])
+        self.factor_configs.swapaxes(0, 1)
+
         factor_configs_log_potentials = np.zeros(
             self.factor_configs.shape[0], dtype=float
         )
