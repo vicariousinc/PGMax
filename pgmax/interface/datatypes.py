@@ -254,13 +254,13 @@ class PairwiseEnumeratedFactorGroup(FactorGroup):
 
     Args:
         log_potential_matrix: array of shape (var1.variable_size, var2.variable_size),
-            where var1 and var2 are the only 2 VariableGroups contained within self.var_group.
-            log_potential_matrix[i,j] must contain the log potential for the configuration where
-            var1 is in state i and var2 is in state j.
+            where var1 and var2 are the 2 VariableGroups (that may refer to the same
+            VariableGroup) whose keys are present in each sub-list of the list returned by
+            the connected_variables() method.
 
     Attributes:
         factors: a tuple of all the factors belonging to this group. These are constructed
-            internally by invoking the _get_connected_var_keys_for_factors method.
+            internally by invoking the connected_variables() method.
         factor_configs_log_potentials: Can be specified by an inheriting class, or just left
             unspecified (equivalent to specifying None). If specified, must have (num_val_configs,).
             and contain the log of the potential value for every possible configuration.
@@ -268,9 +268,10 @@ class PairwiseEnumeratedFactorGroup(FactorGroup):
             initialized.
 
     Raises:
-        ValueError: if the connected_variables() method returns an empty list or if self.var_group (inherited arg)
-            is not a CompositeVariableGroup made up of 2 VariableGroup's, or if the shape of the log_potential_matrix
-            is not the same as the variable sizes for each VariableGroup in the CompositeVariableGroup
+        ValueError: if the connected_variables() method returns an empty list or if every sub-list within the
+            list returned by connected_variables() has len != 2, or if the shape of the log_potential_matrix
+            is not the same as the variable sizes for each variable referenced in each sub-list of the list
+            returned by connected_variables()
     """
 
     log_potential_matrix: np.ndarray
@@ -281,27 +282,23 @@ class PairwiseEnumeratedFactorGroup(FactorGroup):
         if len(connected_var_keys_for_factors) == 0:
             raise ValueError("The list returned by self.connected_variables() is empty")
 
-        if not isinstance(self.var_group, CompositeVariableGroup):
-            raise ValueError(
-                "PairwiseEnumeratedFactorGroup expects var_group that is a CompositeVariableGroup"
-            )
+        for fac_list in connected_var_keys_for_factors:
+            if len(fac_list) != 2:
+                raise ValueError(
+                    "The list returned by self.connected_variables()"
+                    + f" contains a sublist ({fac_list}) with more or less than 2 elements."
+                )
 
-        if len(self.var_group.key_vargroup_pairs) != 2:
+        var1_num_states = self.var_group[  # type: ignore
+            connected_var_keys_for_factors[0][0]
+        ].num_states
+        var2_num_states = self.var_group[  # type: ignore
+            connected_var_keys_for_factors[0][1]
+        ].num_states
+        if not (self.log_potential_matrix.shape == (var1_num_states, var2_num_states)):
             raise ValueError(
-                "PairwiseEnumeratedFactorGroup expects a var_group that is a CompositeVariableGroup with"
-                + f"only 2 contained VariableGroups. However, there were {len(self.var_group.key_vargroup_pairs)}"
-            )
-
-        var1_num_states = self.var_group.key_vargroup_pairs[0][1].variable_size
-        var2_num_states = self.var_group.key_vargroup_pairs[1][1].variable_size
-
-        if not (
-            self.log_potential_matrix.shape == (var1_num_states, var2_num_states)
-            or self.log_potential_matrix.shape == (var2_num_states, var1_num_states)
-        ):
-            raise ValueError(
-                f"self.log_potential_matrix must have shape {(var1_num_states, var2_num_states)} (in any order) based "
-                + f"on self.var_group provided. Instead, it has shape {self.log_potential_matrix.shape}"
+                f"self.log_potential_matrix must have shape {(var1_num_states, var2_num_states)} based "
+                + f"on the return value of self.connected_variables(). Instead, it has shape {self.log_potential_matrix.shape}"
             )
 
         self.factor_configs = np.array(
