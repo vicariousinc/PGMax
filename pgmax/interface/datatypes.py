@@ -289,12 +289,12 @@ class PairwiseFactorGroup(FactorGroup):
                     + f"{(self.var_group[fac_list[0]].num_states, self.var_group[fac_list[1]].num_states)} "  # type: ignore
                     + f"based on the return value of self.connected_variables(). Instead, it has shape {self.log_potential_matrix.shape}"
                 )
-        X, Y = np.mgrid[
-            0 : self.log_potential_matrix.shape[0],
-            0 : self.log_potential_matrix.shape[1],
-        ]
-        self.factor_configs = np.vstack([X.ravel(), Y.ravel()])
-        self.factor_configs = self.factor_configs.swapaxes(0, 1)
+        self.factor_configs = np.array(
+            np.meshgrid(
+                np.arange(self.log_potential_matrix.shape[0]),
+                np.arange(self.log_potential_matrix.shape[1]),
+            )
+        ).T.reshape((-1, 2))
 
         factor_configs_log_potentials = self.log_potential_matrix[
             self.factor_configs[:, 0], self.factor_configs[:, 1]
