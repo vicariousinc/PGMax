@@ -190,10 +190,8 @@ class EnumerationFactorGroup(FactorGroup):
     """Base class to represent a group of EnumerationFactors.
 
     All factors in the group are assumed to have the same set of valid configurations and
-    the same potential function. Additionally, all factors in a group are assumed to be
-    connected to variables from VariableGroups within one CompositeVariableGroup. Note that
-    the log potential function is assumed to be uniform 0 unless the inheriting class
-    includes a factor_configs_log_potentials argument.
+    the same potential function. Note that the log potential function is assumed to be
+    uniform 0 unless the inheriting class includes a factor_configs_log_potentials argument.
 
     Args:
         factor_configs: Array of shape (num_val_configs, num_variables)
@@ -217,8 +215,6 @@ class EnumerationFactorGroup(FactorGroup):
     def __post_init__(self) -> None:
         """Initializes a tuple of all the factors contained within this FactorGroup."""
         connected_var_keys_for_factors = self.connected_variables()
-        if len(connected_var_keys_for_factors) == 0:
-            raise ValueError("The list returned by self.connected_variables() is empty")
         if (
             not hasattr(self, "factor_configs_log_potentials")
             or hasattr(self, "factor_configs_log_potentials")
@@ -274,42 +270,35 @@ class PairwiseFactorGroup(FactorGroup):
     def __post_init__(self) -> None:
         """Initializes a tuple of all the factors contained within this FactorGroup."""
         connected_var_keys_for_factors = self.connected_variables()
-        if len(connected_var_keys_for_factors) == 0:
-            raise ValueError("The list returned by self.connected_variables() is empty")
 
         for fac_list in connected_var_keys_for_factors:
             if len(fac_list) != 2:
                 raise ValueError(
                     "All pairwise factors should connect to exactly 2 variables. Got a factor connecting to"
-                    f" variables ({fac_list})."
+                    f" more or less than 2 variables ({fac_list})."
                 )
-
-        var1_num_states = self.var_group[  # type: ignore
-            connected_var_keys_for_factors[0][0]
-        ].num_states
-        var2_num_states = self.var_group[  # type: ignore
-            connected_var_keys_for_factors[0][1]
-        ].num_states
-        if not (self.log_potential_matrix.shape == (var1_num_states, var2_num_states)):
-            raise ValueError(
-                f"self.log_potential_matrix must have shape {(var1_num_states, var2_num_states)} based "
-                + f"on the return value of self.connected_variables(). Instead, it has shape {self.log_potential_matrix.shape}"
-            )
-
+            if not (
+                self.log_potential_matrix.shape
+                == (
+                    self.var_group[fac_list[0]].num_states,  # type: ignore
+                    self.var_group[fac_list[1]].num_states,  # type: ignore
+                )
+            ):
+                raise ValueError(
+                    "self.log_potential_matrix must have shape"
+                    + f"{(self.var_group[fac_list[0]].num_states, self.var_group[fac_list[1]].num_states)} "  # type: ignore
+                    + f"based on the return value of self.connected_variables(). Instead, it has shape {self.log_potential_matrix.shape}"
+                )
         X, Y = np.mgrid[
             0 : self.log_potential_matrix.shape[0],
             0 : self.log_potential_matrix.shape[1],
         ]
         self.factor_configs = np.vstack([X.ravel(), Y.ravel()])
-        self.factor_configs.swapaxes(0, 1)
+        self.factor_configs = self.factor_configs.swapaxes(0, 1)
 
-        factor_configs_log_potentials = np.zeros(
-            self.factor_configs.shape[0], dtype=float
-        )
-        for row_i in range(self.factor_configs.shape[0]):
-            factor_configs_log_potentials[row_i] = self.log_potential_matrix[
-                tuple(self.factor_configs[row_i])
-            ]
+        factor_configs_log_potentials = self.log_potential_matrix[
+            self.factor_configs[:, 0], self.factor_configs[:, 1]
+        ]
 
         self.factors: Tuple[nodes.EnumerationFactor, ...] = tuple(
             [
