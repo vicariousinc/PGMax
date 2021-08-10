@@ -280,8 +280,8 @@ class PairwiseFactorGroup(FactorGroup):
         for fac_list in connected_var_keys_for_factors:
             if len(fac_list) != 2:
                 raise ValueError(
-                    "The list returned by self.connected_variables()"
-                    + f" contains a sublist ({fac_list}) with more or less than 2 elements."
+                    "All pairwise factors should connect to exactly 2 variables. Got a factor connecting to"
+                    f" variables ({fac_list})."
                 )
 
         var1_num_states = self.var_group[  # type: ignore
