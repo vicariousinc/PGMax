@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import itertools
 from dataclasses import dataclass
 from types import MappingProxyType
@@ -93,7 +95,9 @@ class CompositeVariableGroup:
 
     """
 
-    key_vargroup_pairs: Tuple[Tuple[Any, VariableGroup], ...]
+    key_vargroup_pairs: Tuple[
+        Tuple[Any, Union[VariableGroup, CompositeVariableGroup]], ...
+    ]
 
     def __post_init__(self):
         """Initialize a private, immuable mapping from keys to VariableGroups."""
