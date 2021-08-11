@@ -21,7 +21,7 @@ import pgmax.fg.graph as graph
 
 # Custom Imports
 import pgmax.fg.nodes as nodes  # isort:skip
-import pgmax.interface.datatypes as interface_datatypes  # isort:skip
+import pgmax.fg.groups as groups  # isort:skip
 
 # Standard Package Imports
 import matplotlib.pyplot as plt  # isort:skip
@@ -165,16 +165,16 @@ valid_configs_supp = create_valid_suppression_config_arr(SUPPRESSION_DIAMETER)
 # We create a NDVariableArray such that the [0,i,j] entry corresponds to the vertical cut variable (i.e, the one
 # attached horizontally to the factor) that's at that location in the image, and the [1,i,j] entry corresponds to
 # the horizontal cut variable (i.e, the one attached vertically to the factor) that's at that location
-grid_vars_group = interface_datatypes.NDVariableArray(3, (2, M - 1, N - 1))
+grid_vars_group = groups.NDVariableArray(3, (2, M - 1, N - 1))
 
 # Make a group of additional variables for the edges of the grid
 extra_row_keys: List[Tuple[Any, ...]] = [(0, row, N - 1) for row in range(M - 1)]
 extra_col_keys: List[Tuple[Any, ...]] = [(1, M - 1, col) for col in range(N - 1)]
 additional_keys = tuple(extra_row_keys + extra_col_keys)
-additional_keys_group = interface_datatypes.GenericVariableGroup(3, additional_keys)
+additional_keys_group = groups.GenericVariableGroup(3, additional_keys)
 
 # Combine these two VariableGroups into one CompositeVariableGroup
-composite_grid_group = interface_datatypes.CompositeVariableGroup(
+composite_grid_group = groups.CompositeVariableGroup(
     dict(grid_vars=grid_vars_group, additional_vars=additional_keys_group)
 )
 
@@ -184,7 +184,7 @@ composite_grid_group = interface_datatypes.CompositeVariableGroup(
 
 
 @dataclass(frozen=True, eq=False)
-class FourFactorGroup(interface_datatypes.EnumerationFactorGroup):
+class FourFactorGroup(groups.EnumerationFactorGroup):
     num_rows: int
     num_cols: int
     factor_configs_log_potentials: Optional[np.ndarray] = None
@@ -236,7 +236,7 @@ class FourFactorGroup(interface_datatypes.EnumerationFactorGroup):
 
 
 @dataclass(frozen=True, eq=False)
-class VertSuppressionFactorGroup(interface_datatypes.EnumerationFactorGroup):
+class VertSuppressionFactorGroup(groups.EnumerationFactorGroup):
     num_rows: int
     num_cols: int
     suppression_diameter: int
@@ -271,7 +271,7 @@ class VertSuppressionFactorGroup(interface_datatypes.EnumerationFactorGroup):
 
 
 @dataclass(frozen=True, eq=False)
-class HorzSuppressionFactorGroup(interface_datatypes.EnumerationFactorGroup):
+class HorzSuppressionFactorGroup(groups.EnumerationFactorGroup):
     num_rows: int
     num_cols: int
     suppression_diameter: int
