@@ -225,7 +225,7 @@ class GenericVariableGroup(VariableGroup):
         return keys_to_vars
 
 
-@dataclass(frozen=True, eq=False)
+@dataclass
 class FactorGroup:
     """Base class to represent a group of factors.
 
@@ -262,7 +262,7 @@ class FactorGroup:
         )
 
 
-@dataclass(frozen=True, eq=False)
+@dataclass
 class EnumerationFactorGroup(FactorGroup):
     """Base class to represent a group of EnumerationFactors.
 
@@ -313,7 +313,7 @@ class EnumerationFactorGroup(FactorGroup):
         )
 
 
-@dataclass(frozen=True, eq=False)
+@dataclass
 class PairwiseFactorGroup(FactorGroup):
     """Base class to represent a group of EnumerationFactors where each factor connects to
     two different variables.
