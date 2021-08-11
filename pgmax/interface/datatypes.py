@@ -1,7 +1,8 @@
 import itertools
+import typing
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any, Dict, List, Mapping, Sequence, Tuple, Union
+from typing import Any, Dict, Hashable, List, Mapping, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -25,18 +26,26 @@ class VariableGroup:
             self, "_keys_to_vars", MappingProxyType(self._set_keys_to_vars())
         )
 
-    def __getitem__(self, key: Any) -> Union[nodes.Variable, List[nodes.Variable]]:
+    @typing.overload
+    def __getitem__(self, key: Hashable) -> nodes.Variable:
+        pass
+
+    @typing.overload
+    def __getitem__(self, key: List) -> List[nodes.Variable]:
+        pass
+
+    def __getitem__(self, key):
         """Given a key, retrieve the associated Variable.
 
         Args:
-            key: a single key corresponding to a single variable, or a sequence of such keys
+            key: a single key corresponding to a single variable, or a list of such keys
 
         Returns:
             a single variable if the "key" argument is a single key. Otherwise, returns a list of
                 variables corresponding to each key in the "key" argument.
         """
 
-        if isinstance(key, Sequence):
+        if isinstance(key, List):
             vars_list: List[nodes.Variable] = []
             for k in key:
                 var = self._keys_to_vars.get(k)
@@ -65,6 +74,10 @@ class VariableGroup:
         raise NotImplementedError(
             "Please subclass the VariableGroup class and override this method"
         )
+
+    @property
+    def keys(self) -> Tuple[Any, ...]:
+        return tuple(self._keys_to_vars.keys())
 
     @property
     def variables(self) -> Tuple[nodes.Variable, ...]:
@@ -97,57 +110,72 @@ class CompositeVariableGroup(VariableGroup):
         Mapping[Any, VariableGroup], Sequence[VariableGroup]
     ]
 
-    def __getitem__(self, key: Any) -> Union[nodes.Variable, List[nodes.Variable]]:
+    def __post_init__(self):
+        if (not isinstance(self.variable_group_container, Mapping)) and (
+            not isinstance(self.variable_group_container, Sequence)
+        ):
+            raise ValueError(
+                f"variable_group_container needs to be a mapping or a sequence. Got {type(self.variable_group_container)}"
+            )
+
+    @typing.overload
+    def __getitem__(self, key: Hashable) -> nodes.Variable:
+        pass
+
+    @typing.overload
+    def __getitem__(self, key: List) -> List[nodes.Variable]:
+        pass
+
+    def __getitem__(self, key):
         """Given a key, retrieve the associated Variable from the associated VariableGroup.
 
         Args:
-            key: a single key corresponding to a single Variable within a VariableGroup, or a sequence
+            key: a single key corresponding to a single Variable within a VariableGroup, or a list
                 of such keys
 
         Returns:
             a single variable if the "key" argument is a single key. Otherwise, returns a list of
                 variables corresponding to each key in the "key" argument.
         """
-        if isinstance(key, Sequence):
-            vars_list: List[nodes.Variable] = []
-            for k in key:
-                variable_group = self.variable_group_container[k[0]]
-                vars_list.append(variable_group[k[1:]])  # type: ignore
-            return vars_list
+        if isinstance(key, List):
+            keys_list = key
         else:
-            variable_group = self.variable_group_container[key[0]]
-            if variable_group is None:
+            keys_list = [key]
+
+        vars_list = []
+        for key in keys_list:
+            if len(key) < 2:
                 raise ValueError(
-                    f"The key {key[0]} is not present in the CompositeVariableGroup {type(self)}; please ensure "
-                    "it's been added to the VariableGroup before trying to query it."
+                    "The key needs to have at least 2 elements to index from a composite variable group."
                 )
-            return variable_group[key[1:]]
 
-    @property
-    def variables(self) -> Tuple[nodes.Variable, ...]:
-        """Function to return a tuple of all variables from all VariableGroups in this group.
+            variable_group = self.variable_group_container[key[0]]
+            if len(key) == 2:
+                vars_list.append(variable_group[key[1]])
+            else:
+                vars_list.append(variable_group[key[1:]])
 
-        Returns:
-            tuple of all variable that are part of this VariableGroup
-        """
+        return vars_list[0]
+
+    def _set_keys_to_vars(self) -> Dict[Any, nodes.Variable]:
+        keys_to_vars = {}
         if isinstance(self.variable_group_container, Mapping):
-            variables = sum(
-                [
-                    variable_group.variables
-                    for variable_group in self.variable_group_container.values()
-                ],
-                (),
-            )
+            container_keys = self.variable_group_container.keys()
         else:
-            variables = sum(
-                [
-                    variable_group.variables
-                    for variable_group in self.variable_group_container
-                ],
-                (),
-            )
+            container_keys = set(range(len(self.variable_group_container)))
 
-        return variables
+        for container_key in container_keys:
+            for variable_group_key in self.variable_group_container[container_key].keys:
+                if isinstance(variable_group_key, tuple):
+                    keys_to_vars[
+                        (container_key,) + variable_group_key
+                    ] = self.variable_group_container[container_key][variable_group_key]
+                else:
+                    keys_to_vars[
+                        (container_key, variable_group_key)
+                    ] = self.variable_group_container[container_key][variable_group_key]
+
+        return keys_to_vars
 
 
 @dataclass(frozen=True, eq=False)
@@ -264,20 +292,21 @@ class EnumerationFactorGroup(FactorGroup):
     def __post_init__(self) -> None:
         """Initializes a tuple of all the factors contained within this FactorGroup."""
         connected_var_keys_for_factors = self.connected_variables()
-        if (
-            not hasattr(self, "factor_configs_log_potentials")
-            or hasattr(self, "factor_configs_log_potentials")
-            and self.factor_configs_log_potentials is None  # type: ignore
-        ):
+        if getattr(self, "factor_configs_log_potentials", None) is None:
             factor_configs_log_potentials = np.zeros(
                 self.factor_configs.shape[0], dtype=float
             )
         else:
-            factor_configs_log_potentials = self.factor_configs_log_potentials  # type: ignore
+            factor_configs_log_potentials = getattr(
+                self, "factor_configs_log_potentials"
+            )
+
         self.factors: Tuple[nodes.EnumerationFactor, ...] = tuple(
             [
                 nodes.EnumerationFactor(
-                    tuple(self.variable_group[keys_list]), self.factor_configs, factor_configs_log_potentials  # type: ignore
+                    tuple(self.variable_group[keys_list]),
+                    self.factor_configs,
+                    factor_configs_log_potentials,
                 )
                 for keys_list in connected_var_keys_for_factors
             ]
@@ -329,13 +358,13 @@ class PairwiseFactorGroup(FactorGroup):
             if not (
                 self.log_potential_matrix.shape
                 == (
-                    self.variable_group[fac_list[0]].num_states,  # type: ignore
-                    self.variable_group[fac_list[1]].num_states,  # type: ignore
+                    self.variable_group[fac_list[0]].num_states,
+                    self.variable_group[fac_list[1]].num_states,
                 )
             ):
                 raise ValueError(
                     "self.log_potential_matrix must have shape"
-                    + f"{(self.variable_group[fac_list[0]].num_states, self.variable_group[fac_list[1]].num_states)} "  # type: ignore
+                    + f"{(self.variable_group[fac_list[0]].num_states, self.variable_group[fac_list[1]].num_states)} "
                     + f"based on the return value of self.connected_variables(). Instead, it has shape {self.log_potential_matrix.shape}"
                 )
         self.factor_configs = np.array(
@@ -352,7 +381,9 @@ class PairwiseFactorGroup(FactorGroup):
         self.factors: Tuple[nodes.EnumerationFactor, ...] = tuple(
             [
                 nodes.EnumerationFactor(
-                    tuple(self.variable_group[keys_list]), self.factor_configs, factor_configs_log_potentials  # type: ignore
+                    tuple(self.variable_group[keys_list]),
+                    self.factor_configs,
+                    factor_configs_log_potentials,
                 )
                 for keys_list in connected_var_keys_for_factors
             ]

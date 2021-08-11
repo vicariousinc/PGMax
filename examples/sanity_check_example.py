@@ -424,13 +424,17 @@ for i in range(2):
     for row in range(M):
         for col in range(N):
             try:
-                bp_values[i, row, col] = map_message_dict[composite_grid_group["grid_vars", i, row, col]]  # type: ignore
+                bp_values[i, row, col] = map_message_dict[
+                    composite_grid_group["grid_vars", i, row, col]
+                ]
                 bu_evidence[i, row, col, :] = var_evidence_dict[
                     grid_vars_group[i, row, col]
                 ]
             except ValueError:
                 try:
-                    bp_values[i, row, col] = map_message_dict[composite_grid_group["additional_vars", i, row, col]]  # type: ignore
+                    bp_values[i, row, col] = map_message_dict[
+                        composite_grid_group["additional_vars", i, row, col]
+                    ]
                     bu_evidence[i, row, col, :] = var_evidence_dict[
                         additional_keys_group[i, row, col]
                     ]
