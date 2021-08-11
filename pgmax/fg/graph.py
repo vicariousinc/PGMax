@@ -42,10 +42,7 @@ class FactorGraph:
             [factor_group.factors for factor_group in self.factor_groups], ()
         )
         self.variables = sum(
-            [
-                factor_group.var_group.get_all_vars()
-                for factor_group in self.factor_groups
-            ],
+            [factor_group.var_group.variables for factor_group in self.factor_groups],
             (),
         )
 

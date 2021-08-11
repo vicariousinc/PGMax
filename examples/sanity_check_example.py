@@ -175,7 +175,7 @@ additional_keys_group = interface_datatypes.GenericVariableGroup(3, additional_k
 
 # Combine these two VariableGroups into one CompositeVariableGroup
 composite_grid_group = interface_datatypes.CompositeVariableGroup(
-    (("grid_vars", grid_vars_group), ("additional_vars", additional_keys_group))
+    dict(grid_vars=grid_vars_group, additional_vars=additional_keys_group)
 )
 
 
@@ -307,14 +307,14 @@ class HorzSuppressionFactorGroup(interface_datatypes.EnumerationFactorGroup):
 # %%
 # Now, we instantiate the four factors
 four_factors_group = FourFactorGroup(
-    var_group=composite_grid_group,
+    variable_group=composite_grid_group,
     factor_configs=valid_configs_non_supp,
     num_rows=M,
     num_cols=N,
 )
 # Next, we instantiate all the vertical suppression variables
 vert_suppression_group = VertSuppressionFactorGroup(
-    var_group=composite_grid_group,
+    variable_group=composite_grid_group,
     factor_configs=valid_configs_supp,
     num_rows=M,
     num_cols=N,
@@ -322,7 +322,7 @@ vert_suppression_group = VertSuppressionFactorGroup(
 )
 # Next, we instantiate all the horizontal suppression variables
 horz_suppression_group = HorzSuppressionFactorGroup(
-    var_group=composite_grid_group,
+    variable_group=composite_grid_group,
     factor_configs=valid_configs_supp,
     num_rows=M,
     num_cols=N,
