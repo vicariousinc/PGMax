@@ -26,7 +26,7 @@ from timeit import default_timer as timer  # isort:skip
 from dataclasses import dataclass  # isort:skip
 
 # Custom Imports
-import pgmax.interface.datatypes as interface_datatypes  # isort:skip
+import pgmax.fg.groups as groups  # isort:skip
 import pgmax.fg.graph as graph  # isort:skip
 
 # fmt: on
@@ -36,18 +36,18 @@ import pgmax.fg.graph as graph  # isort:skip
 im_size = (30, 30)
 prng_key = jax.random.PRNGKey(42)
 
-pixel_vars = interface_datatypes.NDVariableArray(3, im_size)
-hidden_vars = interface_datatypes.NDVariableArray(
+pixel_vars = groups.NDVariableArray(3, im_size)
+hidden_vars = groups.NDVariableArray(
     17, (im_size[0] - 2, im_size[1] - 2)
 )  # Each hidden var is connected to a 3x3 patch of pixel vars
-composite_vargroup = interface_datatypes.CompositeVariableGroup(
-    ((1, hidden_vars), (0, pixel_vars))
+composite_vargroup = groups.CompositeVariableGroup(
+    (pixel_vars, hidden_vars)
 )  # The 0 vs 1 key refers to the level of the VariableGroup in the hierarchy
 
 
 # %%
-@dataclass
-class BinaryFactorGroup(interface_datatypes.PairwiseFactorGroup):
+@dataclass(frozen=True, eq=False)
+class BinaryFactorGroup(groups.PairwiseFactorGroup):
     num_hidden_rows: int
     num_hidden_cols: int
     kernel_row: int
@@ -157,7 +157,7 @@ for k_row in range(3):
     for k_col in range(3):
         binary_factor_group_list.append(
             BinaryFactorGroup(
-                var_group=composite_vargroup,
+                variable_group=composite_vargroup,
                 num_hidden_rows=28,
                 num_hidden_cols=28,
                 kernel_row=k_row,
@@ -264,7 +264,7 @@ img_arr = np.zeros((1, im_size[0], im_size[1]))
 
 for row in range(im_size[0]):
     for col in range(im_size[1]):
-        img_val = float(map_message_dict[composite_vargroup[0, row, col]])  # type: ignore
+        img_val = float(map_message_dict[composite_vargroup[0, row, col]])
         if img_val == 2.0:
             img_val = 0.4
         img_arr[0, row, col] = img_val * 1.0
