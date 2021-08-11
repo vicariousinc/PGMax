@@ -17,12 +17,15 @@ class VariableGroup:
     All variables in the group are assumed to have the same size. Additionally, the
     variables are indexed by a "key", and can be retrieved by direct indexing (even indexing
     a sequence of keys) of the VariableGroup.
+
+    Attributes:
+        _keys_to_vars: A private, immutable mapping from keys to variables
     """
 
     _keys_to_vars: Mapping[Any, nodes.Variable] = field(init=False)
 
     def __post_init__(self) -> None:
-        """Initialize a private, immuable mapping from keys to Variables."""
+        """Initialize a private, immutable mapping from keys to variables."""
         object.__setattr__(
             self, "_keys_to_vars", MappingProxyType(self._set_keys_to_vars())
         )
@@ -47,24 +50,25 @@ class VariableGroup:
         """
 
         if isinstance(key, List):
-            vars_list: List[nodes.Variable] = []
-            for k in key:
-                var = self._keys_to_vars.get(k)
-                if var is None:
-                    raise ValueError(
-                        f"The key {k} is not present in the VariableGroup {type(self)}; please ensure "
-                        "it's been added to the VariableGroup before trying to query it."
-                    )
-                vars_list.append(var)
-            return vars_list
+            keys_list = key
         else:
-            var = self._keys_to_vars.get(key)
+            keys_list = [key]
+
+        vars_list = []
+        for curr_key in keys_list:
+            var = self._keys_to_vars.get(curr_key)
             if var is None:
                 raise ValueError(
-                    f"The key {key} is not present in in the VariableGroup {type(self)}; please ensure "
+                    f"The key {curr_key} is not present in the VariableGroup {type(self)}; please ensure "
                     "it's been added to the VariableGroup before trying to query it."
                 )
-            return var
+
+            vars_list.append(var)
+
+        if isinstance(key, List):
+            return vars_list
+        else:
+            return vars_list[0]
 
     def _set_keys_to_vars(self) -> Dict[Any, nodes.Variable]:
         """Function that generates a dictionary mapping keys to variables.
@@ -78,6 +82,11 @@ class VariableGroup:
 
     @property
     def keys(self) -> Tuple[Any, ...]:
+        """Function to return a tuple of all keys in the group.
+
+        Returns:
+            tuple of all keys that are part of this VariableGroup
+        """
         return tuple(self._keys_to_vars.keys())
 
     @property
@@ -105,6 +114,8 @@ class CompositeVariableGroup(VariableGroup):
             For a mapping, the keys of the mapping are used to index the variable groups.
             For a sequence, the indices of the sequence are used to index the variable groups.
 
+    Attributes:
+        _keys_to_vars: A private, immutable mapping from keys to variables
     """
 
     variable_group_container: Union[
@@ -166,6 +177,11 @@ class CompositeVariableGroup(VariableGroup):
             return vars_list[0]
 
     def _set_keys_to_vars(self) -> Dict[Any, nodes.Variable]:
+        """Function that generates a dictionary mapping keys to variables.
+
+        Returns:
+            a dictionary mapping all possible keys to different variables.
+        """
         keys_to_vars = {}
         if isinstance(self.variable_group_container, Mapping):
             container_keys = self.variable_group_container.keys()
@@ -191,6 +207,7 @@ class NDVariableArray(VariableGroup):
     """Subclass of VariableGroup for n-dimensional grids of variables.
 
     Args:
+        variable_size: The size of the variables in this variable group
         shape: a tuple specifying the size of each dimension of the grid (similar to
             the notion of a NumPy ndarray shape)
     """
@@ -214,8 +231,10 @@ class NDVariableArray(VariableGroup):
 class GenericVariableGroup(VariableGroup):
     """A generic variable group that contains a set of variables of the same size
 
-    Returns:
-        a dictionary mapping all possible keys to different variables.
+    Args:
+        variable_size: The size of the variables in this variable group
+        key_tuple: A tuple of all keys in this variable group
+
     """
 
     variable_size: int
@@ -299,7 +318,7 @@ class EnumerationFactorGroup(FactorGroup):
 
     @cached_property
     def factors(self) -> Tuple[nodes.EnumerationFactor, ...]:
-        """Initializes a tuple of all the factors contained within this FactorGroup."""
+        """Returns a tuple of all the factors contained within this FactorGroup."""
         connected_var_keys_for_factors = self.connected_variables()
         if getattr(self, "factor_configs_log_potentials", None) is None:
             factor_configs_log_potentials = np.zeros(
@@ -356,7 +375,6 @@ class PairwiseFactorGroup(FactorGroup):
 
     def __post_init(self) -> None:
         connected_var_keys_for_factors = self.connected_variables()
-
         for fac_list in connected_var_keys_for_factors:
             if len(fac_list) != 2:
                 raise ValueError(
@@ -377,26 +395,23 @@ class PairwiseFactorGroup(FactorGroup):
                 )
 
     @cached_property
-    def factor_configs(self) -> np.ndarray:
-        return np.array(
+    def factors(self) -> Tuple[nodes.EnumerationFactor, ...]:
+        """Returns a tuple of all the factors contained within this FactorGroup."""
+        factor_configs = np.array(
             np.meshgrid(
                 np.arange(self.log_potential_matrix.shape[0]),
                 np.arange(self.log_potential_matrix.shape[1]),
             )
         ).T.reshape((-1, 2))
-
-    @cached_property
-    def factors(self) -> Tuple[nodes.EnumerationFactor, ...]:
-        """Initializes a tuple of all the factors contained within this FactorGroup."""
-        connected_var_keys_for_factors = self.connected_variables()
         factor_configs_log_potentials = self.log_potential_matrix[
-            self.factor_configs[:, 0], self.factor_configs[:, 1]
+            factor_configs[:, 0], factor_configs[:, 1]
         ]
+        connected_var_keys_for_factors = self.connected_variables()
         return tuple(
             [
                 nodes.EnumerationFactor(
                     tuple(self.variable_group[keys_list]),
-                    self.factor_configs,
+                    factor_configs,
                     factor_configs_log_potentials,
                 )
                 for keys_list in connected_var_keys_for_factors
