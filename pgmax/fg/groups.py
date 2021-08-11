@@ -373,7 +373,7 @@ class PairwiseFactorGroup(FactorGroup):
 
     log_potential_matrix: np.ndarray
 
-    def __post_init(self) -> None:
+    def __post_init__(self) -> None:
         connected_var_keys_for_factors = self.connected_variables()
         for fac_list in connected_var_keys_for_factors:
             if len(fac_list) != 2:
