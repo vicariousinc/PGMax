@@ -118,6 +118,10 @@ class CompositeVariableGroup(VariableGroup):
                 f"variable_group_container needs to be a mapping or a sequence. Got {type(self.variable_group_container)}"
             )
 
+        object.__setattr__(
+            self, "_keys_to_vars", MappingProxyType(self._set_keys_to_vars())
+        )
+
     @typing.overload
     def __getitem__(self, key: Hashable) -> nodes.Variable:
         pass
@@ -143,19 +147,22 @@ class CompositeVariableGroup(VariableGroup):
             keys_list = [key]
 
         vars_list = []
-        for key in keys_list:
-            if len(key) < 2:
+        for curr_key in keys_list:
+            if len(curr_key) < 2:
                 raise ValueError(
                     "The key needs to have at least 2 elements to index from a composite variable group."
                 )
 
-            variable_group = self.variable_group_container[key[0]]
-            if len(key) == 2:
-                vars_list.append(variable_group[key[1]])
+            variable_group = self.variable_group_container[curr_key[0]]
+            if len(curr_key) == 2:
+                vars_list.append(variable_group[curr_key[1]])
             else:
-                vars_list.append(variable_group[key[1:]])
+                vars_list.append(variable_group[curr_key[1:]])
 
-        return vars_list[0]
+        if isinstance(key, List):
+            return vars_list
+        else:
+            return vars_list[0]
 
     def _set_keys_to_vars(self) -> Dict[Any, nodes.Variable]:
         keys_to_vars = {}
