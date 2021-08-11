@@ -21,7 +21,7 @@ import pgmax.fg.graph as graph
 
 # Custom Imports
 import pgmax.fg.nodes as nodes  # isort:skip
-import pgmax.interface.datatypes as interface_datatypes  # isort:skip
+import pgmax.fg.groups as groups  # isort:skip
 
 # Standard Package Imports
 import matplotlib.pyplot as plt  # isort:skip
@@ -165,17 +165,17 @@ valid_configs_supp = create_valid_suppression_config_arr(SUPPRESSION_DIAMETER)
 # We create a NDVariableArray such that the [0,i,j] entry corresponds to the vertical cut variable (i.e, the one
 # attached horizontally to the factor) that's at that location in the image, and the [1,i,j] entry corresponds to
 # the horizontal cut variable (i.e, the one attached vertically to the factor) that's at that location
-grid_vars_group = interface_datatypes.NDVariableArray(3, (2, M - 1, N - 1))
+grid_vars_group = groups.NDVariableArray(3, (2, M - 1, N - 1))
 
 # Make a group of additional variables for the edges of the grid
 extra_row_keys: List[Tuple[Any, ...]] = [(0, row, N - 1) for row in range(M - 1)]
 extra_col_keys: List[Tuple[Any, ...]] = [(1, M - 1, col) for col in range(N - 1)]
 additional_keys = tuple(extra_row_keys + extra_col_keys)
-additional_keys_group = interface_datatypes.GenericVariableGroup(3, additional_keys)
+additional_keys_group = groups.GenericVariableGroup(3, additional_keys)
 
 # Combine these two VariableGroups into one CompositeVariableGroup
-composite_grid_group = interface_datatypes.CompositeVariableGroup(
-    (("grid_vars", grid_vars_group), ("additional_vars", additional_keys_group))
+composite_grid_group = groups.CompositeVariableGroup(
+    dict(grid_vars=grid_vars_group, additional_vars=additional_keys_group)
 )
 
 
@@ -183,8 +183,8 @@ composite_grid_group = interface_datatypes.CompositeVariableGroup(
 # Subclass FactorGroup into the 3 different groups that appear in this problem
 
 
-@dataclass
-class FourFactorGroup(interface_datatypes.EnumerationFactorGroup):
+@dataclass(frozen=True, eq=False)
+class FourFactorGroup(groups.EnumerationFactorGroup):
     num_rows: int
     num_cols: int
     factor_configs_log_potentials: Optional[np.ndarray] = None
@@ -235,8 +235,8 @@ class FourFactorGroup(interface_datatypes.EnumerationFactorGroup):
         return ret_list
 
 
-@dataclass
-class VertSuppressionFactorGroup(interface_datatypes.EnumerationFactorGroup):
+@dataclass(frozen=True, eq=False)
+class VertSuppressionFactorGroup(groups.EnumerationFactorGroup):
     num_rows: int
     num_cols: int
     suppression_diameter: int
@@ -270,8 +270,8 @@ class VertSuppressionFactorGroup(interface_datatypes.EnumerationFactorGroup):
         return ret_list
 
 
-@dataclass
-class HorzSuppressionFactorGroup(interface_datatypes.EnumerationFactorGroup):
+@dataclass(frozen=True, eq=False)
+class HorzSuppressionFactorGroup(groups.EnumerationFactorGroup):
     num_rows: int
     num_cols: int
     suppression_diameter: int
@@ -307,14 +307,14 @@ class HorzSuppressionFactorGroup(interface_datatypes.EnumerationFactorGroup):
 # %%
 # Now, we instantiate the four factors
 four_factors_group = FourFactorGroup(
-    var_group=composite_grid_group,
+    variable_group=composite_grid_group,
     factor_configs=valid_configs_non_supp,
     num_rows=M,
     num_cols=N,
 )
 # Next, we instantiate all the vertical suppression variables
 vert_suppression_group = VertSuppressionFactorGroup(
-    var_group=composite_grid_group,
+    variable_group=composite_grid_group,
     factor_configs=valid_configs_supp,
     num_rows=M,
     num_cols=N,
@@ -322,7 +322,7 @@ vert_suppression_group = VertSuppressionFactorGroup(
 )
 # Next, we instantiate all the horizontal suppression variables
 horz_suppression_group = HorzSuppressionFactorGroup(
-    var_group=composite_grid_group,
+    variable_group=composite_grid_group,
     factor_configs=valid_configs_supp,
     num_rows=M,
     num_cols=N,
@@ -424,13 +424,17 @@ for i in range(2):
     for row in range(M):
         for col in range(N):
             try:
-                bp_values[i, row, col] = map_message_dict[composite_grid_group["grid_vars", i, row, col]]  # type: ignore
+                bp_values[i, row, col] = map_message_dict[
+                    composite_grid_group["grid_vars", i, row, col]
+                ]
                 bu_evidence[i, row, col, :] = var_evidence_dict[
                     grid_vars_group[i, row, col]
                 ]
             except ValueError:
                 try:
-                    bp_values[i, row, col] = map_message_dict[composite_grid_group["additional_vars", i, row, col]]  # type: ignore
+                    bp_values[i, row, col] = map_message_dict[
+                        composite_grid_group["additional_vars", i, row, col]
+                    ]
                     bu_evidence[i, row, col, :] = var_evidence_dict[
                         additional_keys_group[i, row, col]
                     ]
