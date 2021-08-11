@@ -7,6 +7,7 @@ from typing import Any, Dict, Hashable, List, Mapping, Sequence, Tuple, Union
 import numpy as np
 
 import pgmax.fg.nodes as nodes
+from pgmax.utils import cached_property
 
 
 @dataclass(frozen=True, eq=False)
@@ -232,7 +233,7 @@ class GenericVariableGroup(VariableGroup):
         return keys_to_vars
 
 
-@dataclass
+@dataclass(frozen=True, eq=False)
 class FactorGroup:
     """Base class to represent a group of factors.
 
@@ -269,7 +270,7 @@ class FactorGroup:
         )
 
 
-@dataclass
+@dataclass(frozen=True, eq=False)
 class EnumerationFactorGroup(FactorGroup):
     """Base class to represent a group of EnumerationFactors.
 
@@ -296,7 +297,8 @@ class EnumerationFactorGroup(FactorGroup):
 
     factor_configs: np.ndarray
 
-    def __post_init__(self) -> None:
+    @cached_property
+    def factors(self) -> Tuple[nodes.EnumerationFactor, ...]:
         """Initializes a tuple of all the factors contained within this FactorGroup."""
         connected_var_keys_for_factors = self.connected_variables()
         if getattr(self, "factor_configs_log_potentials", None) is None:
@@ -308,7 +310,7 @@ class EnumerationFactorGroup(FactorGroup):
                 self, "factor_configs_log_potentials"
             )
 
-        self.factors: Tuple[nodes.EnumerationFactor, ...] = tuple(
+        return tuple(
             [
                 nodes.EnumerationFactor(
                     tuple(self.variable_group[keys_list]),
@@ -320,7 +322,7 @@ class EnumerationFactorGroup(FactorGroup):
         )
 
 
-@dataclass
+@dataclass(frozen=True, eq=False)
 class PairwiseFactorGroup(FactorGroup):
     """Base class to represent a group of EnumerationFactors where each factor connects to
     two different variables.
@@ -352,8 +354,7 @@ class PairwiseFactorGroup(FactorGroup):
 
     log_potential_matrix: np.ndarray
 
-    def __post_init__(self) -> None:
-        """Initializes a tuple of all the factors contained within this FactorGroup."""
+    def __post_init(self) -> None:
         connected_var_keys_for_factors = self.connected_variables()
 
         for fac_list in connected_var_keys_for_factors:
@@ -374,18 +375,24 @@ class PairwiseFactorGroup(FactorGroup):
                     + f"{(self.variable_group[fac_list[0]].num_states, self.variable_group[fac_list[1]].num_states)} "
                     + f"based on the return value of self.connected_variables(). Instead, it has shape {self.log_potential_matrix.shape}"
                 )
-        self.factor_configs = np.array(
+
+    @cached_property
+    def factor_configs(self) -> np.ndarray:
+        return np.array(
             np.meshgrid(
                 np.arange(self.log_potential_matrix.shape[0]),
                 np.arange(self.log_potential_matrix.shape[1]),
             )
         ).T.reshape((-1, 2))
 
+    @cached_property
+    def factors(self) -> Tuple[nodes.EnumerationFactor, ...]:
+        """Initializes a tuple of all the factors contained within this FactorGroup."""
+        connected_var_keys_for_factors = self.connected_variables()
         factor_configs_log_potentials = self.log_potential_matrix[
             self.factor_configs[:, 0], self.factor_configs[:, 1]
         ]
-
-        self.factors: Tuple[nodes.EnumerationFactor, ...] = tuple(
+        return tuple(
             [
                 nodes.EnumerationFactor(
                     tuple(self.variable_group[keys_list]),

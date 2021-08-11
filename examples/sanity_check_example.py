@@ -183,7 +183,7 @@ composite_grid_group = interface_datatypes.CompositeVariableGroup(
 # Subclass FactorGroup into the 3 different groups that appear in this problem
 
 
-@dataclass
+@dataclass(frozen=True, eq=False)
 class FourFactorGroup(interface_datatypes.EnumerationFactorGroup):
     num_rows: int
     num_cols: int
@@ -235,7 +235,7 @@ class FourFactorGroup(interface_datatypes.EnumerationFactorGroup):
         return ret_list
 
 
-@dataclass
+@dataclass(frozen=True, eq=False)
 class VertSuppressionFactorGroup(interface_datatypes.EnumerationFactorGroup):
     num_rows: int
     num_cols: int
@@ -270,7 +270,7 @@ class VertSuppressionFactorGroup(interface_datatypes.EnumerationFactorGroup):
         return ret_list
 
 
-@dataclass
+@dataclass(frozen=True, eq=False)
 class HorzSuppressionFactorGroup(interface_datatypes.EnumerationFactorGroup):
     num_rows: int
     num_cols: int
