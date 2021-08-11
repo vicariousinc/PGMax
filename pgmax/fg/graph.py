@@ -8,11 +8,9 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-import pgmax.bp.infer as infer
-import pgmax.fg.fg_utils as fg_utils
-import pgmax.fg.nodes as nodes
-import pgmax.interface.datatypes as interface_datatypes
 from pgmax import utils
+from pgmax.bp import infer
+from pgmax.fg import fg_utils, groups, nodes
 
 
 @dataclass(frozen=True, eq=False)
@@ -35,7 +33,7 @@ class FactorGraph:
             for that particular variable should be placed.
     """
 
-    factor_groups: Tuple[interface_datatypes.FactorGroup, ...]
+    factor_groups: Tuple[groups.FactorGroup, ...]
 
     def __post_init__(self):
         self.factors = sum(
