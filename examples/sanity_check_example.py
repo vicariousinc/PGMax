@@ -20,14 +20,11 @@ import os
 import pgmax.fg.graph as graph
 
 # Custom Imports
-import pgmax.fg.nodes as nodes  # isort:skip
 import pgmax.fg.groups as groups  # isort:skip
 
 # Standard Package Imports
 import matplotlib.pyplot as plt  # isort:skip
 import numpy as np  # isort:skip
-import jax  # isort:skip
-import jax.numpy as jnp  # isort:skip
 from numpy.random import default_rng  # isort:skip
 from scipy import sparse  # isort:skip
 from scipy.ndimage import gaussian_filter  # isort:skip
@@ -38,7 +35,7 @@ from dataclasses import dataclass  # isort:skip
 # fmt: on
 
 # %% [markdown]
-# ## Setting up Image and Factor Graph
+# ## Setting up Image
 
 # %%
 # Set random seed for rng
@@ -96,6 +93,9 @@ fig, ax = plt.subplots(1, 2, figsize=(20, 10))
 ax[0].imshow(horizontal_oriented_cuts)
 ax[1].imshow(vertical_oriented_cuts)
 
+
+# %% [markdown]
+# ## Set Up Factor Graph
 
 # %%
 # Helper function to easily generate a list of valid configurations for a given suppression diameter
@@ -329,84 +329,67 @@ horz_suppression_group = HorzSuppressionFactorGroup(
     suppression_diameter=SUPPRESSION_DIAMETER,
 )
 
-
-# %%
-# Override and define a concrete FactorGraph Class with the get_evidence function implemented
-class ConcreteFactorGraph(graph.FactorGraph):
-    def get_evidence(
-        self, data: Dict[nodes.Variable, np.array], context: Any = None
-    ) -> jnp.ndarray:
-        """Function to generate evidence array. Need to be overwritten for concrete factor graphs
-
-        Args:
-            data: Data for generating evidence
-            context: Optional context for generating evidence
-
-        Returns:
-            Array of shape (num_var_states,) representing the flattened evidence for each variable
-        """
-        evidence = np.zeros(self.num_var_states)
-        for var in self.variables:
-            start_index = self._vars_to_starts[var]
-            evidence[start_index : start_index + var.num_states] = data[var]
-        return jax.device_put(evidence)
-
-
 # %%
 gt_has_cuts = gt_has_cuts.astype(np.int32)
 
 # Now, we use this array along with the gt_has_cuts array computed earlier using the image in order to derive the evidence values
-var_evidence_dict = {}
+grid_evidence_arr = np.zeros((2, M - 1, N - 1, 3), dtype=float)
+additional_vars_evidence_dict: Dict[Tuple[int, ...], np.ndarray] = {}
 for i in range(2):
     for row in range(M):
         for col in range(N):
             # The dictionary key is in composite_grid_group at loc [i,row,call]
-            evidence_arr = np.zeros(
+            evidence_vals_arr = np.zeros(
                 3
             )  # Note that we know num states for each variable is 3, so we can do this
-            evidence_arr[
+            evidence_vals_arr[
                 gt_has_cuts[i, row, col]
             ] = 2.0  # This assigns belief value 2.0 to the correct index in the evidence vector
-            evidence_arr = (
-                evidence_arr - evidence_arr[0]
+            evidence_vals_arr = (
+                evidence_vals_arr - evidence_vals_arr[0]
             )  # This normalizes the evidence by subtracting away the 0th index value
-            evidence_arr[1:] += 0.1 * rng.logistic(
-                size=evidence_arr[1:].shape
+            evidence_vals_arr[1:] += 0.1 * rng.logistic(
+                size=evidence_vals_arr[1:].shape
             )  # This adds logistic noise for every evidence entry
             try:
-                var_evidence_dict[
-                    composite_grid_group["grid_vars", i, row, col]
-                ] = evidence_arr
+                _ = composite_grid_group["grid_vars", i, row, col]
+                grid_evidence_arr[i, row, col] = evidence_vals_arr
             except ValueError:
                 try:
-                    var_evidence_dict[
-                        composite_grid_group["additional_vars", i, row, col]
-                    ] = evidence_arr
+                    _ = composite_grid_group["additional_vars", i, row, col]
+                    additional_vars_evidence_dict[(i, row, col)] = evidence_vals_arr
                 except ValueError:
                     pass
 
+
+# %%
+# Create the factor graph
+fg_creation_start_time = timer()
+fg = graph.FactorGraph(
+    factor_groups=(four_factors_group, vert_suppression_group, horz_suppression_group),
+    variable_groups=(grid_vars_group, additional_keys_group),
+)
+fg_creation_end_time = timer()
+print(f"fg Creation time = {fg_creation_end_time - fg_creation_start_time}")
+
+
+# Set the evidence
+fg.update_evidence(grid_vars_group, grid_evidence_arr)
+fg.update_evidence(additional_keys_group, additional_vars_evidence_dict)
 
 # %% [markdown]
 # ## Belief Propagation
 
 # %%
-# Create the factor graph
-fg_creation_start_time = timer()
-fg = ConcreteFactorGraph(
-    (four_factors_group, vert_suppression_group, horz_suppression_group)
-)
-fg_creation_end_time = timer()
-print(f"fg Creation time = {fg_creation_end_time - fg_creation_start_time}")
-
 # Run BP
 bp_start_time = timer()
-final_msgs = fg.run_bp(1000, 0.5, evidence_data=var_evidence_dict)
+final_msgs = fg.run_bp(1000, 0.5)
 bp_end_time = timer()
 print(f"time taken for bp {bp_end_time - bp_start_time}")
 
 # Run inference and convert result to human-readable data structure
 data_writeback_start_time = timer()
-map_message_dict = fg.decode_map_states(final_msgs, evidence_data=var_evidence_dict)
+map_message_dict = fg.decode_map_states(final_msgs)
 data_writeback_end_time = timer()
 print(
     f"time taken for data conversion of inference result {data_writeback_end_time - data_writeback_start_time}"
@@ -427,17 +410,16 @@ for i in range(2):
                 bp_values[i, row, col] = map_message_dict[
                     composite_grid_group["grid_vars", i, row, col]
                 ]
-                bu_evidence[i, row, col, :] = var_evidence_dict[
-                    grid_vars_group[i, row, col]
-                ]
+                bu_evidence[i, row, col, :] = grid_evidence_arr[i, row, col]
             except ValueError:
                 try:
                     bp_values[i, row, col] = map_message_dict[
                         composite_grid_group["additional_vars", i, row, col]
                     ]
-                    bu_evidence[i, row, col, :] = var_evidence_dict[
-                        additional_keys_group[i, row, col]
+                    bu_evidence[i, row, col, :] = additional_vars_evidence_dict[
+                        (i, row, col)
                     ]
+
                 except ValueError:
                     pass
 
