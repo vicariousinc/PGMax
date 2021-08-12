@@ -214,8 +214,8 @@ class FactorGraph:
                     f"Expected evidence values to have shape {variable_group.shape + tuple([variable_group.variable_size])}"
                     + f" instead, got {evidence_values.shape}"
                 )
-            for idx, evidence_val in np.ndenumerate(evidence_values[..., 0]):
-                self._vars_to_evidence[variable_group[idx]] = evidence_val
+            for idx, _ in np.ndenumerate(evidence_values[..., 0]):
+                self._vars_to_evidence[variable_group[idx]] = evidence_values[idx]
 
         elif isinstance(variable_group, groups.GenericVariableGroup):
             if not isinstance(evidence_values, Dict):
