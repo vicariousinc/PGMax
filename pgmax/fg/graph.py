@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Dict, List, Mapping, Sequence, Union
+from typing import Any, Dict, List, Mapping, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -20,10 +20,13 @@ class FactorGraph:
     the evidence array, and optionally init_msgs (default to initializing all messages to 0)
 
     Args:
-        variable_groups: A container containing multiple variable groups.
-            Supported containers include mapping, sequence and single VariableGroup.
+        variable_groups: A container containing multiple VariableGroups, or a CompositeVariableGroup.
+            If not a CompositeVariableGroup, supported containers include mapping, sequence and single
+            VariableGroup.
             For a mapping, the keys of the mapping are used to index the variable groups.
             For a sequence, the indices of the sequence are used to index the variable groups.
+            Note that a CompositeVariableGroup will be created from this input, and the individual
+            VariableGroups will need to be accessed by indexing this.
 
     Attributes:
         _comp_var_group: CompositeVariableGroup. contains all involved VariableGroups
@@ -184,13 +187,14 @@ class FactorGraph:
 
     def update_evidence(
         self,
-        variable_group: groups.VariableGroup,
+        variable_group_id: Tuple[Any, ...],
         evidence_values: Union[Dict[Any, np.ndarray], np.ndarray],
     ):
         """Function to update the evidence for variables in the FactorGraph.
 
         Args:
-            variable_group: a VariableGroup that contains all the variables to be updated.
+            variable_group_id: tuple that represents the index into the CompositeVariableGroup
+                (self._comp_var_group) that is created when the FactorGraph is instantiated.
             evidence_values: a container for np.ndarrays representing the evidence
                 Currently supported containers are:
                 - an np.ndarray: if variable_group is of type NDVariableArray, then evidence_values
@@ -206,7 +210,6 @@ class FactorGraph:
 
         Raises:
             ValueError:
-                - if variable_group was not passed into this FactorGraph as part of self.variable_groups
                 - or if variable_group is an NDVariableArray and:
                     - evidence_values is anything other than an np.ndarray or
                     - the dimensions of evidence_values aren't num_var_array_dims + 1 or
@@ -218,6 +221,7 @@ class FactorGraph:
                     not the same as variable_group.variable_size
             NotImplementedError: if variable_group is neither a NDVariableArray or GenericVariableGroup
         """
+        variable_group = self._comp_var_group[variable_group_id]
         if isinstance(variable_group, groups.NDVariableArray):
             if not isinstance(evidence_values, np.ndarray):
                 raise ValueError(
