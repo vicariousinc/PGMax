@@ -28,9 +28,8 @@ import numpy as np  # isort:skip
 from numpy.random import default_rng  # isort:skip
 from scipy import sparse  # isort:skip
 from scipy.ndimage import gaussian_filter  # isort:skip
-from typing import Any, Dict, Tuple, List, Optional  # isort:skip
+from typing import Any, Dict, Tuple, List  # isort:skip
 from timeit import default_timer as timer  # isort:skip
-from dataclasses import dataclass  # isort:skip
 
 # fmt: on
 
@@ -93,9 +92,82 @@ fig, ax = plt.subplots(1, 2, figsize=(20, 10))
 ax[0].imshow(horizontal_oriented_cuts)
 ax[1].imshow(vertical_oriented_cuts)
 
-
 # %% [markdown]
 # ## Set Up Factor Graph
+
+# %% [markdown]
+# ### Create all Variables that are part of Graph
+
+# %%
+# We create a NDVariableArray such that the [0,i,j] entry corresponds to the vertical cut variable (i.e, the one
+# attached horizontally to the factor) that's at that location in the image, and the [1,i,j] entry corresponds to
+# the horizontal cut variable (i.e, the one attached vertically to the factor) that's at that location
+grid_vars_group = groups.NDVariableArray(3, (2, M - 1, N - 1))
+
+# Make a group of additional variables for the edges of the grid
+extra_row_keys: List[Tuple[Any, ...]] = [(0, row, N - 1) for row in range(M - 1)]
+extra_col_keys: List[Tuple[Any, ...]] = [(1, M - 1, col) for col in range(N - 1)]
+additional_keys = tuple(extra_row_keys + extra_col_keys)
+additional_keys_group = groups.GenericVariableGroup(3, additional_keys)
+
+# Combine these two VariableGroups into one CompositeVariableGroup
+composite_grid_group = groups.CompositeVariableGroup(
+    dict(grid_vars=grid_vars_group, additional_vars=additional_keys_group)
+)
+
+
+# %% [markdown]
+# ### Create arrays for evidence
+
+# %%
+gt_has_cuts = gt_has_cuts.astype(np.int32)
+
+# Now, we use this array along with the gt_has_cuts array computed earlier using the image in order to derive the evidence values
+grid_evidence_arr = np.zeros((2, M - 1, N - 1, 3), dtype=float)
+additional_vars_evidence_dict: Dict[Tuple[int, ...], np.ndarray] = {}
+for i in range(2):
+    for row in range(M):
+        for col in range(N):
+            # The dictionary key is in composite_grid_group at loc [i,row,call]
+            evidence_vals_arr = np.zeros(
+                3
+            )  # Note that we know num states for each variable is 3, so we can do this
+            evidence_vals_arr[
+                gt_has_cuts[i, row, col]
+            ] = 2.0  # This assigns belief value 2.0 to the correct index in the evidence vector
+            evidence_vals_arr = (
+                evidence_vals_arr - evidence_vals_arr[0]
+            )  # This normalizes the evidence by subtracting away the 0th index value
+            evidence_vals_arr[1:] += 0.1 * rng.logistic(
+                size=evidence_vals_arr[1:].shape
+            )  # This adds logistic noise for every evidence entry
+            try:
+                _ = composite_grid_group["grid_vars", i, row, col]
+                grid_evidence_arr[i, row, col] = evidence_vals_arr
+            except ValueError:
+                try:
+                    _ = composite_grid_group["additional_vars", i, row, col]
+                    additional_vars_evidence_dict[(i, row, col)] = evidence_vals_arr
+                except ValueError:
+                    pass
+
+
+# %% [markdown]
+# ### Create FactorGraph using VariableGroups and assign evidence
+
+# %%
+# Create the factor graph
+fg = graph.FactorGraph(
+    variable_groups=(grid_vars_group, additional_keys_group),
+)
+
+# Set the evidence
+fg.update_evidence(grid_vars_group, grid_evidence_arr)
+fg.update_evidence(additional_keys_group, additional_vars_evidence_dict)
+
+
+# %% [markdown]
+# ### Create Valid Configuration Arrays
 
 # %%
 # Helper function to easily generate a list of valid configurations for a given suppression diameter
@@ -115,7 +187,6 @@ def create_valid_suppression_config_arr(suppression_diameter):
     return ret_arr
 
 
-# %%
 # Before constructing a Factor Graph, we specify all the valid configurations for the non-suppression factors
 """
       1v
@@ -161,221 +232,107 @@ SUPPRESSION_DIAMETER = 9
 valid_configs_supp = create_valid_suppression_config_arr(SUPPRESSION_DIAMETER)
 
 
+# %% [markdown]
+# ### Setup all Factors by creating FactorGroups
+
 # %%
-# We create a NDVariableArray such that the [0,i,j] entry corresponds to the vertical cut variable (i.e, the one
-# attached horizontally to the factor) that's at that location in the image, and the [1,i,j] entry corresponds to
-# the horizontal cut variable (i.e, the one attached vertically to the factor) that's at that location
-grid_vars_group = groups.NDVariableArray(3, (2, M - 1, N - 1))
-
-# Make a group of additional variables for the edges of the grid
-extra_row_keys: List[Tuple[Any, ...]] = [(0, row, N - 1) for row in range(M - 1)]
-extra_col_keys: List[Tuple[Any, ...]] = [(1, M - 1, col) for col in range(N - 1)]
-additional_keys = tuple(extra_row_keys + extra_col_keys)
-additional_keys_group = groups.GenericVariableGroup(3, additional_keys)
-
-# Combine these two VariableGroups into one CompositeVariableGroup
-composite_grid_group = groups.CompositeVariableGroup(
-    dict(grid_vars=grid_vars_group, additional_vars=additional_keys_group)
+# Create an EnumerationFactorGroup for four factors
+four_factor_keys: List[List[Tuple[Any, ...]]] = []
+for row in range(M - 1):
+    for col in range(N - 1):
+        if row != M - 2 and col != N - 2:
+            four_factor_keys.append(
+                [
+                    ("grid_vars", 0, row, col),
+                    ("grid_vars", 1, row, col),
+                    ("grid_vars", 0, row, col + 1),
+                    ("grid_vars", 1, row + 1, col),
+                ]
+            )
+        elif row != M - 2:
+            four_factor_keys.append(
+                [
+                    ("grid_vars", 0, row, col),
+                    ("grid_vars", 1, row, col),
+                    ("additional_vars", 0, row, col + 1),
+                    ("grid_vars", 1, row + 1, col),
+                ]
+            )
+        elif col != N - 2:
+            four_factor_keys.append(
+                [
+                    ("grid_vars", 0, row, col),
+                    ("grid_vars", 1, row, col),
+                    ("grid_vars", 0, row, col + 1),
+                    ("additional_vars", 1, row + 1, col),
+                ]
+            )
+        else:
+            four_factor_keys.append(
+                [
+                    ("grid_vars", 0, row, col),
+                    ("grid_vars", 1, row, col),
+                    ("additional_vars", 0, row, col + 1),
+                    ("additional_vars", 1, row + 1, col),
+                ]
+            )
+four_factors_group = groups.EnumerationFactorGroup(
+    composite_grid_group, four_factor_keys, valid_configs_non_supp
 )
 
 
-# %%
-# Subclass FactorGroup into the 3 different groups that appear in this problem
-
-
-@dataclass(frozen=True, eq=False)
-class FourFactorGroup(groups.EnumerationFactorGroup):
-    num_rows: int
-    num_cols: int
-    factor_configs_log_potentials: Optional[np.ndarray] = None
-
-    def connected_variables(
-        self,
-    ) -> List[List[Tuple[Any, ...]]]:
-        ret_list: List[List[Tuple[Any, ...]]] = []
-        for row in range(self.num_rows - 1):
-            for col in range(self.num_cols - 1):
-                if row != self.num_rows - 2 and col != self.num_cols - 2:
-                    ret_list.append(
-                        [
-                            ("grid_vars", 0, row, col),
-                            ("grid_vars", 1, row, col),
-                            ("grid_vars", 0, row, col + 1),
-                            ("grid_vars", 1, row + 1, col),
-                        ]
-                    )
-                elif row != self.num_rows - 2:
-                    ret_list.append(
-                        [
-                            ("grid_vars", 0, row, col),
-                            ("grid_vars", 1, row, col),
-                            ("additional_vars", 0, row, col + 1),
-                            ("grid_vars", 1, row + 1, col),
-                        ]
-                    )
-                elif col != self.num_cols - 2:
-                    ret_list.append(
-                        [
-                            ("grid_vars", 0, row, col),
-                            ("grid_vars", 1, row, col),
-                            ("grid_vars", 0, row, col + 1),
-                            ("additional_vars", 1, row + 1, col),
-                        ]
-                    )
-                else:
-                    ret_list.append(
-                        [
-                            ("grid_vars", 0, row, col),
-                            ("grid_vars", 1, row, col),
-                            ("additional_vars", 0, row, col + 1),
-                            ("additional_vars", 1, row + 1, col),
-                        ]
-                    )
-
-        return ret_list
-
-
-@dataclass(frozen=True, eq=False)
-class VertSuppressionFactorGroup(groups.EnumerationFactorGroup):
-    num_rows: int
-    num_cols: int
-    suppression_diameter: int
-    factor_configs_log_potentials: Optional[np.ndarray] = None
-
-    def connected_variables(
-        self,
-    ) -> List[List[Tuple[Any, ...]]]:
-        ret_list: List[List[Tuple[Any, ...]]] = []
-        for col in range(self.num_cols):
-            for start_row in range(self.num_rows - self.suppression_diameter):
-                if col != self.num_cols - 1:
-                    ret_list.append(
-                        [
-                            ("grid_vars", 0, r, col)
-                            for r in range(
-                                start_row, start_row + self.suppression_diameter
-                            )
-                        ]
-                    )
-                else:
-                    ret_list.append(
-                        [
-                            ("additional_vars", 0, r, col)
-                            for r in range(
-                                start_row, start_row + self.suppression_diameter
-                            )
-                        ]
-                    )
-
-        return ret_list
-
-
-@dataclass(frozen=True, eq=False)
-class HorzSuppressionFactorGroup(groups.EnumerationFactorGroup):
-    num_rows: int
-    num_cols: int
-    suppression_diameter: int
-    factor_configs_log_potentials: Optional[np.ndarray] = None
-
-    def connected_variables(
-        self,
-    ) -> List[List[Tuple[Any, ...]]]:
-        ret_list: List[List[Tuple[Any, ...]]] = []
-        for row in range(self.num_rows):
-            for start_col in range(self.num_cols - self.suppression_diameter):
-                if row != self.num_rows - 1:
-                    ret_list.append(
-                        [
-                            ("grid_vars", 1, row, c)
-                            for c in range(
-                                start_col, start_col + self.suppression_diameter
-                            )
-                        ]
-                    )
-                else:
-                    ret_list.append(
-                        [
-                            ("additional_vars", 1, row, c)
-                            for c in range(
-                                start_col, start_col + self.suppression_diameter
-                            )
-                        ]
-                    )
-        return ret_list
-
-
-# %%
-# Now, we instantiate the four factors
-four_factors_group = FourFactorGroup(
-    variable_group=composite_grid_group,
-    factor_configs=valid_configs_non_supp,
-    num_rows=M,
-    num_cols=N,
-)
-# Next, we instantiate all the vertical suppression variables
-vert_suppression_group = VertSuppressionFactorGroup(
-    variable_group=composite_grid_group,
-    factor_configs=valid_configs_supp,
-    num_rows=M,
-    num_cols=N,
-    suppression_diameter=SUPPRESSION_DIAMETER,
-)
-# Next, we instantiate all the horizontal suppression variables
-horz_suppression_group = HorzSuppressionFactorGroup(
-    variable_group=composite_grid_group,
-    factor_configs=valid_configs_supp,
-    num_rows=M,
-    num_cols=N,
-    suppression_diameter=SUPPRESSION_DIAMETER,
+# Create an EnumerationFactorGroup for vertical suppression factors
+vert_suppression_keys: List[List[Tuple[Any, ...]]] = []
+for col in range(N):
+    for start_row in range(M - SUPPRESSION_DIAMETER):
+        if col != N - 1:
+            vert_suppression_keys.append(
+                [
+                    ("grid_vars", 0, r, col)
+                    for r in range(start_row, start_row + SUPPRESSION_DIAMETER)
+                ]
+            )
+        else:
+            vert_suppression_keys.append(
+                [
+                    ("additional_vars", 0, r, col)
+                    for r in range(start_row, start_row + SUPPRESSION_DIAMETER)
+                ]
+            )
+vert_suppression_group = groups.EnumerationFactorGroup(
+    composite_grid_group, vert_suppression_keys, valid_configs_supp
 )
 
-# %%
-gt_has_cuts = gt_has_cuts.astype(np.int32)
 
-# Now, we use this array along with the gt_has_cuts array computed earlier using the image in order to derive the evidence values
-grid_evidence_arr = np.zeros((2, M - 1, N - 1, 3), dtype=float)
-additional_vars_evidence_dict: Dict[Tuple[int, ...], np.ndarray] = {}
-for i in range(2):
-    for row in range(M):
-        for col in range(N):
-            # The dictionary key is in composite_grid_group at loc [i,row,call]
-            evidence_vals_arr = np.zeros(
-                3
-            )  # Note that we know num states for each variable is 3, so we can do this
-            evidence_vals_arr[
-                gt_has_cuts[i, row, col]
-            ] = 2.0  # This assigns belief value 2.0 to the correct index in the evidence vector
-            evidence_vals_arr = (
-                evidence_vals_arr - evidence_vals_arr[0]
-            )  # This normalizes the evidence by subtracting away the 0th index value
-            evidence_vals_arr[1:] += 0.1 * rng.logistic(
-                size=evidence_vals_arr[1:].shape
-            )  # This adds logistic noise for every evidence entry
-            try:
-                _ = composite_grid_group["grid_vars", i, row, col]
-                grid_evidence_arr[i, row, col] = evidence_vals_arr
-            except ValueError:
-                try:
-                    _ = composite_grid_group["additional_vars", i, row, col]
-                    additional_vars_evidence_dict[(i, row, col)] = evidence_vals_arr
-                except ValueError:
-                    pass
-
-
-# %%
-# Create the factor graph
-fg_creation_start_time = timer()
-fg = graph.FactorGraph(
-    factor_groups=(four_factors_group, vert_suppression_group, horz_suppression_group),
-    variable_groups=(grid_vars_group, additional_keys_group),
+horz_suppression_keys: List[List[Tuple[Any, ...]]] = []
+for row in range(M):
+    for start_col in range(N - SUPPRESSION_DIAMETER):
+        if row != M - 1:
+            horz_suppression_keys.append(
+                [
+                    ("grid_vars", 1, row, c)
+                    for c in range(start_col, start_col + SUPPRESSION_DIAMETER)
+                ]
+            )
+        else:
+            horz_suppression_keys.append(
+                [
+                    ("additional_vars", 1, row, c)
+                    for c in range(start_col, start_col + SUPPRESSION_DIAMETER)
+                ]
+            )
+horz_suppression_group = groups.EnumerationFactorGroup(
+    composite_grid_group, horz_suppression_keys, valid_configs_supp
 )
-fg_creation_end_time = timer()
-print(f"fg Creation time = {fg_creation_end_time - fg_creation_start_time}")
 
 
-# Set the evidence
-fg.update_evidence(grid_vars_group, grid_evidence_arr)
-fg.update_evidence(additional_keys_group, additional_vars_evidence_dict)
+# %% [markdown]
+# ### Add FactorGroups to FactorGraph
+
+# %%
+fg.add_factor_groups(
+    (four_factors_group, vert_suppression_group, horz_suppression_group)
+)
 
 # %% [markdown]
 # ## Belief Propagation

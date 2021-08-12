@@ -260,33 +260,25 @@ class FactorGroup:
         variable_group: either a VariableGroup or - if the elements of more than one VariableGroup
             are connected to this FactorGroup - then a CompositeVariableGroup. This holds
             all the variables that are connected to this FactorGroup
+        connected_var_keys: A list of tuples of tuples, where each innermost tuple contains a
+            key variable_group. Each list within the outer list is taken to contain the keys of variables
+            neighboring a particular factor to be added.
 
     Raises:
         ValueError: if the connected_variables() method returns an empty list
     """
 
     variable_group: Union[CompositeVariableGroup, VariableGroup]
+    connected_variables: List[List[Tuple[Any, ...]]]
 
     def __post_init__(self) -> None:
         """Initializes a tuple of all the factors contained within this FactorGroup."""
-        connected_var_keys_for_factors = self.connected_variables()
-        if len(connected_var_keys_for_factors) == 0:
+        if len(self.connected_variables) == 0:
             raise ValueError("The list returned by self.connected_variables() is empty")
 
-    def connected_variables(
-        self,
-    ) -> List[List[Tuple[Any, ...]]]:
-        """Fuction to generate indices of variables neighboring a factor.
-
-        This function needs to be overridden by a concrete implementation of a factor group.
-
-        Returns:
-            A list of lists of tuples, where each tuple contains a key into a CompositeVariableGroup.
-                Each inner list represents a particular factor to be added.
-        """
-        raise NotImplementedError(
-            "Please subclass the FactorGroup class and override this method"
-        )
+    @cached_property
+    def factors(self) -> Tuple[nodes.EnumerationFactor, ...]:
+        raise NotImplementedError("Needs to be overriden by subclass")
 
 
 @dataclass(frozen=True, eq=False)
@@ -319,7 +311,6 @@ class EnumerationFactorGroup(FactorGroup):
     @cached_property
     def factors(self) -> Tuple[nodes.EnumerationFactor, ...]:
         """Returns a tuple of all the factors contained within this FactorGroup."""
-        connected_var_keys_for_factors = self.connected_variables()
         if getattr(self, "factor_configs_log_potentials", None) is None:
             factor_configs_log_potentials = np.zeros(
                 self.factor_configs.shape[0], dtype=float
@@ -336,7 +327,7 @@ class EnumerationFactorGroup(FactorGroup):
                     self.factor_configs,
                     factor_configs_log_potentials,
                 )
-                for keys_list in connected_var_keys_for_factors
+                for keys_list in self.connected_variables
             ]
         )
 
@@ -374,8 +365,7 @@ class PairwiseFactorGroup(FactorGroup):
     log_potential_matrix: np.ndarray
 
     def __post_init__(self) -> None:
-        connected_var_keys_for_factors = self.connected_variables()
-        for fac_list in connected_var_keys_for_factors:
+        for fac_list in self.connected_variables:
             if len(fac_list) != 2:
                 raise ValueError(
                     "All pairwise factors should connect to exactly 2 variables. Got a factor connecting to"
@@ -406,7 +396,6 @@ class PairwiseFactorGroup(FactorGroup):
         factor_configs_log_potentials = self.log_potential_matrix[
             factor_configs[:, 0], factor_configs[:, 1]
         ]
-        connected_var_keys_for_factors = self.connected_variables()
         return tuple(
             [
                 nodes.EnumerationFactor(
@@ -414,6 +403,6 @@ class PairwiseFactorGroup(FactorGroup):
                     factor_configs,
                     factor_configs_log_potentials,
                 )
-                for keys_list in connected_var_keys_for_factors
+                for keys_list in self.connected_variables
             ]
         )

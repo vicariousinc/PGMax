@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Dict, Mapping, Sequence, Set, Tuple, Union
+from typing import Any, Dict, List, Mapping, Sequence, Union
 
 import jax
 import jax.numpy as jnp
@@ -20,14 +20,14 @@ class FactorGraph:
     the evidence array, and optionally init_msgs (default to initializing all messages to 0)
 
     Args:
-        variable_group_container: A container containing multiple variable groups.
+        variable_groups: A container containing multiple variable groups.
             Supported containers include mapping, sequence and single VariableGroup.
             For a mapping, the keys of the mapping are used to index the variable groups.
             For a sequence, the indices of the sequence are used to index the variable groups.
 
     Attributes:
-        variables: tuple. contains involved variables
-        factors: tuple. contains involved factors
+        _comp_var_group: CompositeVariableGroup. contains all involved VariableGroups
+        _factors: list. contains all involved factors
         num_var_states: int. represents the sum of all variable states of all variables in the
             FactorGraph
         _vars_to_starts: MappingProxyType[nodes.Variable, int]. maps every variable to an int
@@ -39,9 +39,6 @@ class FactorGraph:
             been added to this FactorGraph
     """
 
-    factor_groups: Tuple[
-        groups.FactorGroup, ...
-    ]  # NOTE: This line just here for testing!
     variable_groups: Union[
         Mapping[Any, groups.VariableGroup],
         Sequence[groups.VariableGroup],
@@ -49,22 +46,12 @@ class FactorGraph:
     ]
 
     def __post_init__(self):
-        self._vargroups_set: Set[groups.VariableGroup] = set()
-        if isinstance(self.variable_groups, groups.VariableGroup):
+        if isinstance(self.variable_groups, groups.CompositeVariableGroup):
+            self._comp_var_group = self.variable_groups
+        elif isinstance(self.variable_groups, groups.VariableGroup):
             self._comp_var_group = groups.CompositeVariableGroup([self.variable_groups])
-            self._vargroups_set.add(self.variable_groups)
         else:
             self._comp_var_group = groups.CompositeVariableGroup(self.variable_groups)
-            if isinstance(self.variable_groups, Sequence):
-                for var_group in self.variable_groups:
-                    self._vargroups_set.add(var_group)
-            elif isinstance(self.variable_groups, Mapping):
-                for var_group in self.variable_groups.values():
-                    self._vargroups_set.add(var_group)
-
-        self.factors = sum(
-            [factor_group.factors for factor_group in self.factor_groups], ()
-        )  # NOTE: This line also just here for testing!
 
         vars_num_states_cumsum = np.insert(
             np.array(
@@ -84,7 +71,40 @@ class FactorGraph:
 
         self._vars_to_evidence: Dict[nodes.Variable, np.ndarray] = {}
 
-    def get_curr_wiring(self) -> nodes.EnumerationWiring:
+        self._factors: List[nodes.EnumerationFactor] = []
+
+    def add_factors(self, new_factors: Sequence[nodes.EnumerationFactor]) -> None:
+        """Function to add factors to this FactorGraph.
+
+        Args:
+            new_factors: a sequence of factors to be added to the graph
+
+        Raises:
+            ValueError: if new_factors is empty
+        """
+
+        if len(new_factors) == 0:
+            raise ValueError("No Factors or FactorGroups to add!")
+        self._factors.extend(new_factors)
+
+    def add_factor_groups(
+        self, new_factor_groups: Sequence[groups.FactorGroup]
+    ) -> None:
+        """Function to add FactorGroups to this FactorGraph.
+
+        Args:
+            new_factor_groups: a sequence of FactorGroups to be added to the graph
+
+        Raises:
+            ValueError: if new_factor_groups is empty
+        """
+        if len(new_factor_groups) == 0:
+            raise ValueError("No Factors or FactorGroups to add!")
+        for factor_group in new_factor_groups:
+            self._factors.extend(factor_group.factors)
+
+    @property
+    def curr_wiring(self) -> nodes.EnumerationWiring:
         """Function to compile wiring for belief propagation.
 
         If wiring has already beeen compiled, do nothing.
@@ -93,12 +113,13 @@ class FactorGraph:
             compiled wiring from each individual factor
         """
         wirings = [
-            factor.compile_wiring(self._vars_to_starts) for factor in self.factors
+            factor.compile_wiring(self._vars_to_starts) for factor in self._factors
         ]
         wiring = fg_utils.concatenate_enumeration_wirings(wirings)
         return wiring
 
-    def get_curr_factor_configs_log_potentials(self) -> np.ndarray:
+    @property
+    def curr_factor_configs_log_potentials(self) -> np.ndarray:
         """Function to compile potential array for belief propagation..
 
         If potential array has already beeen compiled, do nothing.
@@ -108,7 +129,7 @@ class FactorGraph:
                 valid configuration
         """
         return np.concatenate(
-            [factor.factor_configs_log_potentials for factor in self.factors]
+            [factor.factor_configs_log_potentials for factor in self._factors]
         )
 
     def get_curr_evidence(self, evidence_default_mode) -> np.ndarray:
@@ -159,7 +180,7 @@ class FactorGraph:
             array of shape (num_edge_state,) representing initialized factor to variable
                 messages
         """
-        return jnp.zeros(self.get_curr_wiring().var_states_for_edges.shape[0])
+        return jnp.zeros(self.curr_wiring.var_states_for_edges.shape[0])
 
     def update_evidence(
         self,
@@ -197,11 +218,6 @@ class FactorGraph:
                     not the same as variable_group.variable_size
             NotImplementedError: if variable_group is neither a NDVariableArray or GenericVariableGroup
         """
-        if variable_group not in self._vargroups_set:
-            raise ValueError(
-                "A VariableGroup whose evidence is being updated was not added to factor graph"
-            )
-
         if isinstance(variable_group, groups.NDVariableArray):
             if not isinstance(evidence_values, np.ndarray):
                 raise ValueError(
@@ -264,10 +280,10 @@ class FactorGraph:
         else:
             msgs = self.get_init_msgs(msgs_context)
 
-        wiring = jax.device_put(self.get_curr_wiring())
+        wiring = jax.device_put(self.curr_wiring)
         evidence = jax.device_put(self.get_curr_evidence(evidence_default_mode))
         factor_configs_log_potentials = jax.device_put(
-            self.get_curr_factor_configs_log_potentials()
+            self.curr_factor_configs_log_potentials
         )
         # evidence = self.get_evidence(evidence_data, evidence_context)
         max_msg_size = int(jnp.max(wiring.edges_num_states))
@@ -327,9 +343,7 @@ class FactorGraph:
         Returns:
             a dictionary mapping variables to their MAP state
         """
-        var_states_for_edges = jax.device_put(
-            self.get_curr_wiring().var_states_for_edges
-        )
+        var_states_for_edges = jax.device_put(self.curr_wiring.var_states_for_edges)
         evidence = jax.device_put(self.get_curr_evidence(evidence_default_mode))
         final_var_states = evidence.at[var_states_for_edges].add(msgs)
         var_to_map_dict = {}
