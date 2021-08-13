@@ -87,8 +87,9 @@ class FactorGraph:
         """Function to add factors to this FactorGraph.
 
         Args:
-            variable_group_key: tuple that represents the index into the CompositeVariableGroup
-                (self._comp_var_group) that is created when the FactorGraph is instantiated.
+            variable_group_key: optional tuple that represents the index into the CompositeVariableGroup
+                (self._comp_var_group) that is created when the FactorGraph is instantiated. If this is
+                set to None, then it is assumed that the entire CompositeVariableGroup is being indexed.
             FactorFactory: a callable class definition. This class must be a sub-class of FactorGroup
                 and contain a string key for every keyword argument (EXCEPT the variable_group keyword)
                 that might be necessary to instantiate this class.
