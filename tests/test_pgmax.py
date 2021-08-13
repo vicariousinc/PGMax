@@ -245,8 +245,8 @@ def test_e2e_sanity_check():
     )
 
     # Set the evidence
-    fg.update_evidence(tuple(["grid_vars"]), grid_evidence_arr)
-    fg.update_evidence(tuple(["additional_vars"]), additional_vars_evidence_dict)
+    fg.update_evidence("grid_vars", grid_evidence_arr)
+    fg.update_evidence("additional_vars", additional_vars_evidence_dict)
 
     # Create an EnumerationFactorGroup for four factors
     four_factor_keys: List[List[Tuple[Any, ...]]] = []

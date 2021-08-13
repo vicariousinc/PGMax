@@ -191,7 +191,7 @@ class FactorGraph:
 
     def update_evidence(
         self,
-        key: Tuple[Any, ...],
+        key: Union[Tuple[Any, ...], Any],
         evidence: Union[Dict[Any, np.ndarray], np.ndarray],
     ):
         """Function to update the evidence for variables in the FactorGraph.
@@ -216,8 +216,6 @@ class FactorGraph:
                 Note that each np.ndarray in the dictionary values must have the same size as
                 variable_group.variable_size.
         """
-        if len(key) == 1:
-            key = key[0]
         if key in self._comp_var_group.container_keys:
             self._vars_to_evidence.update(
                 self._comp_var_group.variable_group_container[key].get_vars_to_evidence(
