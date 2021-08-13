@@ -21,7 +21,7 @@ import pgmax.fg.graph as graph
 
 # Custom Imports
 import pgmax.fg.nodes as nodes  # isort:skip
-import pgmax.interface.datatypes as interface_datatypes  # isort:skip
+import pgmax.fg.groups as groups  # isort:skip
 
 # Standard Package Imports
 import matplotlib.pyplot as plt  # isort:skip
@@ -31,7 +31,7 @@ import jax.numpy as jnp  # isort:skip
 from numpy.random import default_rng  # isort:skip
 from scipy import sparse  # isort:skip
 from scipy.ndimage import gaussian_filter  # isort:skip
-from typing import Any, Dict, Tuple, List  # isort:skip
+from typing import Any, Dict, Tuple, List, Optional  # isort:skip
 from timeit import default_timer as timer  # isort:skip
 from dataclasses import dataclass  # isort:skip
 
@@ -47,8 +47,6 @@ rng = default_rng(23)
 # Make sure these environment variables are set correctly to get an accurate picture of memory usage
 os.environ["XLA_PYTHON_ALLOCATOR"] = "platform"
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
-print(os.getenv("XLA_PYTHON_ALLOCATOR", "default").lower())
-print(os.getenv("XLA_PYTHON_CLIENT_PREALLOCATE"))
 
 # Create a synthetic depth image for testing purposes
 im_size = 32
@@ -167,17 +165,17 @@ valid_configs_supp = create_valid_suppression_config_arr(SUPPRESSION_DIAMETER)
 # We create a NDVariableArray such that the [0,i,j] entry corresponds to the vertical cut variable (i.e, the one
 # attached horizontally to the factor) that's at that location in the image, and the [1,i,j] entry corresponds to
 # the horizontal cut variable (i.e, the one attached vertically to the factor) that's at that location
-grid_vars_group = interface_datatypes.NDVariableArray(3, (2, M - 1, N - 1))
+grid_vars_group = groups.NDVariableArray(3, (2, M - 1, N - 1))
 
 # Make a group of additional variables for the edges of the grid
 extra_row_keys: List[Tuple[Any, ...]] = [(0, row, N - 1) for row in range(M - 1)]
 extra_col_keys: List[Tuple[Any, ...]] = [(1, M - 1, col) for col in range(N - 1)]
 additional_keys = tuple(extra_row_keys + extra_col_keys)
-additional_keys_group = interface_datatypes.GenericVariableGroup(3, additional_keys)
+additional_keys_group = groups.GenericVariableGroup(3, additional_keys)
 
 # Combine these two VariableGroups into one CompositeVariableGroup
-composite_grid_group = interface_datatypes.CompositeVariableGroup(
-    (("grid_vars", grid_vars_group), ("additional_vars", additional_keys_group))
+composite_grid_group = groups.CompositeVariableGroup(
+    dict(grid_vars=grid_vars_group, additional_vars=additional_keys_group)
 )
 
 
@@ -185,10 +183,11 @@ composite_grid_group = interface_datatypes.CompositeVariableGroup(
 # Subclass FactorGroup into the 3 different groups that appear in this problem
 
 
-@dataclass
-class FourFactorGroup(interface_datatypes.FactorGroup):
+@dataclass(frozen=True, eq=False)
+class FourFactorGroup(groups.EnumerationFactorGroup):
     num_rows: int
     num_cols: int
+    factor_configs_log_potentials: Optional[np.ndarray] = None
 
     def connected_variables(
         self,
@@ -236,11 +235,12 @@ class FourFactorGroup(interface_datatypes.FactorGroup):
         return ret_list
 
 
-@dataclass
-class VertSuppressionFactorGroup(interface_datatypes.FactorGroup):
+@dataclass(frozen=True, eq=False)
+class VertSuppressionFactorGroup(groups.EnumerationFactorGroup):
     num_rows: int
     num_cols: int
     suppression_diameter: int
+    factor_configs_log_potentials: Optional[np.ndarray] = None
 
     def connected_variables(
         self,
@@ -270,11 +270,12 @@ class VertSuppressionFactorGroup(interface_datatypes.FactorGroup):
         return ret_list
 
 
-@dataclass
-class HorzSuppressionFactorGroup(interface_datatypes.FactorGroup):
+@dataclass(frozen=True, eq=False)
+class HorzSuppressionFactorGroup(groups.EnumerationFactorGroup):
     num_rows: int
     num_cols: int
     suppression_diameter: int
+    factor_configs_log_potentials: Optional[np.ndarray] = None
 
     def connected_variables(
         self,
@@ -306,35 +307,27 @@ class HorzSuppressionFactorGroup(interface_datatypes.FactorGroup):
 # %%
 # Now, we instantiate the four factors
 four_factors_group = FourFactorGroup(
-    valid_configs_non_supp,
-    composite_grid_group,
-    M,
-    N,
+    variable_group=composite_grid_group,
+    factor_configs=valid_configs_non_supp,
+    num_rows=M,
+    num_cols=N,
 )
 # Next, we instantiate all the vertical suppression variables
 vert_suppression_group = VertSuppressionFactorGroup(
-    valid_configs_supp,
-    composite_grid_group,
-    M,
-    N,
-    SUPPRESSION_DIAMETER,
+    variable_group=composite_grid_group,
+    factor_configs=valid_configs_supp,
+    num_rows=M,
+    num_cols=N,
+    suppression_diameter=SUPPRESSION_DIAMETER,
 )
 # Next, we instantiate all the horizontal suppression variables
 horz_suppression_group = HorzSuppressionFactorGroup(
-    valid_configs_supp,
-    composite_grid_group,
-    M,
-    N,
-    SUPPRESSION_DIAMETER,
+    variable_group=composite_grid_group,
+    factor_configs=valid_configs_supp,
+    num_rows=M,
+    num_cols=N,
+    suppression_diameter=SUPPRESSION_DIAMETER,
 )
-
-# Finally, we construct the tuple of all the factors and variables involved in the problem.
-facs_tuple = tuple(
-    list(four_factors_group.factors)
-    + list(vert_suppression_group.factors)
-    + list(horz_suppression_group.factors)
-)
-vars_tuple = composite_grid_group.get_all_vars()
 
 
 # %%
@@ -350,39 +343,13 @@ class ConcreteFactorGraph(graph.FactorGraph):
             context: Optional context for generating evidence
 
         Returns:
-            None, but must set the self._evidence attribute to a jnp.array of shape (num_var_states,)
+            Array of shape (num_var_states,) representing the flattened evidence for each variable
         """
         evidence = np.zeros(self.num_var_states)
         for var in self.variables:
             start_index = self._vars_to_starts[var]
             evidence[start_index : start_index + var.num_states] = data[var]
         return jax.device_put(evidence)
-
-    def output_inference(
-        self, final_var_states: jnp.ndarray, context: Any = None
-    ) -> Any:
-        """Function to take the result of message passing and output the inference result for
-            each variable
-
-        Args:
-            final_var_states: an array of shape (num_var_states,) that is the result of belief
-                propagation
-            context: Optional context for using this array
-
-        Returns:
-            An evidence array of shape (num_var_states,)
-        """
-        # NOTE: An argument can be passed here to do different inferences for sum-product and
-        # max-product respectively
-        var_to_map_dict = {}
-        final_var_states_np = np.array(final_var_states)
-        for var in self.variables:
-            start_index = self._vars_to_starts[var]
-            var_to_map_dict[var] = np.argmax(
-                final_var_states_np[start_index : start_index + var.num_states]
-            )
-
-        return var_to_map_dict
 
 
 # %%
@@ -425,7 +392,9 @@ for i in range(2):
 # %%
 # Create the factor graph
 fg_creation_start_time = timer()
-fg = ConcreteFactorGraph(vars_tuple, facs_tuple)
+fg = ConcreteFactorGraph(
+    (four_factors_group, vert_suppression_group, horz_suppression_group)
+)
 fg_creation_end_time = timer()
 print(f"fg Creation time = {fg_creation_end_time - fg_creation_start_time}")
 
@@ -443,6 +412,7 @@ print(
     f"time taken for data conversion of inference result {data_writeback_end_time - data_writeback_start_time}"
 )
 
+
 # %% [markdown]
 # ## Visualization of Results
 
@@ -454,13 +424,17 @@ for i in range(2):
     for row in range(M):
         for col in range(N):
             try:
-                bp_values[i, row, col] = map_message_dict[composite_grid_group["grid_vars", i, row, col]]  # type: ignore
+                bp_values[i, row, col] = map_message_dict[
+                    composite_grid_group["grid_vars", i, row, col]
+                ]
                 bu_evidence[i, row, col, :] = var_evidence_dict[
                     grid_vars_group[i, row, col]
                 ]
             except ValueError:
                 try:
-                    bp_values[i, row, col] = map_message_dict[composite_grid_group["additional_vars", i, row, col]]  # type: ignore
+                    bp_values[i, row, col] = map_message_dict[
+                        composite_grid_group["additional_vars", i, row, col]
+                    ]
                     bu_evidence[i, row, col, :] = var_evidence_dict[
                         additional_keys_group[i, row, col]
                     ]

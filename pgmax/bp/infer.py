@@ -36,6 +36,7 @@ def pass_var_to_fac_messages(
 def pass_fac_to_var_messages(
     vtof_msgs: jnp.ndarray,
     factor_configs_edge_states: jnp.ndarray,
+    factor_configs_log_potentials: jnp.ndarray,
     num_val_configs: int,
 ) -> jnp.ndarray:
 
@@ -52,6 +53,8 @@ def pass_fac_to_var_messages(
             factor_configs_edge_states[ii] contains a pair of global factor_config and edge_state indices
             factor_configs_edge_states[ii, 0] contains the global factor config index
             factor_configs_edge_states[ii, 1] contains the corresponding global edge_state index
+        factor_configs_log_potentials: Array of shape (num_val_configs, ). An entry at index i is the log potential
+            function value for the configuration with global factor config index i.
         num_val_configs: the total number of valid configurations for factors in the factor graph.
 
     Returns:
@@ -61,7 +64,7 @@ def pass_fac_to_var_messages(
         jnp.zeros(shape=(num_val_configs,))
         .at[factor_configs_edge_states[..., 0]]
         .add(vtof_msgs[factor_configs_edge_states[..., 1]])
-    )
+    ) + factor_configs_log_potentials
     ftov_msgs = (
         jnp.full(shape=(vtof_msgs.shape[0],), fill_value=NEG_INF)
         .at[factor_configs_edge_states[..., 1]]

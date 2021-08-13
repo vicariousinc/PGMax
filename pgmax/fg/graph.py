@@ -8,9 +8,9 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-import pgmax.bp.infer as infer
 from pgmax import utils
-from pgmax.fg import fg_utils, nodes
+from pgmax.bp import infer
+from pgmax.fg import fg_utils, groups, nodes
 
 
 @dataclass(frozen=True, eq=False)
@@ -21,14 +21,32 @@ class FactorGraph:
     the evidence array, and optionally init_msgs (default to initializing all messages to 0)
 
     Args:
-        variables: List of involved variables
-        factors: List of involved factors
+        factor_groups: a tuple containing all the FactorGroups that are part of this FactorGraph
+
+    Attributes:
+        variables: tuple. contains involved variables
+        factors: tuple. contains involved factors
+        num_var_states: int. represents the sum of all variable states of all variables in the
+            FactorGraph
+        _vars_to_starts: MappingProxyType[nodes.Variable, int]. maps every variable to an int
+            representing an index in the evidence array at which the first entry of the evidence
+            for that particular variable should be placed.
     """
 
-    variables: Tuple[nodes.Variable, ...]
-    factors: Tuple[nodes.EnumerationFactor, ...]
+    factor_groups: Tuple[groups.FactorGroup, ...]
 
     def __post_init__(self):
+        self.factors = sum(
+            [factor_group.factors for factor_group in self.factor_groups], ()
+        )
+        self.variables = sum(
+            [
+                factor_group.variable_group.variables
+                for factor_group in self.factor_groups
+            ],
+            (),
+        )
+
         vars_num_states_cumsum = np.insert(
             np.array(
                 [variable.num_states for variable in self.variables], dtype=int
@@ -46,15 +64,32 @@ class FactorGraph:
 
     @utils.cached_property
     def wiring(self) -> nodes.EnumerationWiring:
-        """Function to compile wiring for belief propagation..
+        """Function to compile wiring for belief propagation.
 
         If wiring has already beeen compiled, do nothing.
+
+        Returns:
+            compiled wiring from each individual factor
         """
         wirings = [
             factor.compile_wiring(self._vars_to_starts) for factor in self.factors
         ]
         wiring = fg_utils.concatenate_enumeration_wirings(wirings)
         return wiring
+
+    @utils.cached_property
+    def factor_configs_log_potentials(self) -> np.ndarray:
+        """Function to compile potential array for belief propagation..
+
+        If potential array has already beeen compiled, do nothing.
+
+        Returns:
+            a jnp array representing the log of the potential function for each
+                valid configuration
+        """
+        return np.concatenate(
+            [factor.factor_configs_log_potentials for factor in self.factors]
+        )
 
     def get_evidence(self, data: Any, context: Any = None) -> jnp.ndarray:
         """Function to generate evidence array. Need to be overwritten for concrete factor graphs
@@ -119,6 +154,9 @@ class FactorGraph:
             msgs = self.get_init_msgs(msgs_context)
 
         wiring = jax.device_put(self.wiring)
+        factor_configs_log_potentials = jax.device_put(
+            self.factor_configs_log_potentials
+        )
         evidence = self.get_evidence(evidence_data, evidence_context)
         max_msg_size = int(jnp.max(wiring.edges_num_states))
 
@@ -126,7 +164,7 @@ class FactorGraph:
         msgs = infer.normalize_and_clip_msgs(
             msgs, wiring.edges_num_states, max_msg_size
         )
-        num_val_configs = int(wiring.factor_configs_edge_states[-1, 0])
+        num_val_configs = int(wiring.factor_configs_edge_states[-1, 0]) + 1
 
         @jax.jit
         def message_passing_step(msgs, _):
@@ -140,6 +178,7 @@ class FactorGraph:
             ftov_msgs = infer.pass_fac_to_var_messages(
                 vtof_msgs,
                 wiring.factor_configs_edge_states,
+                factor_configs_log_potentials,
                 num_val_configs,
             )
             # Use the results of message passing to perform damping and
