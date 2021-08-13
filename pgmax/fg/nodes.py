@@ -58,12 +58,26 @@ class EnumerationFactor:
 
     Args:
         variables: List of involved variables
-        configs: Array of shape (num_configs, num_variables)
-            An array containing explicit enumeration of all valid configurations
+        configs: Array of shape (num_val_configs, num_variables)
+            An array containing an explicit enumeration of all valid configurations
+        factor_configs_log_potentials: Array of shape (num_val_configs,). An array containing
+            the log of the potential value for every possible configuration
+
+    Raises:
+        ValueError: If:
+            (1) the dtype of the configs array is not int
+            (2) the dtype of the potential array is not float
+            (3) configs array doesn't have the same number of columns
+            as there are variables
+            (4) the potential array doesn't have the same number of
+            rows as the configs array
+            (5) any value in the configs array is greater than the size
+            of the corresponding variable or less than 0.
     """
 
     variables: Tuple[Variable, ...]
     configs: np.ndarray
+    factor_configs_log_potentials: np.ndarray
 
     def __post_init__(self):
         self.configs.flags.writeable = False
@@ -72,9 +86,19 @@ class EnumerationFactor:
                 f"Configurations should be integers. Got {self.configs.dtype}."
             )
 
+        if not np.issubdtype(self.factor_configs_log_potentials.dtype, np.floating):
+            raise ValueError(
+                f"Potential should be floats. Got {self.factor_configs_log_potentials.dtype}."
+            )
+
         if len(self.variables) != self.configs.shape[1]:
             raise ValueError(
                 f"Number of variables {len(self.variables)} doesn't match given configurations {self.configs.shape}"
+            )
+
+        if self.configs.shape[0] != self.factor_configs_log_potentials.shape[0]:
+            raise ValueError(
+                f"The potential array has {self.factor_configs_log_potentials.shape[0]} rows, which is not equal to the number of configurations ({self.configs.shape[0]})"
             )
 
         vars_num_states = np.array([variable.num_states for variable in self.variables])
