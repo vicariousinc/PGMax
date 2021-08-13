@@ -126,8 +126,6 @@ class CompositeVariableGroup(VariableGroup):
 
     Attributes:
         _keys_to_vars: A private, immutable mapping from keys to variables
-        _container_keys: A private tuple containing all valid container keys
-            Can be used to index variable_group_container to get corresponding variable groups
     """
 
     variable_group_container: Union[
