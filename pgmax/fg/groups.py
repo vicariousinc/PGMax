@@ -116,6 +116,8 @@ class CompositeVariableGroup(VariableGroup):
 
     Attributes:
         _keys_to_vars: A private, immutable mapping from keys to variables
+        _container_keys: A private tuple containing all valid container keys
+            Can be used to index variable_group_container to get corresponding variable groups
     """
 
     variable_group_container: Union[
@@ -183,12 +185,7 @@ class CompositeVariableGroup(VariableGroup):
             a dictionary mapping all possible keys to different variables.
         """
         keys_to_vars = {}
-        if isinstance(self.variable_group_container, Mapping):
-            container_keys = self.variable_group_container.keys()
-        else:
-            container_keys = set(range(len(self.variable_group_container)))
-
-        for container_key in container_keys:
+        for container_key in self.container_keys:
             for variable_group_key in self.variable_group_container[container_key].keys:
                 if isinstance(variable_group_key, tuple):
                     keys_to_vars[
@@ -200,6 +197,15 @@ class CompositeVariableGroup(VariableGroup):
                     ] = self.variable_group_container[container_key][variable_group_key]
 
         return keys_to_vars
+
+    @cached_property
+    def container_keys(self) -> Tuple:
+        if isinstance(self.variable_group_container, Mapping):
+            container_keys = tuple(self.variable_group_container.keys())
+        else:
+            container_keys = tuple(range(len(self.variable_group_container)))
+
+        return container_keys
 
 
 @dataclass(frozen=True, eq=False)
