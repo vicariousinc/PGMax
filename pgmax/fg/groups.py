@@ -80,6 +80,16 @@ class VariableGroup:
             "Please subclass the VariableGroup class and override this method"
         )
 
+    def get_vars_to_evidence(self, evidence: Any) -> Dict[nodes.Variable, np.ndarray]:
+        """Function that turns input evidence into a dictionary mapping variables to evidence.
+
+        Returns:
+            a dictionary mapping all possible variables to the corresponding evidence
+        """
+        raise NotImplementedError(
+            "Please subclass the VariableGroup class and override this method"
+        )
+
     @property
     def keys(self) -> Tuple[Any, ...]:
         """Function to return a tuple of all keys in the group.
@@ -198,6 +208,26 @@ class CompositeVariableGroup(VariableGroup):
 
         return keys_to_vars
 
+    def get_vars_to_evidence(
+        self, evidence: Union[Mapping, Sequence]
+    ) -> Dict[nodes.Variable, np.ndarray]:
+        """Function that turns input evidence into a dictionary mapping variables to evidence.
+
+        Args:
+            evidence: A mapping or a sequence of evidences.
+                The type of evidence should match that of self.variable_group_container
+
+        Returns:
+            a dictionary mapping all possible variables to the corresponding evidence
+        """
+        vars_to_evidence: Dict[nodes.Variable, np.ndarray] = {}
+        for key in self.container_keys:
+            vars_to_evidence.update(
+                self.variable_group_container[key].get_vars_to_evidence(evidence[key])
+            )
+
+        return vars_to_evidence
+
     @cached_property
     def container_keys(self) -> Tuple:
         if isinstance(self.variable_group_container, Mapping):
@@ -232,6 +262,30 @@ class NDVariableArray(VariableGroup):
             keys_to_vars[key] = nodes.Variable(self.variable_size)
         return keys_to_vars
 
+    def get_vars_to_evidence(
+        self, evidence: np.ndarray
+    ) -> Dict[nodes.Variable, np.ndarray]:
+        """Function that turns input evidence into a dictionary mapping variables to evidence.
+
+        Args:
+            evidence: An array of shape self.shape + (variable_size,)
+                An array containing evidence for all the variables
+
+        Returns:
+            a dictionary mapping all possible variables to the corresponding evidence
+        """
+        expected_shape = self.shape + (self.variable_size,)
+        if not evidence.shape == expected_shape:
+            raise ValueError(
+                f"Input evidence should be an array of shape {expected_shape}. "
+                f"Got {evidence.shape}."
+            )
+
+        vars_to_evidence = {
+            self._keys_to_vars[key]: evidence[key] for key in self._keys_to_vars
+        }
+        return vars_to_evidence
+
 
 @dataclass(frozen=True, eq=False)
 class GenericVariableGroup(VariableGroup):
@@ -256,6 +310,36 @@ class GenericVariableGroup(VariableGroup):
         for key in self.key_tuple:
             keys_to_vars[key] = nodes.Variable(self.variable_size)
         return keys_to_vars
+
+    def get_vars_to_evidence(
+        self, evidence: Mapping[Any, np.ndarray]
+    ) -> Dict[nodes.Variable, np.ndarray]:
+        """Function that turns input evidence into a dictionary mapping variables to evidence.
+
+        Args:
+            evidence: An array of shape self.shape + (variable_size,)
+                An array containing evidence for all the variables
+
+        Returns:
+            a dictionary mapping all possible variables to the corresponding evidence
+        """
+        vars_to_evidence = {}
+        for key in evidence:
+            if key not in self._keys_to_vars:
+                raise ValueError(
+                    f"The evidence is referring to a non-existent variable {key}."
+                )
+
+            if evidence[key].shape != (self._keys_to_vars[key].num_states,):
+                raise ValueError(
+                    f"Variable {key} expect an evidence array of shape "
+                    f"({(self._keys_to_vars[key].num_states,)})."
+                    f"Got {evidence[key].shape}."
+                )
+
+            vars_to_evidence[self._keys_to_vars[key]] = evidence[key]
+
+        return vars_to_evidence
 
 
 @dataclass(frozen=True, eq=False)
