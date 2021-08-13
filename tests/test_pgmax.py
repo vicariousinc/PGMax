@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -7,17 +7,16 @@ import numpy as np
 from numpy.random import default_rng
 from scipy.ndimage import gaussian_filter
 
-import pgmax
-from pgmax.fg import graph as graph
-from pgmax.interface import datatypes as interface_datatypes
+from pgmax.fg import graph, groups, nodes
 
 
 def test_e2e_sanity_check():
     # Subclass FactorGroup into the 3 different groups that appear in this problem
-    @dataclass
-    class FourFactorGroup(interface_datatypes.FactorGroup):
+    @dataclass(frozen=True, eq=False)
+    class FourFactorGroup(groups.EnumerationFactorGroup):
         num_rows: int
         num_cols: int
+        factor_configs_log_potentials: Optional[np.ndarray] = None
 
         def connected_variables(
             self,
@@ -64,11 +63,12 @@ def test_e2e_sanity_check():
 
             return ret_list
 
-    @dataclass
-    class VertSuppressionFactorGroup(interface_datatypes.FactorGroup):
+    @dataclass(frozen=True, eq=False)
+    class VertSuppressionFactorGroup(groups.EnumerationFactorGroup):
         num_rows: int
         num_cols: int
         suppression_diameter: int
+        factor_configs_log_potentials: Optional[np.ndarray] = None
 
         def connected_variables(
             self,
@@ -94,13 +94,15 @@ def test_e2e_sanity_check():
                                 )
                             ]
                         )
+
             return ret_list
 
-    @dataclass
-    class HorzSuppressionFactorGroup(interface_datatypes.FactorGroup):
+    @dataclass(frozen=True, eq=False)
+    class HorzSuppressionFactorGroup(groups.EnumerationFactorGroup):
         num_rows: int
         num_cols: int
         suppression_diameter: int
+        factor_configs_log_potentials: Optional[np.ndarray] = None
 
         def connected_variables(
             self,
@@ -131,7 +133,7 @@ def test_e2e_sanity_check():
     # Override and define a concrete FactorGraph Class with the get_evidence function implemented
     class ConcreteFactorGraph(graph.FactorGraph):
         def get_evidence(
-            self, data: Dict[pgmax.fg.nodes.Variable, np.array], context: Any = None
+            self, data: Dict[nodes.Variable, np.array], context: Any = None
         ) -> jnp.ndarray:
             """Function to generate evidence array. Need to be overwritten for concrete factor graphs
 
@@ -140,39 +142,13 @@ def test_e2e_sanity_check():
                 context: Optional context for generating evidence
 
             Returns:
-                None, but must set the self._evidence attribute to a jnp.array of shape (num_var_states,)
+                Array of shape (num_var_states,) representing the flattened evidence for each variable
             """
             evidence = np.zeros(self.num_var_states)
             for var in self.variables:
                 start_index = self._vars_to_starts[var]
                 evidence[start_index : start_index + var.num_states] = data[var]
             return jax.device_put(evidence)
-
-        def output_inference(
-            self, final_var_states: jnp.ndarray, context: Any = None
-        ) -> Any:
-            """Function to take the result of message passing and output the inference result for
-                each variable
-
-            Args:
-                final_var_states: an array of shape (num_var_states,) that is the result of belief
-                    propagation
-                context: Optional context for using this array
-
-            Returns:
-                An evidence array of shape (num_var_states,)
-            """
-            # NOTE: An argument can be passed here to do different inferences for sum-product and
-            # max-product respectively
-            var_to_map_dict = {}
-            final_var_states_np = np.array(final_var_states)
-            for var in self.variables:
-                start_index = self._vars_to_starts[var]
-                var_to_map_dict[var] = np.argmax(
-                    final_var_states_np[start_index : start_index + var.num_states]
-                )
-
-            return var_to_map_dict
 
     # Helper function to easily generate a list of valid configurations for a given suppression diameter
     def create_valid_suppression_config_arr(suppression_diameter):
@@ -356,51 +332,45 @@ def test_e2e_sanity_check():
     # We create a NDVariableArray such that the [0,i,j] entry corresponds to the vertical cut variable (i.e, the one
     # attached horizontally to the factor) that's at that location in the image, and the [1,i,j] entry corresponds to
     # the horizontal cut variable (i.e, the one attached vertically to the factor) that's at that location
-    grid_vars_group = interface_datatypes.NDVariableArray(3, (2, M - 1, N - 1))
+    # We create a NDVariableArray such that the [0,i,j] entry corresponds to the vertical cut variable (i.e, the one
+    # attached horizontally to the factor) that's at that location in the image, and the [1,i,j] entry corresponds to
+    # the horizontal cut variable (i.e, the one attached vertically to the factor) that's at that location
+    grid_vars_group = groups.NDVariableArray(3, (2, M - 1, N - 1))
+
     # Make a group of additional variables for the edges of the grid
     extra_row_keys: List[Tuple[Any, ...]] = [(0, row, N - 1) for row in range(M - 1)]
     extra_col_keys: List[Tuple[Any, ...]] = [(1, M - 1, col) for col in range(N - 1)]
     additional_keys = tuple(extra_row_keys + extra_col_keys)
-    additional_keys_group = interface_datatypes.GenericVariableGroup(3, additional_keys)
+    additional_keys_group = groups.GenericVariableGroup(3, additional_keys)
+
     # Combine these two VariableGroups into one CompositeVariableGroup
-    composite_grid_group = interface_datatypes.CompositeVariableGroup(
-        (("grid_vars", grid_vars_group), ("additional_vars", additional_keys_group))
+    composite_grid_group = groups.CompositeVariableGroup(
+        dict(grid_vars=grid_vars_group, additional_vars=additional_keys_group)
     )
 
     # Now, we instantiate the four factors
     four_factors_group = FourFactorGroup(
-        valid_configs_non_supp,
-        composite_grid_group,
-        M,
-        N,
+        variable_group=composite_grid_group,
+        factor_configs=valid_configs_non_supp,
+        num_rows=M,
+        num_cols=N,
     )
     # Next, we instantiate all the vertical suppression variables
     vert_suppression_group = VertSuppressionFactorGroup(
-        valid_configs_supp,
-        composite_grid_group,
-        M,
-        N,
-        SUPPRESSION_DIAMETER,
+        variable_group=composite_grid_group,
+        factor_configs=valid_configs_supp,
+        num_rows=M,
+        num_cols=N,
+        suppression_diameter=SUPPRESSION_DIAMETER,
     )
     # Next, we instantiate all the horizontal suppression variables
     horz_suppression_group = HorzSuppressionFactorGroup(
-        valid_configs_supp,
-        composite_grid_group,
-        M,
-        N,
-        SUPPRESSION_DIAMETER,
+        variable_group=composite_grid_group,
+        factor_configs=valid_configs_supp,
+        num_rows=M,
+        num_cols=N,
+        suppression_diameter=SUPPRESSION_DIAMETER,
     )
-    # Finally, we construct the tuple of all the factors and variables involved in the problem.
-    facs_tuple = tuple(
-        list(four_factors_group.factors)
-        + list(vert_suppression_group.factors)
-        + list(horz_suppression_group.factors)
-    )
-    vars_tuple = composite_grid_group.get_all_vars()
-
-    # Test that these have the correct number of elements
-    assert len(facs_tuple) == 10
-    assert len(vars_tuple) == 12
 
     gt_has_cuts = gt_has_cuts.astype(np.int32)
     # Now, we use this array along with the gt_has_cuts array computed earlier using the image in order to derive the evidence values
@@ -434,7 +404,9 @@ def test_e2e_sanity_check():
                         pass
 
     # Create the factor graph
-    fg = ConcreteFactorGraph(vars_tuple, facs_tuple)
+    fg = ConcreteFactorGraph(
+        (four_factors_group, vert_suppression_group, horz_suppression_group)
+    )
     # Run BP
     final_msgs = fg.run_bp(1000, 0.5, evidence_data=var_evidence_dict)
 
