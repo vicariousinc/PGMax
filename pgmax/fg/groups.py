@@ -271,6 +271,9 @@ class NDVariableArray(VariableGroup):
 
         Returns:
             a dictionary mapping all possible variables to the corresponding evidence
+
+        Raises:
+            ValueError: if input evidence array is of the wrong shape
         """
         expected_shape = self.shape + (self.variable_size,)
         if not evidence.shape == expected_shape:
@@ -315,11 +318,15 @@ class GenericVariableGroup(VariableGroup):
         """Function that turns input evidence into a dictionary mapping variables to evidence.
 
         Args:
-            evidence: An array of shape self.shape + (variable_size,)
-                An array containing evidence for all the variables
+            evidence: A mapping from keys to np.ndarrays of evidence for that particular
+                key
 
         Returns:
             a dictionary mapping all possible variables to the corresponding evidence
+
+        Raises:
+            ValueError: if a key has not previously been added to this VariableGroup, or
+                if any evidence array is of the wrong shape.
         """
         vars_to_evidence = {}
         for key in evidence:
@@ -328,10 +335,10 @@ class GenericVariableGroup(VariableGroup):
                     f"The evidence is referring to a non-existent variable {key}."
                 )
 
-            if evidence[key].shape != (self._keys_to_vars[key].num_states,):
+            if evidence[key].shape != (self.variable_size,):
                 raise ValueError(
                     f"Variable {key} expect an evidence array of shape "
-                    f"({(self._keys_to_vars[key].num_states,)})."
+                    f"({(self.variable_size,)})."
                     f"Got {evidence[key].shape}."
                 )
 

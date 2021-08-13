@@ -112,7 +112,7 @@ additional_keys_group = groups.GenericVariableGroup(3, additional_keys)
 
 # Combine these two VariableGroups into one CompositeVariableGroup
 composite_grid_group = groups.CompositeVariableGroup(
-    dict(grid_vars=grid_vars_group, additional_vars=additional_keys_group)
+    {"grid_vars": grid_vars_group, "additional_vars": additional_keys_group}
 )
 
 
@@ -158,12 +158,12 @@ for i in range(2):
 # %%
 # Create the factor graph
 fg = graph.FactorGraph(
-    variable_groups=(grid_vars_group, additional_keys_group),
+    variable_groups=composite_grid_group,
 )
 
 # Set the evidence
-fg.update_evidence(grid_vars_group, grid_evidence_arr)
-fg.update_evidence(additional_keys_group, additional_vars_evidence_dict)
+fg.update_evidence(tuple(["grid_vars"]), grid_evidence_arr)
+fg.update_evidence(tuple(["additional_vars"]), additional_vars_evidence_dict)
 
 
 # %% [markdown]
@@ -276,9 +276,6 @@ for row in range(M - 1):
                     ("additional_vars", 1, row + 1, col),
                 ]
             )
-four_factors_group = groups.EnumerationFactorGroup(
-    composite_grid_group, four_factor_keys, valid_configs_non_supp
-)
 
 
 # Create an EnumerationFactorGroup for vertical suppression factors
@@ -299,9 +296,6 @@ for col in range(N):
                     for r in range(start_row, start_row + SUPPRESSION_DIAMETER)
                 ]
             )
-vert_suppression_group = groups.EnumerationFactorGroup(
-    composite_grid_group, vert_suppression_keys, valid_configs_supp
-)
 
 
 horz_suppression_keys: List[List[Tuple[Any, ...]]] = []
@@ -330,9 +324,23 @@ horz_suppression_group = groups.EnumerationFactorGroup(
 # ### Add FactorGroups to FactorGraph
 
 # %%
-fg.add_factor_groups(
-    (four_factors_group, vert_suppression_group, horz_suppression_group)
-)
+# use this kwargs dict for 4 factors
+four_factors_kwargs = {
+    "connected_variables": four_factor_keys,
+    "factor_configs": valid_configs_non_supp,
+}
+vert_suppression_kwargs = {
+    "connected_variables": vert_suppression_keys,
+    "factor_configs": valid_configs_supp,
+}
+horz_suppression_kwargs = {
+    "connected_variables": horz_suppression_keys,
+    "factor_configs": valid_configs_supp,
+}
+
+fg.add_factors(None, groups.EnumerationFactorGroup, four_factors_kwargs)
+fg.add_factors(None, groups.EnumerationFactorGroup, vert_suppression_kwargs)
+fg.add_factors(None, groups.EnumerationFactorGroup, horz_suppression_kwargs)
 
 # %% [markdown]
 # ## Belief Propagation

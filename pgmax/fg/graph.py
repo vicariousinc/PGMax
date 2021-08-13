@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Dict, List, Mapping, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, List, Mapping, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -10,6 +10,8 @@ import numpy as np
 
 from pgmax.bp import infer
 from pgmax.fg import fg_utils, groups, nodes
+
+from typing import Optional  # isort:skip
 
 
 @dataclass
@@ -76,35 +78,36 @@ class FactorGraph:
 
         self._factors: List[nodes.EnumerationFactor] = []
 
-    def add_factors(self, new_factors: Sequence[nodes.EnumerationFactor]) -> None:
+    def add_factors(
+        self,
+        variable_group_key: Optional[Tuple[Any, ...]],
+        FactorFactory: Callable,
+        kwargs: Dict[str, Any],
+    ) -> None:
         """Function to add factors to this FactorGraph.
 
         Args:
-            new_factors: a sequence of factors to be added to the graph
+            variable_group_key: tuple that represents the index into the CompositeVariableGroup
+                (self._comp_var_group) that is created when the FactorGraph is instantiated.
+            FactorFactory: a callable class definition. This class must be a sub-class of FactorGroup
+                and contain a string key for every keyword argument (EXCEPT the variable_group keyword)
+                that might be necessary to instantiate this class.
+            kwargs: a dictionary of keyword args
 
         Raises:
             ValueError: if new_factors is empty
         """
-
-        if len(new_factors) == 0:
-            raise ValueError("No Factors or FactorGroups to add!")
-        self._factors.extend(new_factors)
-
-    def add_factor_groups(
-        self, new_factor_groups: Sequence[groups.FactorGroup]
-    ) -> None:
-        """Function to add FactorGroups to this FactorGraph.
-
-        Args:
-            new_factor_groups: a sequence of FactorGroups to be added to the graph
-
-        Raises:
-            ValueError: if new_factor_groups is empty
-        """
-        if len(new_factor_groups) == 0:
-            raise ValueError("No Factors or FactorGroups to add!")
-        for factor_group in new_factor_groups:
-            self._factors.extend(factor_group.factors)
+        if variable_group_key is None:
+            variable_group = self._comp_var_group
+        else:
+            variable_group = self._comp_var_group[variable_group_key]
+        kwargs["variable_group"] = variable_group
+        new_factor = FactorFactory(**kwargs)
+        if not isinstance(new_factor, groups.FactorGroup):
+            raise ValueError(
+                f"The FactorFactory did not instantiate a subclass of FactorGroup as expected. Instead, the class was {type(new_factor)}"
+            )
+        self._factors.extend(new_factor.factors)
 
     @property
     def curr_wiring(self) -> nodes.EnumerationWiring:
@@ -135,7 +138,7 @@ class FactorGraph:
             [factor.factor_configs_log_potentials for factor in self._factors]
         )
 
-    def get_curr_evidence(self, evidence_default_mode) -> np.ndarray:
+    def get_curr_evidence(self, evidence_default_mode: str) -> np.ndarray:
         """Function to generate evidence array. Need to be overwritten for concrete factor graphs
 
         Args:
@@ -187,70 +190,39 @@ class FactorGraph:
 
     def update_evidence(
         self,
-        variable_group_id: Tuple[Any, ...],
-        evidence_values: Union[Dict[Any, np.ndarray], np.ndarray],
+        key: Tuple[Any, ...],
+        evidence: Union[Dict[Any, np.ndarray], np.ndarray],
     ):
         """Function to update the evidence for variables in the FactorGraph.
 
         Args:
-            variable_group_id: tuple that represents the index into the CompositeVariableGroup
-                (self._comp_var_group) that is created when the FactorGraph is instantiated.
-            evidence_values: a container for np.ndarrays representing the evidence
+            key: tuple that represents the index into the CompositeVariableGroup
+                (self._comp_var_group) that is created when the FactorGraph is instantiated. Note that
+                this can be an index referring to an entire VariableGroup (in which case, the evidence
+                is set for the entire VariableGroup at once), or to an individual Variable within the
+                CompositeVariableGroup.
+            evidence: a container for np.ndarrays representing the evidence
                 Currently supported containers are:
-                - an np.ndarray: if variable_group is of type NDVariableArray, then evidence_values
+                - an np.ndarray: if key indexes an NDVariableArray, then evidence_values
                 can simply be an np.ndarray with num_var_array_dims + 1 dimensions where
                 num_var_array_dims is the number of dimensions of the NDVariableArray, and the
                 +1 represents a dimension (that should be the final dimension) for the evidence.
                 Note that the size of the final dimension should be the same as
-                variable_group.variable_size.
-                - a dictionary: if variable_group is of type GenericVariableGroup, then evidence_values
+                variable_group.variable_size. if key indexes a particular variable, then this array
+                must be of the same size as variable.num_states
+                - a dictionary: if key indexes a GenericVariableGroup, then evidence_values
                 must be a dictionary mapping keys of variable_group to np.ndarrays of evidence values.
                 Note that each np.ndarray in the dictionary values must have the same size as
                 variable_group.variable_size.
-
-        Raises:
-            ValueError:
-                - or if variable_group is an NDVariableArray and:
-                    - evidence_values is anything other than an np.ndarray or
-                    - the dimensions of evidence_values aren't num_var_array_dims + 1 or
-                    - the last dimension of evidence_values doesn't have the same size as
-                    variable_group.variable_size,
-                - or if variable_group is a GenericVariableGroup and:
-                    - evidence_values is not a dictionary or
-                    - there is a value in the evidence_values dictionary with array size that's
-                    not the same as variable_group.variable_size
-            NotImplementedError: if variable_group is neither a NDVariableArray or GenericVariableGroup
         """
-        variable_group = self._comp_var_group[variable_group_id]
-        if isinstance(variable_group, groups.NDVariableArray):
-            if not isinstance(evidence_values, np.ndarray):
-                raise ValueError(
-                    "Expected np.ndarray of evidence_values for variable_group of type NDVariableArray"
+        if key in self._comp_var_group.container_keys:
+            self._vars_to_evidence.update(
+                self._comp_var_group.variable_group_container[key].get_vars_to_evidence(
+                    evidence
                 )
-            if evidence_values.shape != variable_group.shape + tuple(
-                [variable_group.variable_size]
-            ):
-                raise ValueError(
-                    f"Expected evidence values to have shape {variable_group.shape + tuple([variable_group.variable_size])}"
-                    + f" instead, got {evidence_values.shape}"
-                )
-            for idx, _ in np.ndenumerate(evidence_values[..., 0]):
-                self._vars_to_evidence[variable_group[idx]] = evidence_values[idx]
-
-        elif isinstance(variable_group, groups.GenericVariableGroup):
-            if not isinstance(evidence_values, Dict):
-                raise ValueError(
-                    "Expected dict of evidence_values for variable_group of type NDVariableArray"
-                )
-            for idx, evidence_val in evidence_values.items():
-                if evidence_val.shape != (variable_group.variable_size,):
-                    raise ValueError(
-                        f"evidence_values contains a value of shape {evidence_val.shape}, but expected shape {(variable_group.variable_size,)}"
-                    )
-                self._vars_to_evidence[variable_group[idx]] = evidence_val
-
+            )
         else:
-            raise NotImplementedError
+            self._vars_to_evidence[self._comp_var_group[key]] = evidence
 
     def run_bp(
         self,
