@@ -245,8 +245,8 @@ def test_e2e_sanity_check():
     )
 
     # Set the evidence
-    fg.update_evidence("grid_vars", grid_evidence_arr)
-    fg.update_evidence("additional_vars", additional_vars_evidence_dict)
+    fg.set_evidence("grid_vars", grid_evidence_arr)
+    fg.set_evidence("additional_vars", additional_vars_evidence_dict)
 
     # Create an EnumerationFactorGroup for four factors
     four_factor_keys: List[List[Tuple[Any, ...]]] = []
@@ -327,25 +327,26 @@ def test_e2e_sanity_check():
                 )
 
     # Make kwargs dicts
+    # use this kwargs dict for 4 factors
     four_factors_kwargs = {
-        "connected_variables": four_factor_keys,
+        "connected_var_keys": four_factor_keys,
         "factor_configs": valid_configs_non_supp,
     }
     vert_suppression_kwargs = {
-        "connected_variables": vert_suppression_keys,
+        "connected_var_keys": vert_suppression_keys,
         "factor_configs": valid_configs_supp,
     }
     horz_suppression_kwargs = {
-        "connected_variables": horz_suppression_keys,
+        "connected_var_keys": horz_suppression_keys,
         "factor_configs": valid_configs_supp,
     }
 
-    fg.add_factors(None, groups.EnumerationFactorGroup, four_factors_kwargs)
-    fg.add_factors(None, groups.EnumerationFactorGroup, vert_suppression_kwargs)
-    fg.add_factors(None, groups.EnumerationFactorGroup, horz_suppression_kwargs)
+    fg.add_factors(four_factors_kwargs)
+    fg.add_factors(vert_suppression_kwargs)
+    fg.add_factors(horz_suppression_kwargs)
 
     # Run BP
     final_msgs = fg.run_bp(1000, 0.5)
 
     # Test that the output messages are close to the true messages
-    assert jnp.allclose(final_msgs, true_final_msgs_output)
+    assert jnp.allclose(final_msgs, true_final_msgs_output, atol=1e-06)

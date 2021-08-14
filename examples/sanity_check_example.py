@@ -162,8 +162,8 @@ fg = graph.FactorGraph(
 )
 
 # Set the evidence
-fg.update_evidence("grid_vars", grid_evidence_arr)
-fg.update_evidence("additional_vars", additional_vars_evidence_dict)
+fg.set_evidence("grid_vars", grid_evidence_arr)
+fg.set_evidence("additional_vars", additional_vars_evidence_dict)
 
 
 # %% [markdown]
@@ -326,21 +326,21 @@ horz_suppression_group = groups.EnumerationFactorGroup(
 # %%
 # use this kwargs dict for 4 factors
 four_factors_kwargs = {
-    "connected_variables": four_factor_keys,
+    "connected_var_keys": four_factor_keys,
     "factor_configs": valid_configs_non_supp,
 }
 vert_suppression_kwargs = {
-    "connected_variables": vert_suppression_keys,
+    "connected_var_keys": vert_suppression_keys,
     "factor_configs": valid_configs_supp,
 }
 horz_suppression_kwargs = {
-    "connected_variables": horz_suppression_keys,
+    "connected_var_keys": horz_suppression_keys,
     "factor_configs": valid_configs_supp,
 }
 
-fg.add_factors(None, groups.EnumerationFactorGroup, four_factors_kwargs)
-fg.add_factors(None, groups.EnumerationFactorGroup, vert_suppression_kwargs)
-fg.add_factors(None, groups.EnumerationFactorGroup, horz_suppression_kwargs)
+fg.add_factors(four_factors_kwargs)
+fg.add_factors(vert_suppression_kwargs)
+fg.add_factors(horz_suppression_kwargs)
 
 # %% [markdown]
 # ## Belief Propagation

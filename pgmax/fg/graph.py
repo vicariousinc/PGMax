@@ -11,8 +11,6 @@ import numpy as np
 from pgmax.bp import infer
 from pgmax.fg import fg_utils, groups, nodes
 
-from typing import Optional  # isort:skip
-
 
 @dataclass
 class FactorGraph:
@@ -29,9 +27,11 @@ class FactorGraph:
             For a sequence, the indices of the sequence are used to index the variable groups.
             Note that a CompositeVariableGroup will be created from this input, and the individual
             VariableGroups will need to be accessed by indexing this.
+        evidence_default: string representing a setting that specifies the default evidence value for
+            any variable whose evidence was not explicitly specified using 'set_evidence'
 
     Attributes:
-        _comp_var_group: CompositeVariableGroup. contains all involved VariableGroups
+        _composite_variable_group: CompositeVariableGroup. contains all involved VariableGroups
         _factors: list. contains all involved factors
         num_var_states: int. represents the sum of all variable states of all variables in the
             FactorGraph
@@ -49,18 +49,26 @@ class FactorGraph:
         Sequence[groups.VariableGroup],
         groups.VariableGroup,
     ]
+    evidence_default_mode: str = "zero"
 
     def __post_init__(self):
         if isinstance(self.variable_groups, groups.CompositeVariableGroup):
-            self._comp_var_group = self.variable_groups
+            self._composite_variable_group = self.variable_groups
         elif isinstance(self.variable_groups, groups.VariableGroup):
-            self._comp_var_group = groups.CompositeVariableGroup([self.variable_groups])
+            self._composite_variable_group = groups.CompositeVariableGroup(
+                [self.variable_groups]
+            )
         else:
-            self._comp_var_group = groups.CompositeVariableGroup(self.variable_groups)
+            self._composite_variable_group = groups.CompositeVariableGroup(
+                self.variable_groups
+            )
 
         vars_num_states_cumsum = np.insert(
             np.array(
-                [variable.num_states for variable in self._comp_var_group.variables],
+                [
+                    variable.num_states
+                    for variable in self._composite_variable_group.variables
+                ],
                 dtype=int,
             ).cumsum(),
             0,
@@ -69,7 +77,7 @@ class FactorGraph:
         self._vars_to_starts = MappingProxyType(
             {
                 variable: vars_num_states_cumsum[vv]
-                for vv, variable in enumerate(self._comp_var_group.variables)
+                for vv, variable in enumerate(self._composite_variable_group.variables)
             }
         )
         self.num_var_states = vars_num_states_cumsum[-1]
@@ -80,30 +88,24 @@ class FactorGraph:
 
     def add_factors(
         self,
-        variable_group_key: Optional[Tuple[Any, ...]],
-        FactorFactory: Callable,
         kwargs: Dict[str, Any],
+        factor_factory: Callable = groups.EnumerationFactorGroup,
     ) -> None:
         """Function to add factors to this FactorGraph.
 
         Args:
-            variable_group_key: optional tuple that represents the index into the CompositeVariableGroup
-                (self._comp_var_group) that is created when the FactorGraph is instantiated. If this is
-                set to None, then it is assumed that the entire CompositeVariableGroup is being indexed.
-            FactorFactory: a callable class definition. This class must be a sub-class of FactorGroup
+            kwargs: a dictionary of keyword args to be used to instantiate a particular FactorGroup
+            factor_factory: a callable class definition. This class must be a sub-class of FactorGroup
                 and contain a string key for every keyword argument (EXCEPT the variable_group keyword)
-                that might be necessary to instantiate this class.
-            kwargs: a dictionary of keyword args
+                that might be necessary to instantiate this class. It is assumed that the VariableGroup
+                to be indexed is the CompositeVariableGroup created from all the VariableGroups passed into
+                this class upon instantiation. By default, this will be an EnumerationFactorGroup class
 
         Raises:
-            ValueError: if new_factors is empty
+            ValueError: if factor_factory is not a subclass of FactorGroup
         """
-        if variable_group_key is None:
-            variable_group = self._comp_var_group
-        else:
-            variable_group = self._comp_var_group[variable_group_key]
-        kwargs["variable_group"] = variable_group
-        new_factor = FactorFactory(**kwargs)
+        kwargs["variable_group"] = self._composite_variable_group
+        new_factor = factor_factory(**kwargs)
         if not isinstance(new_factor, groups.FactorGroup):
             raise ValueError(
                 f"The FactorFactory did not instantiate a subclass of FactorGroup as expected. Instead, the class was {type(new_factor)}"
@@ -111,7 +113,7 @@ class FactorGraph:
         self._factors.extend(new_factor.factors)
 
     @property
-    def curr_wiring(self) -> nodes.EnumerationWiring:
+    def wiring(self) -> nodes.EnumerationWiring:
         """Function to compile wiring for belief propagation.
 
         If wiring has already beeen compiled, do nothing.
@@ -126,7 +128,7 @@ class FactorGraph:
         return wiring
 
     @property
-    def curr_factor_configs_log_potentials(self) -> np.ndarray:
+    def factor_configs_log_potentials(self) -> np.ndarray:
         """Function to compile potential array for belief propagation..
 
         If potential array has already beeen compiled, do nothing.
@@ -139,37 +141,32 @@ class FactorGraph:
             [factor.factor_configs_log_potentials for factor in self._factors]
         )
 
-    def get_curr_evidence(self, evidence_default_mode: str) -> np.ndarray:
+    @property
+    def evidence(self) -> np.ndarray:
         """Function to generate evidence array. Need to be overwritten for concrete factor graphs
-
-        Args:
-            evidence_default: a string representing a setting that specifies the default evidence value for any variable
-                whose evidence was not explicitly specified using 'update_evidence'. Currently, the following modes are
-                implemented
-                - 'zeros': set unspecified nodes to 0
 
         Returns:
             Array of shape (num_var_states,) representing the flattened evidence for each variable
 
         Raises:
-            NotImplementedError: if evidence_default is a string that is not listed
+            NotImplementedError: if self.evidence_default is a string that is not listed
         """
         evidence = np.zeros(self.num_var_states)
 
-        for var in self._comp_var_group.variables:
+        for var in self._composite_variable_group.variables:
             start_index = self._vars_to_starts[var]
             if self._vars_to_evidence.get(var) is not None:
                 evidence[
                     start_index : start_index + var.num_states
                 ] = self._vars_to_evidence[var]
             else:
-                if evidence_default_mode == "zeros":
+                if self.evidence_default_mode == "zeros":
                     evidence[start_index : start_index + var.num_states] = np.zeros(
                         var.num_states
                     )
                 else:
                     raise NotImplementedError(
-                        f"evidence_default_mode {evidence_default_mode} is not yet implemented"
+                        f"evidence_default_mode {self.evidence_default_mode} is not yet implemented"
                     )
 
         return evidence
@@ -187,9 +184,9 @@ class FactorGraph:
             array of shape (num_edge_state,) representing initialized factor to variable
                 messages
         """
-        return jnp.zeros(self.curr_wiring.var_states_for_edges.shape[0])
+        return jnp.zeros(self.wiring.var_states_for_edges.shape[0])
 
-    def update_evidence(
+    def set_evidence(
         self,
         key: Union[Tuple[Any, ...], Any],
         evidence: Union[Dict[Any, np.ndarray], np.ndarray],
@@ -198,7 +195,7 @@ class FactorGraph:
 
         Args:
             key: tuple that represents the index into the CompositeVariableGroup
-                (self._comp_var_group) that is created when the FactorGraph is instantiated. Note that
+                (self._composite_variable_group) that is created when the FactorGraph is instantiated. Note that
                 this can be an index referring to an entire VariableGroup (in which case, the evidence
                 is set for the entire VariableGroup at once), or to an individual Variable within the
                 CompositeVariableGroup.
@@ -216,14 +213,14 @@ class FactorGraph:
                 Note that each np.ndarray in the dictionary values must have the same size as
                 variable_group.variable_size.
         """
-        if key in self._comp_var_group.container_keys:
+        if key in self._composite_variable_group.container_keys:
             self._vars_to_evidence.update(
-                self._comp_var_group.variable_group_container[key].get_vars_to_evidence(
-                    evidence
-                )
+                self._composite_variable_group.variable_group_container[
+                    key
+                ].get_vars_to_evidence(evidence)
             )
         else:
-            self._vars_to_evidence[self._comp_var_group[key]] = evidence
+            self._vars_to_evidence[self._composite_variable_group[key]] = evidence
 
     def run_bp(
         self,
@@ -231,7 +228,6 @@ class FactorGraph:
         damping_factor: float,
         init_msgs: jnp.ndarray = None,
         msgs_context: Any = None,
-        evidence_default_mode: str = "zero",
     ) -> jnp.ndarray:
         """Function to perform belief propagation.
 
@@ -244,8 +240,6 @@ class FactorGraph:
             init_msgs: array of shape (num_edge_state,) representing the initial messaged on which to perform
                 belief propagation. If this argument is none, messages are generated by calling self.get_init_msgs()
             msgs_context: Optional context for initializing messages
-            evidence_default: a string representing a setting that specifies the default evidence value for any variable
-                whose evidence was not explicitly specified using 'update_evidence'
 
         Returns:
             an array of shape (num_edge_state,) that contains the message values after running BP for num_iters iterations
@@ -257,10 +251,10 @@ class FactorGraph:
         else:
             msgs = self.get_init_msgs(msgs_context)
 
-        wiring = jax.device_put(self.curr_wiring)
-        evidence = jax.device_put(self.get_curr_evidence(evidence_default_mode))
+        wiring = jax.device_put(self.wiring)
+        evidence = jax.device_put(self.evidence)
         factor_configs_log_potentials = jax.device_put(
-            self.curr_factor_configs_log_potentials
+            self.factor_configs_log_potentials
         )
         # evidence = self.get_evidence(evidence_data, evidence_context)
         max_msg_size = int(jnp.max(wiring.edges_num_states))
@@ -303,9 +297,7 @@ class FactorGraph:
 
         return msgs_after_bp
 
-    def decode_map_states(
-        self, msgs: jnp.ndarray, evidence_default_mode: str = "zero"
-    ) -> Dict[nodes.Variable, int]:
+    def decode_map_states(self, msgs: jnp.ndarray) -> Dict[nodes.Variable, int]:
         """Function to computes the output of MAP inference on input messages.
 
         The final states are computed based on evidence obtained from the self.get_evidence
@@ -315,17 +307,17 @@ class FactorGraph:
             msgs: an array of shape (num_edge_state,) that correspond to messages to perform inference
                 upon
             evidence_default: a string representing a setting that specifies the default evidence value for any variable
-                whose evidence was not explicitly specified using 'update_evidence'
+                whose evidence was not explicitly specified using 'set_evidence'
 
         Returns:
             a dictionary mapping variables to their MAP state
         """
-        var_states_for_edges = jax.device_put(self.curr_wiring.var_states_for_edges)
-        evidence = jax.device_put(self.get_curr_evidence(evidence_default_mode))
+        var_states_for_edges = jax.device_put(self.wiring.var_states_for_edges)
+        evidence = jax.device_put(self.evidence)
         final_var_states = evidence.at[var_states_for_edges].add(msgs)
         var_to_map_dict = {}
         final_var_states_np = np.array(final_var_states)
-        for var in self._comp_var_group.variables:
+        for var in self._composite_variable_group.variables:
             start_index = self._vars_to_starts[var]
             var_to_map_dict[var] = np.argmax(
                 final_var_states_np[start_index : start_index + var.num_states]

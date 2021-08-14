@@ -360,16 +360,16 @@ class FactorGroup:
             neighboring a particular factor to be added.
 
     Raises:
-        ValueError: if the connected_variables() method returns an empty list
+        ValueError: if connected_var_keys is an empty list
     """
 
     variable_group: Union[CompositeVariableGroup, VariableGroup]
-    connected_variables: List[List[Tuple[Any, ...]]]
+    connected_var_keys: List[List[Tuple[Any, ...]]]
 
     def __post_init__(self) -> None:
         """Initializes a tuple of all the factors contained within this FactorGroup."""
-        if len(self.connected_variables) == 0:
-            raise ValueError("The list returned by self.connected_variables() is empty")
+        if len(self.connected_var_keys) == 0:
+            raise ValueError("self.connected_var_keys is empty")
 
     @cached_property
     def factors(self) -> Tuple[nodes.EnumerationFactor, ...]:
@@ -397,8 +397,6 @@ class EnumerationFactorGroup(FactorGroup):
             If none, it is assumed the log potential is uniform 0 and such an array is automatically
             initialized.
 
-    Raises:
-        ValueError: if the connected_variables() method returns an empty list
     """
 
     factor_configs: np.ndarray
@@ -422,7 +420,7 @@ class EnumerationFactorGroup(FactorGroup):
                     self.factor_configs,
                     factor_configs_log_potentials,
                 )
-                for keys_list in self.connected_variables
+                for keys_list in self.connected_var_keys
             ]
         )
 
@@ -440,27 +438,25 @@ class PairwiseFactorGroup(FactorGroup):
     Args:
         log_potential_matrix: array of shape (var1.variable_size, var2.variable_size),
             where var1 and var2 are the 2 VariableGroups (that may refer to the same
-            VariableGroup) whose keys are present in each sub-list of the list returned by
-            the connected_variables() method.
+            VariableGroup) whose keys are present in each sub-list from self.connected_var_keys.
 
     Attributes:
         factors: a tuple of all the factors belonging to this group. These are constructed
-            internally by invoking the connected_variables() method.
+            internally using self.connected_var_keys
         factor_configs_log_potentials: array of shape (num_val_configs,), where
             num_val_configs = var1.variable_size* var2.variable_size. This flattened array
             contains the log of the potential value for every possible configuration.
 
     Raises:
-        ValueError: if the connected_variables() method returns an empty list or if every sub-list within the
-            list returned by connected_variables() has len != 2, or if the shape of the log_potential_matrix
-            is not the same as the variable sizes for each variable referenced in each sub-list of the list
-            returned by connected_variables()
+        ValueError: if every sub-list within self.connected_var_keys has len != 2, or if the shape of the
+            log_potential_matrix is not the same as the variable sizes for each variable referenced in
+            each sub-list of self.connected_var_keys
     """
 
     log_potential_matrix: np.ndarray
 
     def __post_init__(self) -> None:
-        for fac_list in self.connected_variables:
+        for fac_list in self.connected_var_keys:
             if len(fac_list) != 2:
                 raise ValueError(
                     "All pairwise factors should connect to exactly 2 variables. Got a factor connecting to"
@@ -476,7 +472,7 @@ class PairwiseFactorGroup(FactorGroup):
                 raise ValueError(
                     "self.log_potential_matrix must have shape"
                     + f"{(self.variable_group[fac_list[0]].num_states, self.variable_group[fac_list[1]].num_states)} "
-                    + f"based on the return value of self.connected_variables(). Instead, it has shape {self.log_potential_matrix.shape}"
+                    + f"based on self.connected_var_keys. Instead, it has shape {self.log_potential_matrix.shape}"
                 )
 
     @cached_property
@@ -498,6 +494,6 @@ class PairwiseFactorGroup(FactorGroup):
                     factor_configs,
                     factor_configs_log_potentials,
                 )
-                for keys_list in self.connected_variables
+                for keys_list in self.connected_var_keys
             ]
         )
