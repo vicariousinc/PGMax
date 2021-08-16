@@ -328,22 +328,21 @@ def test_e2e_sanity_check():
 
     # Make kwargs dicts
     # use this kwargs dict for 4 factors
-    four_factors_kwargs = {
-        "connected_var_keys": four_factor_keys,
-        "factor_configs": valid_configs_non_supp,
-    }
-    vert_suppression_kwargs = {
-        "connected_var_keys": vert_suppression_keys,
-        "factor_configs": valid_configs_supp,
-    }
-    horz_suppression_kwargs = {
-        "connected_var_keys": horz_suppression_keys,
-        "factor_configs": valid_configs_supp,
-    }
-
-    fg.add_factors(four_factors_kwargs)
-    fg.add_factors(vert_suppression_kwargs)
-    fg.add_factors(horz_suppression_kwargs)
+    fg.add_factors(
+        factor_factory=groups.EnumerationFactorGroup,
+        connected_var_keys=four_factor_keys,
+        factor_configs=valid_configs_non_supp,
+    )
+    fg.add_factors(
+        factor_factory=groups.EnumerationFactorGroup,
+        connected_var_keys=vert_suppression_keys,
+        factor_configs=valid_configs_supp,
+    )
+    fg.add_factors(
+        factor_factory=groups.EnumerationFactorGroup,
+        connected_var_keys=horz_suppression_keys,
+        factor_configs=valid_configs_supp,
+    )
 
     # Run BP
     final_msgs = fg.run_bp(1000, 0.5)

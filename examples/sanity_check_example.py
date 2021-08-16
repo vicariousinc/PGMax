@@ -236,46 +236,50 @@ valid_configs_supp = create_valid_suppression_config_arr(SUPPRESSION_DIAMETER)
 # ### Setup all Factors by creating FactorGroups
 
 # %%
-# Create an EnumerationFactorGroup for four factors
-four_factor_keys: List[List[Tuple[Any, ...]]] = []
+# Imperatively add EnumerationFactorGroups (each consisting of just one EnumerationFactor) to
+# the graph!
 for row in range(M - 1):
     for col in range(N - 1):
         if row != M - 2 and col != N - 2:
-            four_factor_keys.append(
+            curr_keys = [
                 [
                     ("grid_vars", 0, row, col),
                     ("grid_vars", 1, row, col),
                     ("grid_vars", 0, row, col + 1),
                     ("grid_vars", 1, row + 1, col),
                 ]
-            )
+            ]
         elif row != M - 2:
-            four_factor_keys.append(
+            curr_keys = [
                 [
                     ("grid_vars", 0, row, col),
                     ("grid_vars", 1, row, col),
                     ("additional_vars", 0, row, col + 1),
                     ("grid_vars", 1, row + 1, col),
                 ]
-            )
+            ]
+
         elif col != N - 2:
-            four_factor_keys.append(
+            curr_keys = [
                 [
                     ("grid_vars", 0, row, col),
                     ("grid_vars", 1, row, col),
                     ("grid_vars", 0, row, col + 1),
                     ("additional_vars", 1, row + 1, col),
                 ]
-            )
+            ]
+
         else:
-            four_factor_keys.append(
+            curr_keys = [
                 [
                     ("grid_vars", 0, row, col),
                     ("grid_vars", 1, row, col),
                     ("additional_vars", 0, row, col + 1),
                     ("additional_vars", 1, row + 1, col),
                 ]
-            )
+            ]
+
+        fg.add_factors(curr_keys, valid_configs_non_supp)
 
 
 # Create an EnumerationFactorGroup for vertical suppression factors
@@ -321,26 +325,19 @@ horz_suppression_group = groups.EnumerationFactorGroup(
 
 
 # %% [markdown]
-# ### Add FactorGroups to FactorGraph
+# ### Add FactorGroups Remaining to FactorGraph
 
 # %%
-# use this kwargs dict for 4 factors
-four_factors_kwargs = {
-    "connected_var_keys": four_factor_keys,
-    "factor_configs": valid_configs_non_supp,
-}
-vert_suppression_kwargs = {
-    "connected_var_keys": vert_suppression_keys,
-    "factor_configs": valid_configs_supp,
-}
-horz_suppression_kwargs = {
-    "connected_var_keys": horz_suppression_keys,
-    "factor_configs": valid_configs_supp,
-}
-
-fg.add_factors(four_factors_kwargs)
-fg.add_factors(vert_suppression_kwargs)
-fg.add_factors(horz_suppression_kwargs)
+fg.add_factors(
+    factor_factory=groups.EnumerationFactorGroup,
+    connected_var_keys=vert_suppression_keys,
+    factor_configs=valid_configs_supp,
+)
+fg.add_factors(
+    factor_factory=groups.EnumerationFactorGroup,
+    connected_var_keys=horz_suppression_keys,
+    factor_configs=valid_configs_supp,
+)
 
 # %% [markdown]
 # ## Belief Propagation

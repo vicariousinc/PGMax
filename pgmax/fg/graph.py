@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Callable, Dict, List, Mapping, Sequence, Tuple, Union
+from typing import Any, Dict, List, Mapping, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -49,7 +49,7 @@ class FactorGraph:
         Sequence[groups.VariableGroup],
         groups.VariableGroup,
     ]
-    evidence_default_mode: str = "zero"
+    evidence_default_mode: str = "zeros"
 
     def __post_init__(self):
         if isinstance(self.variable_groups, groups.CompositeVariableGroup):
@@ -88,29 +88,38 @@ class FactorGraph:
 
     def add_factors(
         self,
-        kwargs: Dict[str, Any],
-        factor_factory: Callable = groups.EnumerationFactorGroup,
+        *args,
+        **kwargs,
     ) -> None:
         """Function to add factors to this FactorGraph.
 
         Args:
-            kwargs: a dictionary of keyword args to be used to instantiate a particular FactorGroup
-            factor_factory: a callable class definition. This class must be a sub-class of FactorGroup
-                and contain a string key for every keyword argument (EXCEPT the variable_group keyword)
-                that might be necessary to instantiate this class. It is assumed that the VariableGroup
-                to be indexed is the CompositeVariableGroup created from all the VariableGroups passed into
-                this class upon instantiation. By default, this will be an EnumerationFactorGroup class
-
-        Raises:
-            ValueError: if factor_factory is not a subclass of FactorGroup
+            *args: optional sequence of arguments. If specified, and if there is no
+                "factor_factory" key specified as part of the **kwargs, then these args
+                are taken to specify the arguments to be used to instantiate an
+                EnumerationFactorGroup. If there is a "factor_factory" key, then these args
+                are taken to specify the arguments to be used to construct the class
+                specified by the "factor_factory" argument. Note that either *args or
+                **kwargs must be specified.
+            **kwargs: optional mapping of keyword arguments. If specified, and if there
+                is no "factor_factory" key specified as part of this mapping, then these
+                args are taken to specify the arguments to be used to instantiate an
+                EnumerationFactorGroup. If there is a "factor_factory" key, then these args
+                are taken to specify the arguments to be used to construct the class
+                specified by the "factor_factory" argument. Note that either *args or
+                **kwargs must be specified.
         """
-        kwargs["variable_group"] = self._composite_variable_group
-        new_factor = factor_factory(**kwargs)
-        if not isinstance(new_factor, groups.FactorGroup):
-            raise ValueError(
-                f"The FactorFactory did not instantiate a subclass of FactorGroup as expected. Instead, the class was {type(new_factor)}"
+        factor_factory = kwargs.pop("factor_factory", None)
+        if factor_factory is not None:
+            factor_group = factor_factory(
+                self._composite_variable_group, *args, **kwargs
             )
-        self._factors.extend(new_factor.factors)
+        else:
+            factor_group = groups.EnumerationFactorGroup(
+                self._composite_variable_group, *args, **kwargs
+            )
+
+        self._factors.extend(factor_group.factors)
 
     @property
     def wiring(self) -> nodes.EnumerationWiring:
@@ -151,23 +160,18 @@ class FactorGraph:
         Raises:
             NotImplementedError: if self.evidence_default is a string that is not listed
         """
-        evidence = np.zeros(self.num_var_states)
+        if self.evidence_default_mode == "zeros":
+            evidence = np.zeros(self.num_var_states)
+        elif self.evidence_default_mode == "random":
+            evidence = np.random.rand(self.num_var_states)
+        else:
+            raise NotImplementedError(
+                f"evidence_default_mode {self.evidence_default_mode} is not yet implemented"
+            )
 
-        for var in self._composite_variable_group.variables:
+        for var, evidence_val in self._vars_to_evidence.items():
             start_index = self._vars_to_starts[var]
-            if self._vars_to_evidence.get(var) is not None:
-                evidence[
-                    start_index : start_index + var.num_states
-                ] = self._vars_to_evidence[var]
-            else:
-                if self.evidence_default_mode == "zeros":
-                    evidence[start_index : start_index + var.num_states] = np.zeros(
-                        var.num_states
-                    )
-                else:
-                    raise NotImplementedError(
-                        f"evidence_default_mode {self.evidence_default_mode} is not yet implemented"
-                    )
+            evidence[start_index : start_index + var.num_states] = evidence_val
 
         return evidence
 
@@ -256,7 +260,6 @@ class FactorGraph:
         factor_configs_log_potentials = jax.device_put(
             self.factor_configs_log_potentials
         )
-        # evidence = self.get_evidence(evidence_data, evidence_context)
         max_msg_size = int(jnp.max(wiring.edges_num_states))
 
         # Normalize the messages to ensure the maximum value is 0.
@@ -306,8 +309,6 @@ class FactorGraph:
         Args:
             msgs: an array of shape (num_edge_state,) that correspond to messages to perform inference
                 upon
-            evidence_default: a string representing a setting that specifies the default evidence value for any variable
-                whose evidence was not explicitly specified using 'set_evidence'
 
         Returns:
             a dictionary mapping variables to their MAP state
