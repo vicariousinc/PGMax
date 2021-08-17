@@ -23,7 +23,6 @@ import jax  # isort:skip
 import jax.numpy as jnp  # isort:skip
 from typing import Any, Tuple, List  # isort:skip
 from timeit import default_timer as timer  # isort:skip
-from dataclasses import dataclass  # isort:skip
 
 # Custom Imports
 import pgmax.fg.groups as groups  # isort:skip
@@ -31,44 +30,27 @@ import pgmax.fg.graph as graph  # isort:skip
 
 # fmt: on
 
+# %% [markdown]
+# # Setup Variables
+
 # %%
-# Instantiate all the Variables in the factor graph via VariableGroups
+# Define some global constants
 im_size = (30, 30)
 prng_key = jax.random.PRNGKey(42)
 
+# Instantiate all the Variables in the factor graph via VariableGroups
 pixel_vars = groups.NDVariableArray(3, im_size)
 hidden_vars = groups.NDVariableArray(
     17, (im_size[0] - 2, im_size[1] - 2)
 )  # Each hidden var is connected to a 3x3 patch of pixel vars
-composite_vargroup = groups.CompositeVariableGroup(
-    (pixel_vars, hidden_vars)
-)  # The 0 vs 1 key refers to the level of the VariableGroup in the hierarchy
+composite_vargroup = groups.CompositeVariableGroup((pixel_vars, hidden_vars))
 
-
-# %%
-@dataclass(frozen=True, eq=False)
-class BinaryFactorGroup(groups.PairwiseFactorGroup):
-    num_hidden_rows: int
-    num_hidden_cols: int
-    kernel_row: int
-    kernel_col: int
-
-    def connected_variables(self) -> List[List[Tuple[Any, ...]]]:
-        ret_list: List[List[Tuple[Any, ...]]] = []
-        for h_row in range(self.num_hidden_rows):
-            for h_col in range(self.num_hidden_cols):
-                ret_list.append(
-                    [
-                        (1, h_row, h_col),
-                        (0, h_row + self.kernel_row, h_col + self.kernel_col),
-                    ]
-                )
-        return ret_list
-
+# %% [markdown]
+# # Load Trained Weights And Setup Evidence
 
 # %%
 # Load weights and create evidence (taken directly from @lazarox's code)
-crbm_weights = np.load("crbm_mnist_weights_surfaces_pmap002.npz")
+crbm_weights = np.load("example_data/crbm_mnist_weights_surfaces_pmap002.npz")
 W_orig, bX, bH = crbm_weights["W"], crbm_weights["bX"], crbm_weights["bH"]
 n_samples = 1
 T = 1
@@ -95,11 +77,56 @@ rnH = jax.random.gumbel(
 )
 bHn = bH[None, :, :, :, :, None, None] + T * rnH
 
-# Create the evidence array by concatenating bXn and bHn
-# bXn_concat = bXn.reshape((3, 30, 30)).flatten("F")
-# bHn_concat = bHn.reshape((17, 28, 28)).flatten("F")
-# evidence = jnp.concatenate((bXn_concat, bHn_concat))
-# print(W_orig.shape)
+bXn_evidence = bXn.reshape((3, 30, 30))
+bXn_evidence = bXn_evidence.swapaxes(0, 1)
+bXn_evidence = bXn_evidence.swapaxes(1, 2)
+bHn_evidence = bHn.reshape((17, 28, 28))
+bHn_evidence = bHn_evidence.swapaxes(0, 1)
+bHn_evidence = bHn_evidence.swapaxes(1, 2)
+
+
+# %% [markdown]
+# # Create FactorGraph and Assign Evidence
+
+# %%
+# Create the factor graph
+fg = graph.FactorGraph((pixel_vars, hidden_vars))
+
+# Assign evidence to pixel vars
+fg.set_evidence(0, np.array(bXn_evidence))
+fg.set_evidence(1, np.array(bHn_evidence))
+
+
+# %% [markdown]
+# # Add all Factors to graph via constructing FactorGroups
+
+# %%
+def binary_connected_variables(
+    num_hidden_rows, num_hidden_cols, kernel_row, kernel_col
+):
+    ret_list: List[List[Tuple[Any, ...]]] = []
+    for h_row in range(num_hidden_rows):
+        for h_col in range(num_hidden_cols):
+            ret_list.append(
+                [
+                    (1, h_row, h_col),
+                    (0, h_row + kernel_row, h_col + kernel_col),
+                ]
+            )
+    return ret_list
+
+
+W_pot = W_orig.swapaxes(0, 1)
+for k_row in range(3):
+    for k_col in range(3):
+        fg.add_factors(
+            factor_factory=groups.PairwiseFactorGroup,
+            connected_var_keys=binary_connected_variables(28, 28, k_row, k_col),
+            log_potential_matrix=W_pot[:, :, k_row, k_col],
+        )
+
+# %% [markdown]
+# # Construct Initial Messages
 
 # %%
 
@@ -126,6 +153,9 @@ def custom_flatten_ordering(Mdown, Mup):
     return flattened_arr
 
 
+# NOTE: This block only works because it exploits knowledge about the order in which the flat message array is constructed within PGMax.
+# Normal users won't have this...
+
 # Create initial messages using bXn and bHn messages from
 # features to pixels (taken directly from @lazarox's code)
 rng, rng_input = jax.random.split(rng)
@@ -135,7 +165,6 @@ Mdown = jnp.zeros(
 Mup = jnp.zeros(
     (n_samples, 1, n_cat_H, f_s, f_s, im_height - f_s + 1, im_width - f_s + 1)
 )
-# Make beliefs zero initially (seems critical for low energy solution)
 Mdown = Mdown - bXn[:, :, :, :, :, 1:-1, 1:-1] / f_s ** 2
 Mup = Mup - bHn / f_s ** 2
 
@@ -150,72 +179,15 @@ init_msgs = jax.device_put(
     custom_flatten_ordering(np.array(reshaped_Mdown), np.array(reshaped_Mup))
 )
 
-# %%
-W_pot = W_orig.swapaxes(0, 1)
-binary_factor_group_list: List[BinaryFactorGroup] = []
-for k_row in range(3):
-    for k_col in range(3):
-        binary_factor_group_list.append(
-            BinaryFactorGroup(
-                variable_group=composite_vargroup,
-                num_hidden_rows=28,
-                num_hidden_cols=28,
-                kernel_row=k_row,
-                kernel_col=k_col,
-                log_potential_matrix=W_pot[:, :, k_row, k_col],
-            )
-        )
-
+# %% [markdown]
+# # Run Belief Propagation and Retrieve MAP Estimate
 
 # %%
-class ConcreteHereticGraph(graph.FactorGraph):
-    def get_evidence(self, data: Any = None, context: Any = None) -> jnp.ndarray:
-        """Function to generate evidence array. Need to be overwritten for concrete factor graphs
-
-        Args:
-            data: Data for generating evidence
-            context: Optional context for generating evidence
-
-        Returns:
-            Array of shape (num_var_states,) representing the flattened evidence for each variable
-        """
-        bXn, bHn = data  # type: ignore
-        evidence_arr = np.zeros(
-            self.num_var_states,
-        )
-        pixel_grid_shape, hidden_grid_shape, composite_vargroup = context  # type: ignore
-        for row in range(pixel_grid_shape[0]):
-            for col in range(pixel_grid_shape[1]):
-                curr_var = composite_vargroup[0, row, col]
-                evidence_arr[
-                    self._vars_to_starts[curr_var] : self._vars_to_starts[curr_var]
-                    + curr_var.num_states
-                ] = bXn[0, :, 0, 0, 0, row, col]
-        for row in range(hidden_grid_shape[0]):
-            for col in range(hidden_grid_shape[1]):
-                curr_var = composite_vargroup[1, row, col]
-                evidence_arr[
-                    self._vars_to_starts[curr_var] : self._vars_to_starts[curr_var]
-                    + curr_var.num_states
-                ] = bHn[0, 0, :, 0, 0, row, col]
-
-        return jax.device_put(evidence_arr)
-
-
-# %%
-# Create the factor graph
-fg_creation_start_time = timer()
-fg = ConcreteHereticGraph(tuple(binary_factor_group_list))
-fg_creation_end_time = timer()
-print(f"fg Creation time = {fg_creation_end_time - fg_creation_start_time}")
-
 # Run BP
 bp_start_time = timer()
 final_msgs = fg.run_bp(
     500,
     0.5,
-    evidence_data=(np.array(bXn), np.array(bHn)),
-    evidence_context=(im_size, (im_size[0] - 2, im_size[1] - 2), composite_vargroup),
     init_msgs=init_msgs,
 )
 bp_end_time = timer()
@@ -225,14 +197,15 @@ print(f"time taken for bp {bp_end_time - bp_start_time}")
 data_writeback_start_time = timer()
 map_message_dict = fg.decode_map_states(
     final_msgs,
-    evidence_data=(np.array(bXn), np.array(bHn)),
-    evidence_context=(im_size, (im_size[0] - 2, im_size[1] - 2), composite_vargroup),
 )
 data_writeback_end_time = timer()
 print(
     f"time taken for data conversion of inference result {data_writeback_end_time - data_writeback_start_time}"
 )
 
+
+# %% [markdown]
+# # Plot Results
 
 # %%
 # Viz function from @lazarox's code
