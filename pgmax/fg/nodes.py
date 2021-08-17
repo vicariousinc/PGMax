@@ -13,7 +13,12 @@ from pgmax import utils
 @dataclass(frozen=True, eq=False)
 class Variable:
     """Base class for variables.
-    Concrete variables can have additional associated meta information.
+    If desired, this can be sub-classed to add additional concrete
+    meta-information
+
+    Args:
+        num_states: an int representing the number of states this variable
+            has.
     """
 
     num_states: int
