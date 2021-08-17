@@ -242,44 +242,40 @@ for row in range(M - 1):
     for col in range(N - 1):
         if row != M - 2 and col != N - 2:
             curr_keys = [
-                [
-                    ("grid_vars", 0, row, col),
-                    ("grid_vars", 1, row, col),
-                    ("grid_vars", 0, row, col + 1),
-                    ("grid_vars", 1, row + 1, col),
-                ]
+                ("grid_vars", 0, row, col),
+                ("grid_vars", 1, row, col),
+                ("grid_vars", 0, row, col + 1),
+                ("grid_vars", 1, row + 1, col),
             ]
         elif row != M - 2:
             curr_keys = [
-                [
-                    ("grid_vars", 0, row, col),
-                    ("grid_vars", 1, row, col),
-                    ("additional_vars", 0, row, col + 1),
-                    ("grid_vars", 1, row + 1, col),
-                ]
+                ("grid_vars", 0, row, col),
+                ("grid_vars", 1, row, col),
+                ("additional_vars", 0, row, col + 1),
+                ("grid_vars", 1, row + 1, col),
             ]
 
         elif col != N - 2:
             curr_keys = [
-                [
-                    ("grid_vars", 0, row, col),
-                    ("grid_vars", 1, row, col),
-                    ("grid_vars", 0, row, col + 1),
-                    ("additional_vars", 1, row + 1, col),
-                ]
+                ("grid_vars", 0, row, col),
+                ("grid_vars", 1, row, col),
+                ("grid_vars", 0, row, col + 1),
+                ("additional_vars", 1, row + 1, col),
             ]
 
         else:
             curr_keys = [
-                [
-                    ("grid_vars", 0, row, col),
-                    ("grid_vars", 1, row, col),
-                    ("additional_vars", 0, row, col + 1),
-                    ("additional_vars", 1, row + 1, col),
-                ]
+                ("grid_vars", 0, row, col),
+                ("grid_vars", 1, row, col),
+                ("additional_vars", 0, row, col + 1),
+                ("additional_vars", 1, row + 1, col),
             ]
 
-        fg.add_factors(curr_keys, valid_configs_non_supp)
+        fg.add_factors(
+            curr_keys,
+            valid_configs_non_supp,
+            np.zeros(valid_configs_non_supp.shape[0], dtype=float),
+        )
 
 
 # Create an EnumerationFactorGroup for vertical suppression factors

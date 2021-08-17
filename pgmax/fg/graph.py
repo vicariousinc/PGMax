@@ -97,29 +97,34 @@ class FactorGraph:
             *args: optional sequence of arguments. If specified, and if there is no
                 "factor_factory" key specified as part of the **kwargs, then these args
                 are taken to specify the arguments to be used to instantiate an
-                EnumerationFactorGroup. If there is a "factor_factory" key, then these args
+                EnumerationFactor. If there is a "factor_factory" key, then these args
                 are taken to specify the arguments to be used to construct the class
                 specified by the "factor_factory" argument. Note that either *args or
                 **kwargs must be specified.
             **kwargs: optional mapping of keyword arguments. If specified, and if there
                 is no "factor_factory" key specified as part of this mapping, then these
                 args are taken to specify the arguments to be used to instantiate an
-                EnumerationFactorGroup. If there is a "factor_factory" key, then these args
+                EnumerationFactor. If there is a "factor_factory" key, then these args
                 are taken to specify the arguments to be used to construct the class
                 specified by the "factor_factory" argument. Note that either *args or
                 **kwargs must be specified.
         """
         factor_factory = kwargs.pop("factor_factory", None)
         if factor_factory is not None:
-            factor_group = factor_factory(
+            factors = factor_factory(
                 self._composite_variable_group, *args, **kwargs
-            )
+            ).factors
         else:
-            factor_group = groups.EnumerationFactorGroup(
-                self._composite_variable_group, *args, **kwargs
-            )
+            if len(args) > 0:
+                new_args = list(args)
+                new_args[0] = tuple(self._composite_variable_group[args[0]])
+                factors = [nodes.EnumerationFactor(*new_args, **kwargs)]
+            else:
+                keys = kwargs.pop("keys")
+                kwargs["variables"] = self._composite_variable_group[keys]
+                factors = [nodes.EnumerationFactor(**kwargs)]
 
-        self._factors.extend(factor_group.factors)
+        self._factors.extend(factors)
 
     @property
     def wiring(self) -> nodes.EnumerationWiring:
@@ -163,7 +168,7 @@ class FactorGraph:
         if self.evidence_default_mode == "zeros":
             evidence = np.zeros(self.num_var_states)
         elif self.evidence_default_mode == "random":
-            evidence = np.random.rand(self.num_var_states)
+            evidence = np.random.gumbel(self.num_var_states)
         else:
             raise NotImplementedError(
                 f"evidence_default_mode {self.evidence_default_mode} is not yet implemented"
