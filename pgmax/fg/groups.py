@@ -271,6 +271,9 @@ class NDVariableArray(VariableGroup):
 
         Returns:
             a dictionary mapping all possible variables to the corresponding evidence
+
+        Raises:
+            ValueError: if input evidence array is of the wrong shape
         """
         expected_shape = self.shape + (self.variable_size,)
         if not evidence.shape == expected_shape:
@@ -315,11 +318,15 @@ class GenericVariableGroup(VariableGroup):
         """Function that turns input evidence into a dictionary mapping variables to evidence.
 
         Args:
-            evidence: An array of shape self.shape + (variable_size,)
-                An array containing evidence for all the variables
+            evidence: A mapping from keys to np.ndarrays of evidence for that particular
+                key
 
         Returns:
             a dictionary mapping all possible variables to the corresponding evidence
+
+        Raises:
+            ValueError: if a key has not previously been added to this VariableGroup, or
+                if any evidence array is of the wrong shape.
         """
         vars_to_evidence = {}
         for key in evidence:
@@ -328,10 +335,10 @@ class GenericVariableGroup(VariableGroup):
                     f"The evidence is referring to a non-existent variable {key}."
                 )
 
-            if evidence[key].shape != (self._keys_to_vars[key].num_states,):
+            if evidence[key].shape != (self.variable_size,):
                 raise ValueError(
                     f"Variable {key} expect an evidence array of shape "
-                    f"({(self._keys_to_vars[key].num_states,)})."
+                    f"({(self.variable_size,)})."
                     f"Got {evidence[key].shape}."
                 )
 
@@ -348,33 +355,25 @@ class FactorGroup:
         variable_group: either a VariableGroup or - if the elements of more than one VariableGroup
             are connected to this FactorGroup - then a CompositeVariableGroup. This holds
             all the variables that are connected to this FactorGroup
+        connected_var_keys: A list of tuples of tuples, where each innermost tuple contains a
+            key variable_group. Each list within the outer list is taken to contain the keys of variables
+            neighboring a particular factor to be added.
 
     Raises:
-        ValueError: if the connected_variables() method returns an empty list
+        ValueError: if connected_var_keys is an empty list
     """
 
     variable_group: Union[CompositeVariableGroup, VariableGroup]
+    connected_var_keys: List[List[Tuple[Any, ...]]]
 
     def __post_init__(self) -> None:
         """Initializes a tuple of all the factors contained within this FactorGroup."""
-        connected_var_keys_for_factors = self.connected_variables()
-        if len(connected_var_keys_for_factors) == 0:
-            raise ValueError("The list returned by self.connected_variables() is empty")
+        if len(self.connected_var_keys) == 0:
+            raise ValueError("self.connected_var_keys is empty")
 
-    def connected_variables(
-        self,
-    ) -> List[List[Tuple[Any, ...]]]:
-        """Fuction to generate indices of variables neighboring a factor.
-
-        This function needs to be overridden by a concrete implementation of a factor group.
-
-        Returns:
-            A list of lists of tuples, where each tuple contains a key into a CompositeVariableGroup.
-                Each inner list represents a particular factor to be added.
-        """
-        raise NotImplementedError(
-            "Please subclass the FactorGroup class and override this method"
-        )
+    @cached_property
+    def factors(self) -> Tuple[nodes.EnumerationFactor, ...]:
+        raise NotImplementedError("Needs to be overriden by subclass")
 
 
 @dataclass(frozen=True, eq=False)
@@ -398,8 +397,6 @@ class EnumerationFactorGroup(FactorGroup):
             If none, it is assumed the log potential is uniform 0 and such an array is automatically
             initialized.
 
-    Raises:
-        ValueError: if the connected_variables() method returns an empty list
     """
 
     factor_configs: np.ndarray
@@ -407,7 +404,6 @@ class EnumerationFactorGroup(FactorGroup):
     @cached_property
     def factors(self) -> Tuple[nodes.EnumerationFactor, ...]:
         """Returns a tuple of all the factors contained within this FactorGroup."""
-        connected_var_keys_for_factors = self.connected_variables()
         if getattr(self, "factor_configs_log_potentials", None) is None:
             factor_configs_log_potentials = np.zeros(
                 self.factor_configs.shape[0], dtype=float
@@ -424,7 +420,7 @@ class EnumerationFactorGroup(FactorGroup):
                     self.factor_configs,
                     factor_configs_log_potentials,
                 )
-                for keys_list in connected_var_keys_for_factors
+                for keys_list in self.connected_var_keys
             ]
         )
 
@@ -442,28 +438,25 @@ class PairwiseFactorGroup(FactorGroup):
     Args:
         log_potential_matrix: array of shape (var1.variable_size, var2.variable_size),
             where var1 and var2 are the 2 VariableGroups (that may refer to the same
-            VariableGroup) whose keys are present in each sub-list of the list returned by
-            the connected_variables() method.
+            VariableGroup) whose keys are present in each sub-list from self.connected_var_keys.
 
     Attributes:
         factors: a tuple of all the factors belonging to this group. These are constructed
-            internally by invoking the connected_variables() method.
+            internally using self.connected_var_keys
         factor_configs_log_potentials: array of shape (num_val_configs,), where
             num_val_configs = var1.variable_size* var2.variable_size. This flattened array
             contains the log of the potential value for every possible configuration.
 
     Raises:
-        ValueError: if the connected_variables() method returns an empty list or if every sub-list within the
-            list returned by connected_variables() has len != 2, or if the shape of the log_potential_matrix
-            is not the same as the variable sizes for each variable referenced in each sub-list of the list
-            returned by connected_variables()
+        ValueError: if every sub-list within self.connected_var_keys has len != 2, or if the shape of the
+            log_potential_matrix is not the same as the variable sizes for each variable referenced in
+            each sub-list of self.connected_var_keys
     """
 
     log_potential_matrix: np.ndarray
 
     def __post_init__(self) -> None:
-        connected_var_keys_for_factors = self.connected_variables()
-        for fac_list in connected_var_keys_for_factors:
+        for fac_list in self.connected_var_keys:
             if len(fac_list) != 2:
                 raise ValueError(
                     "All pairwise factors should connect to exactly 2 variables. Got a factor connecting to"
@@ -479,7 +472,7 @@ class PairwiseFactorGroup(FactorGroup):
                 raise ValueError(
                     "self.log_potential_matrix must have shape"
                     + f"{(self.variable_group[fac_list[0]].num_states, self.variable_group[fac_list[1]].num_states)} "
-                    + f"based on the return value of self.connected_variables(). Instead, it has shape {self.log_potential_matrix.shape}"
+                    + f"based on self.connected_var_keys. Instead, it has shape {self.log_potential_matrix.shape}"
                 )
 
     @cached_property
@@ -494,7 +487,6 @@ class PairwiseFactorGroup(FactorGroup):
         factor_configs_log_potentials = self.log_potential_matrix[
             factor_configs[:, 0], factor_configs[:, 1]
         ]
-        connected_var_keys_for_factors = self.connected_variables()
         return tuple(
             [
                 nodes.EnumerationFactor(
@@ -502,6 +494,6 @@ class PairwiseFactorGroup(FactorGroup):
                     factor_configs,
                     factor_configs_log_potentials,
                 )
-                for keys_list in connected_var_keys_for_factors
+                for keys_list in self.connected_var_keys
             ]
         )
