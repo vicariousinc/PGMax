@@ -323,7 +323,7 @@ class FactorGraph:
         final_var_states = evidence.at[var_states_for_edges].add(msgs)
         var_key_to_map_dict: Dict[Tuple[Any, ...], int] = {}
         final_var_states_np = np.array(final_var_states)
-        for var_key in self._composite_variable_group.all_keys:
+        for var_key in self._composite_variable_group.keys:
             var = self._composite_variable_group[var_key]
             start_index = self._vars_to_starts[var]
             var_key_to_map_dict[var_key] = np.argmax(

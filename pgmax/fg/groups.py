@@ -242,10 +242,6 @@ class CompositeVariableGroup(VariableGroup):
 
         return container_keys
 
-    @cached_property
-    def all_keys(self) -> Tuple:
-        return tuple(self._keys_to_vars.keys())
-
 
 @dataclass(frozen=True, eq=False)
 class NDVariableArray(VariableGroup):
