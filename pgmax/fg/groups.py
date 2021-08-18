@@ -228,12 +228,23 @@ class CompositeVariableGroup(VariableGroup):
 
     @cached_property
     def container_keys(self) -> Tuple:
+        """Function to get keys referring to the variable groups within this
+        CompositeVariableGroup.
+
+        Returns:
+            a tuple of the keys referring to the variable groups within this
+            CompositeVariableGroup.
+        """
         if isinstance(self.variable_group_container, Mapping):
             container_keys = tuple(self.variable_group_container.keys())
         else:
             container_keys = tuple(range(len(self.variable_group_container)))
 
         return container_keys
+
+    @cached_property
+    def all_keys(self) -> Tuple:
+        return tuple(self._keys_to_vars.keys())
 
 
 @dataclass(frozen=True, eq=False)

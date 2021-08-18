@@ -305,7 +305,7 @@ class FactorGraph:
 
         return msgs_after_bp
 
-    def decode_map_states(self, msgs: jnp.ndarray) -> Dict[nodes.Variable, int]:
+    def decode_map_states(self, msgs: jnp.ndarray) -> Dict[Tuple[Any, ...], int]:
         """Function to computes the output of MAP inference on input messages.
 
         The final states are computed based on evidence obtained from the self.get_evidence
@@ -316,16 +316,17 @@ class FactorGraph:
                 upon
 
         Returns:
-            a dictionary mapping variables to their MAP state
+            a dictionary mapping each variable key to the MAP states of the corresponding variable
         """
         var_states_for_edges = jax.device_put(self.wiring.var_states_for_edges)
         evidence = jax.device_put(self.evidence)
         final_var_states = evidence.at[var_states_for_edges].add(msgs)
-        var_to_map_dict = {}
+        var_key_to_map_dict: Dict[Tuple[Any, ...], int] = {}
         final_var_states_np = np.array(final_var_states)
-        for var in self._composite_variable_group.variables:
+        for var_key in self._composite_variable_group.all_keys:
+            var = self._composite_variable_group[var_key]
             start_index = self._vars_to_starts[var]
-            var_to_map_dict[var] = np.argmax(
+            var_key_to_map_dict[var_key] = np.argmax(
                 final_var_states_np[start_index : start_index + var.num_states]
             )
-        return var_to_map_dict
+        return var_key_to_map_dict

@@ -237,7 +237,7 @@ img_arr = np.zeros((1, im_size[0], im_size[1]))
 
 for row in range(im_size[0]):
     for col in range(im_size[1]):
-        img_val = float(map_message_dict[composite_vargroup[0, row, col]])
+        img_val = float(map_message_dict[0, row, col])
         if img_val == 2.0:
             img_val = 0.4
         img_arr[0, row, col] = img_val * 1.0
