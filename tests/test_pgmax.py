@@ -6,6 +6,9 @@ import numpy as np
 from numpy.random import default_rng
 from scipy.ndimage import gaussian_filter
 
+from pgmax.fg import graph, groups
+
+
 def test_e2e_sanity_check():
     # Helper function to easily generate a list of valid configurations for a given suppression diameter
     def create_valid_suppression_config_arr(suppression_diameter):
