@@ -1,5 +1,4 @@
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -7,149 +6,7 @@ import numpy as np
 from numpy.random import default_rng
 from scipy.ndimage import gaussian_filter
 
-from pgmax.fg import graph, groups, nodes
-
-
 def test_e2e_sanity_check():
-    # Subclass FactorGroup into the 3 different groups that appear in this problem
-    @dataclass(frozen=True, eq=False)
-    class FourFactorGroup(groups.EnumerationFactorGroup):
-        num_rows: int
-        num_cols: int
-        factor_configs_log_potentials: Optional[np.ndarray] = None
-
-        def connected_variables(
-            self,
-        ) -> List[List[Tuple[Any, ...]]]:
-            ret_list: List[List[Tuple[Any, ...]]] = []
-            for row in range(self.num_rows - 1):
-                for col in range(self.num_cols - 1):
-                    if row != self.num_rows - 2 and col != self.num_cols - 2:
-                        ret_list.append(
-                            [
-                                ("grid_vars", 0, row, col),
-                                ("grid_vars", 1, row, col),
-                                ("grid_vars", 0, row, col + 1),
-                                ("grid_vars", 1, row + 1, col),
-                            ]
-                        )
-                    elif row != self.num_rows - 2:
-                        ret_list.append(
-                            [
-                                ("grid_vars", 0, row, col),
-                                ("grid_vars", 1, row, col),
-                                ("additional_vars", 0, row, col + 1),
-                                ("grid_vars", 1, row + 1, col),
-                            ]
-                        )
-                    elif col != self.num_cols - 2:
-                        ret_list.append(
-                            [
-                                ("grid_vars", 0, row, col),
-                                ("grid_vars", 1, row, col),
-                                ("grid_vars", 0, row, col + 1),
-                                ("additional_vars", 1, row + 1, col),
-                            ]
-                        )
-                    else:
-                        ret_list.append(
-                            [
-                                ("grid_vars", 0, row, col),
-                                ("grid_vars", 1, row, col),
-                                ("additional_vars", 0, row, col + 1),
-                                ("additional_vars", 1, row + 1, col),
-                            ]
-                        )
-
-            return ret_list
-
-    @dataclass(frozen=True, eq=False)
-    class VertSuppressionFactorGroup(groups.EnumerationFactorGroup):
-        num_rows: int
-        num_cols: int
-        suppression_diameter: int
-        factor_configs_log_potentials: Optional[np.ndarray] = None
-
-        def connected_variables(
-            self,
-        ) -> List[List[Tuple[Any, ...]]]:
-            ret_list: List[List[Tuple[Any, ...]]] = []
-            for col in range(self.num_cols):
-                for start_row in range(self.num_rows - self.suppression_diameter):
-                    if col != self.num_cols - 1:
-                        ret_list.append(
-                            [
-                                ("grid_vars", 0, r, col)
-                                for r in range(
-                                    start_row, start_row + self.suppression_diameter
-                                )
-                            ]
-                        )
-                    else:
-                        ret_list.append(
-                            [
-                                ("additional_vars", 0, r, col)
-                                for r in range(
-                                    start_row, start_row + self.suppression_diameter
-                                )
-                            ]
-                        )
-
-            return ret_list
-
-    @dataclass(frozen=True, eq=False)
-    class HorzSuppressionFactorGroup(groups.EnumerationFactorGroup):
-        num_rows: int
-        num_cols: int
-        suppression_diameter: int
-        factor_configs_log_potentials: Optional[np.ndarray] = None
-
-        def connected_variables(
-            self,
-        ) -> List[List[Tuple[Any, ...]]]:
-            ret_list: List[List[Tuple[Any, ...]]] = []
-            for row in range(self.num_rows):
-                for start_col in range(self.num_cols - self.suppression_diameter):
-                    if row != self.num_rows - 1:
-                        ret_list.append(
-                            [
-                                ("grid_vars", 1, row, c)
-                                for c in range(
-                                    start_col, start_col + self.suppression_diameter
-                                )
-                            ]
-                        )
-                    else:
-                        ret_list.append(
-                            [
-                                ("additional_vars", 1, row, c)
-                                for c in range(
-                                    start_col, start_col + self.suppression_diameter
-                                )
-                            ]
-                        )
-            return ret_list
-
-    # Override and define a concrete FactorGraph Class with the get_evidence function implemented
-    class ConcreteFactorGraph(graph.FactorGraph):
-        def get_evidence(
-            self, data: Dict[nodes.Variable, np.array], context: Any = None
-        ) -> jnp.ndarray:
-            """Function to generate evidence array. Need to be overwritten for concrete factor graphs
-
-            Args:
-                data: Data for generating evidence
-                context: Optional context for generating evidence
-
-            Returns:
-                Array of shape (num_var_states,) representing the flattened evidence for each variable
-            """
-            evidence = np.zeros(self.num_var_states)
-            for var in self.variables:
-                start_index = self._vars_to_starts[var]
-                evidence[start_index : start_index + var.num_states] = data[var]
-            return jax.device_put(evidence)
-
     # Helper function to easily generate a list of valid configurations for a given suppression diameter
     def create_valid_suppression_config_arr(suppression_diameter):
         valid_suppressions_list = []
@@ -175,49 +32,49 @@ def test_e2e_sanity_check():
             0.0000000e00,
             0.0000000e00,
             0.0000000e00,
-            -6.2903488e-01,
+            -6.2903470e-01,
             0.0000000e00,
-            -3.0177206e-01,
-            -3.0177212e-01,
-            -1.8688640e-01,
+            -3.0177221e-01,
+            -3.0177209e-01,
+            -2.8220856e-01,
             0.0000000e00,
-            -5.1396430e-01,
+            -6.0928625e-01,
+            -1.2259892e-01,
+            -5.7227510e-01,
+            0.0000000e00,
             -1.2259889e-01,
-            -5.7227504e-01,
             0.0000000e00,
-            -1.2259889e-01,
+            -7.0657951e-01,
             0.0000000e00,
-            -6.1125731e-01,
-            0.0000000e00,
-            -4.8884386e-01,
+            -5.8416575e-01,
             -4.4967628e-01,
             -1.2259889e-01,
             -4.4967628e-01,
             0.0000000e00,
             0.0000000e00,
-            -4.8865831e-01,
-            -1.1587739e-01,
-            -1.8589482e-01,
+            -5.8398044e-01,
+            -1.1587733e-01,
+            -1.8589476e-01,
             0.0000000e00,
-            -3.0177230e-01,
+            -3.0177209e-01,
             0.0000000e00,
-            -5.9604645e-08,
-            -2.9802322e-08,
-            0.0000000e00,
-            0.0000000e00,
-            -6.3002640e-01,
-            -1.1587760e-01,
-            -3.2707733e-01,
-            0.0000000e00,
-            0.0000000e00,
-            -2.9802322e-08,
             -1.1920929e-07,
-            -1.1587739e-01,
-            -4.8865813e-01,
+            -2.9802322e-08,
+            0.0000000e00,
+            0.0000000e00,
+            -7.2534859e-01,
+            -2.1119976e-01,
+            -1.1224430e00,
+            0.0000000e00,
+            -2.9802322e-08,
+            -2.9802322e-08,
+            0.0000000e00,
+            -1.1587762e-01,
+            -4.8865837e-01,
             0.0000000e00,
             0.0000000e00,
             0.0000000e00,
-            0.0000000e00,
+            -2.9802322e-08,
             0.0000000e00,
             -1.7563977e00,
             -1.7563977e00,
@@ -225,8 +82,8 @@ def test_e2e_sanity_check():
             -2.0581698e00,
             -2.0581698e00,
             0.0000000e00,
-            -2.1041441e00,
-            -2.1041441e00,
+            -2.1994662e00,
+            -2.1994662e00,
             0.0000000e00,
             -1.6154857e00,
             -1.6154857e00,
@@ -246,14 +103,14 @@ def test_e2e_sanity_check():
             -1.8303051e00,
             -1.8303051e00,
             0.0000000e00,
-            -2.6462264e00,
-            -2.6462264e00,
+            -2.7415483e00,
+            -2.7415483e00,
             0.0000000e00,
             -2.0552459e00,
             -2.0552459e00,
             0.0000000e00,
-            -2.1711230e00,
-            -2.9675078e-01,
+            -2.1711233e00,
+            -2.1711233e00,
         ]
     )
 
@@ -345,70 +202,147 @@ def test_e2e_sanity_check():
 
     # Combine these two VariableGroups into one CompositeVariableGroup
     composite_grid_group = groups.CompositeVariableGroup(
-        dict(grid_vars=grid_vars_group, additional_vars=additional_keys_group)
-    )
-
-    # Now, we instantiate the four factors
-    four_factors_group = FourFactorGroup(
-        variable_group=composite_grid_group,
-        factor_configs=valid_configs_non_supp,
-        num_rows=M,
-        num_cols=N,
-    )
-    # Next, we instantiate all the vertical suppression variables
-    vert_suppression_group = VertSuppressionFactorGroup(
-        variable_group=composite_grid_group,
-        factor_configs=valid_configs_supp,
-        num_rows=M,
-        num_cols=N,
-        suppression_diameter=SUPPRESSION_DIAMETER,
-    )
-    # Next, we instantiate all the horizontal suppression variables
-    horz_suppression_group = HorzSuppressionFactorGroup(
-        variable_group=composite_grid_group,
-        factor_configs=valid_configs_supp,
-        num_rows=M,
-        num_cols=N,
-        suppression_diameter=SUPPRESSION_DIAMETER,
+        {"grid_vars": grid_vars_group, "additional_vars": additional_keys_group}
     )
 
     gt_has_cuts = gt_has_cuts.astype(np.int32)
+
     # Now, we use this array along with the gt_has_cuts array computed earlier using the image in order to derive the evidence values
-    var_evidence_dict = {}
+    grid_evidence_arr = np.zeros((2, M - 1, N - 1, 3), dtype=float)
+    additional_vars_evidence_dict: Dict[Tuple[int, ...], np.ndarray] = {}
     for i in range(2):
         for row in range(M):
             for col in range(N):
                 # The dictionary key is in composite_grid_group at loc [i,row,call]
-                evidence_arr = np.zeros(
+                evidence_vals_arr = np.zeros(
                     3
                 )  # Note that we know num states for each variable is 3, so we can do this
-                evidence_arr[
+                evidence_vals_arr[
                     gt_has_cuts[i, row, col]
                 ] = 2.0  # This assigns belief value 2.0 to the correct index in the evidence vector
-                evidence_arr = (
-                    evidence_arr - evidence_arr[0]
+                evidence_vals_arr = (
+                    evidence_vals_arr - evidence_vals_arr[0]
                 )  # This normalizes the evidence by subtracting away the 0th index value
-                evidence_arr[1:] += 0.1 * rng.logistic(
-                    size=evidence_arr[1:].shape
+                evidence_vals_arr[1:] += 0.1 * rng.logistic(
+                    size=evidence_vals_arr[1:].shape
                 )  # This adds logistic noise for every evidence entry
                 try:
-                    var_evidence_dict[
-                        composite_grid_group["grid_vars", i, row, col]
-                    ] = evidence_arr
+                    _ = composite_grid_group["grid_vars", i, row, col]
+                    grid_evidence_arr[i, row, col] = evidence_vals_arr
                 except ValueError:
                     try:
-                        var_evidence_dict[
-                            composite_grid_group["additional_vars", i, row, col]
-                        ] = evidence_arr
+                        _ = composite_grid_group["additional_vars", i, row, col]
+                        additional_vars_evidence_dict[(i, row, col)] = evidence_vals_arr
                     except ValueError:
                         pass
 
     # Create the factor graph
-    fg = ConcreteFactorGraph(
-        (four_factors_group, vert_suppression_group, horz_suppression_group)
+    fg = graph.FactorGraph(
+        variable_groups=composite_grid_group,
     )
+
+    # Set the evidence
+    fg.set_evidence("grid_vars", grid_evidence_arr)
+    fg.set_evidence("additional_vars", additional_vars_evidence_dict)
+
+    # Create an EnumerationFactorGroup for four factors
+    four_factor_keys: List[List[Tuple[Any, ...]]] = []
+    for row in range(M - 1):
+        for col in range(N - 1):
+            if row != M - 2 and col != N - 2:
+                four_factor_keys.append(
+                    [
+                        ("grid_vars", 0, row, col),
+                        ("grid_vars", 1, row, col),
+                        ("grid_vars", 0, row, col + 1),
+                        ("grid_vars", 1, row + 1, col),
+                    ]
+                )
+            elif row != M - 2:
+                four_factor_keys.append(
+                    [
+                        ("grid_vars", 0, row, col),
+                        ("grid_vars", 1, row, col),
+                        ("additional_vars", 0, row, col + 1),
+                        ("grid_vars", 1, row + 1, col),
+                    ]
+                )
+            elif col != N - 2:
+                four_factor_keys.append(
+                    [
+                        ("grid_vars", 0, row, col),
+                        ("grid_vars", 1, row, col),
+                        ("grid_vars", 0, row, col + 1),
+                        ("additional_vars", 1, row + 1, col),
+                    ]
+                )
+            else:
+                four_factor_keys.append(
+                    [
+                        ("grid_vars", 0, row, col),
+                        ("grid_vars", 1, row, col),
+                        ("additional_vars", 0, row, col + 1),
+                        ("additional_vars", 1, row + 1, col),
+                    ]
+                )
+
+    # Create an EnumerationFactorGroup for vertical suppression factors
+    vert_suppression_keys: List[List[Tuple[Any, ...]]] = []
+    for col in range(N):
+        for start_row in range(M - SUPPRESSION_DIAMETER):
+            if col != N - 1:
+                vert_suppression_keys.append(
+                    [
+                        ("grid_vars", 0, r, col)
+                        for r in range(start_row, start_row + SUPPRESSION_DIAMETER)
+                    ]
+                )
+            else:
+                vert_suppression_keys.append(
+                    [
+                        ("additional_vars", 0, r, col)
+                        for r in range(start_row, start_row + SUPPRESSION_DIAMETER)
+                    ]
+                )
+
+    horz_suppression_keys: List[List[Tuple[Any, ...]]] = []
+    for row in range(M):
+        for start_col in range(N - SUPPRESSION_DIAMETER):
+            if row != M - 1:
+                horz_suppression_keys.append(
+                    [
+                        ("grid_vars", 1, row, c)
+                        for c in range(start_col, start_col + SUPPRESSION_DIAMETER)
+                    ]
+                )
+            else:
+                horz_suppression_keys.append(
+                    [
+                        ("additional_vars", 1, row, c)
+                        for c in range(start_col, start_col + SUPPRESSION_DIAMETER)
+                    ]
+                )
+
+    # Make kwargs dicts
+    # use this kwargs dict for 4 factors
+    fg.add_factors(
+        factor_factory=groups.EnumerationFactorGroup,
+        connected_var_keys=four_factor_keys,
+        factor_configs=valid_configs_non_supp,
+    )
+    fg.add_factors(
+        factor_factory=groups.EnumerationFactorGroup,
+        connected_var_keys=vert_suppression_keys,
+        factor_configs=valid_configs_supp,
+    )
+    fg.add_factors(
+        factor_factory=groups.EnumerationFactorGroup,
+        connected_var_keys=horz_suppression_keys,
+        factor_configs=valid_configs_supp,
+    )
+
     # Run BP
-    final_msgs = fg.run_bp(1000, 0.5, evidence_data=var_evidence_dict)
+    final_msgs = fg.run_bp(1000, 0.5)
 
     # Test that the output messages are close to the true messages
-    assert jnp.allclose(final_msgs, true_final_msgs_output)
+    assert jnp.allclose(final_msgs, true_final_msgs_output, atol=1e-06)
