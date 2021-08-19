@@ -15,7 +15,7 @@ jobs:
       matrix:
         python-version: [3.7]
         poetry-version: [1.1.6]
-    if: ${{ github.event_name == 'pull_request' }}
+    # if: ${{ github.event_name == 'pull_request' }}
     steps:
       #----------------------------------------------
       #       cancel any pending actions
@@ -63,11 +63,16 @@ jobs:
       - name: Install library
         run: poetry install --no-interaction
       #----------------------------------------------
-      #              run test suite
+      #         run test suite with coverage
       #----------------------------------------------
-      - name: Test with pytest
+      - name: Test with coverage
         run: |
-          poetry run pytest
+          poetry run coverage run -m pytest
+      #----------------------------------------------
+      #      upload coverage report to codecov
+      #----------------------------------------------
+      - name: Upload Coverage to Codecov
+        uses: codecov/codecov-action@v2
       #----------------------------------------------
       #        test docs build only on PR
       #----------------------------------------------
