@@ -365,20 +365,18 @@ for i in range(2):
     for row in range(M):
         for col in range(N):
             try:
-                bp_values[i, row, col] = map_message_dict[
-                    composite_grid_group["grid_vars", i, row, col]
-                ]
+                bp_values[i, row, col] = map_message_dict["grid_vars", i, row, col]
                 bu_evidence[i, row, col, :] = grid_evidence_arr[i, row, col]
-            except ValueError:
+            except KeyError:
                 try:
                     bp_values[i, row, col] = map_message_dict[
-                        composite_grid_group["additional_vars", i, row, col]
+                        "additional_vars", i, row, col
                     ]
                     bu_evidence[i, row, col, :] = additional_vars_evidence_dict[
                         (i, row, col)
                     ]
 
-                except ValueError:
+                except KeyError:
                     pass
 
 
