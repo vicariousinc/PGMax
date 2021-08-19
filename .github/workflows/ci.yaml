@@ -73,11 +73,13 @@ jobs:
       #----------------------------------------------
       - name: Upload Coverage to Codecov
         uses: codecov/codecov-action@v2
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }} # not required for public repos
+          verbose: true # optional (default = false)
       #----------------------------------------------
       #        test docs build only on PR
       #----------------------------------------------
       - name: Test docs build
-        if: ${{ github.event_name == 'pull_request' }}
         run: |
           cd docs
           poetry run make html
