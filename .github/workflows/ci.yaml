@@ -67,7 +67,7 @@ jobs:
       #----------------------------------------------
       - name: Test with coverage
         run: |
-          poetry run coverage run -m pytest
+          pytest --cov=./ --cov-report=xml
       #----------------------------------------------
       #      upload coverage report to codecov
       #----------------------------------------------
