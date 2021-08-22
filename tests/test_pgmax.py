@@ -349,3 +349,51 @@ def test_e2e_sanity_check():
 
     # Test that the output messages are close to the true messages
     assert jnp.allclose(final_msgs, true_final_msgs_output, atol=1e-06)
+
+
+def test_e2e_heretic():
+    # Define some global constants
+    im_size = (30, 30)
+    prng_key = jax.random.PRNGKey(42)
+
+    # Instantiate all the Variables in the factor graph via VariableGroups
+    pixel_vars = groups.NDVariableArray(3, im_size)
+    hidden_vars = groups.NDVariableArray(
+        17, (im_size[0] - 2, im_size[1] - 2)
+    )  # Each hidden var is connected to a 3x3 patch of pixel vars
+    composite_vargroup = groups.CompositeVariableGroup((pixel_vars, hidden_vars))
+
+    bXn = np.zeros((30, 30, 3))
+    bHn = np.zeros((28, 28, 17))
+
+    # Create the factor graph
+    fg = graph.FactorGraph((pixel_vars, hidden_vars))
+
+    # Assign evidence to pixel vars
+    fg.set_evidence(0, np.array(bXn))
+    fg.set_evidence(1, np.array(bHn))
+
+    def binary_connected_variables(
+        num_hidden_rows, num_hidden_cols, kernel_row, kernel_col
+    ):
+        ret_list: List[List[Tuple[Any, ...]]] = []
+        for h_row in range(num_hidden_rows):
+            for h_col in range(num_hidden_cols):
+                ret_list.append(
+                    [
+                        (1, h_row, h_col),
+                        (0, h_row + kernel_row, h_col + kernel_col),
+                    ]
+                )
+        return ret_list
+
+    W_pot = np.zeros((17, 3, 3, 3), dtype=float)
+    for k_row in range(3):
+        for k_col in range(3):
+            fg.add_factors(
+                factor_factory=groups.PairwiseFactorGroup,
+                connected_var_keys=binary_connected_variables(28, 28, k_row, k_col),
+                log_potential_matrix=W_pot[:, :, k_row, k_col],
+            )
+
+    assert len(fg._factors) == 7056
