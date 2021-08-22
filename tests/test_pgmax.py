@@ -8,6 +8,9 @@ from scipy.ndimage import gaussian_filter
 
 from pgmax.fg import graph, groups
 
+# Set random seed for rng
+rng = default_rng(23)
+
 
 def test_e2e_sanity_check():
     # Helper function to easily generate a list of valid configurations for a given suppression diameter
@@ -26,8 +29,6 @@ def test_e2e_sanity_check():
         ret_arr.flags.writeable = False
         return ret_arr
 
-    # Set random seed for rng
-    rng = default_rng(23)
     true_final_msgs_output = jax.device_put(
         [
             0.0000000e00,
@@ -116,6 +117,20 @@ def test_e2e_sanity_check():
             -2.1711233e00,
         ]
     )
+    true_map_state_output = {
+        ("grid_vars", 0, 0, 0): 2,
+        ("grid_vars", 0, 0, 1): 0,
+        ("grid_vars", 0, 1, 0): 0,
+        ("grid_vars", 0, 1, 1): 2,
+        ("grid_vars", 1, 0, 0): 1,
+        ("grid_vars", 1, 0, 1): 0,
+        ("grid_vars", 1, 1, 0): 1,
+        ("grid_vars", 1, 1, 1): 0,
+        ("additional_vars", 0, 0, 2): 0,
+        ("additional_vars", 0, 1, 2): 2,
+        ("additional_vars", 1, 2, 0): 1,
+        ("additional_vars", 1, 2, 1): 0,
+    }
 
     # Create a synthetic depth image for testing purposes
     im_size = 3
@@ -248,45 +263,53 @@ def test_e2e_sanity_check():
     fg.set_evidence("grid_vars", grid_evidence_arr)
     fg.set_evidence("additional_vars", additional_vars_evidence_dict)
 
-    # Create an EnumerationFactorGroup for four factors
-    four_factor_keys: List[List[Tuple[Any, ...]]] = []
+    # Imperatively add EnumerationFactorGroups (each consisting of just one EnumerationFactor) to
+    # the graph!
     for row in range(M - 1):
         for col in range(N - 1):
             if row != M - 2 and col != N - 2:
-                four_factor_keys.append(
-                    [
-                        ("grid_vars", 0, row, col),
-                        ("grid_vars", 1, row, col),
-                        ("grid_vars", 0, row, col + 1),
-                        ("grid_vars", 1, row + 1, col),
-                    ]
-                )
+                curr_keys = [
+                    ("grid_vars", 0, row, col),
+                    ("grid_vars", 1, row, col),
+                    ("grid_vars", 0, row, col + 1),
+                    ("grid_vars", 1, row + 1, col),
+                ]
             elif row != M - 2:
-                four_factor_keys.append(
-                    [
-                        ("grid_vars", 0, row, col),
-                        ("grid_vars", 1, row, col),
-                        ("additional_vars", 0, row, col + 1),
-                        ("grid_vars", 1, row + 1, col),
-                    ]
-                )
+                curr_keys = [
+                    ("grid_vars", 0, row, col),
+                    ("grid_vars", 1, row, col),
+                    ("additional_vars", 0, row, col + 1),
+                    ("grid_vars", 1, row + 1, col),
+                ]
+
             elif col != N - 2:
-                four_factor_keys.append(
-                    [
-                        ("grid_vars", 0, row, col),
-                        ("grid_vars", 1, row, col),
-                        ("grid_vars", 0, row, col + 1),
-                        ("additional_vars", 1, row + 1, col),
-                    ]
+                curr_keys = [
+                    ("grid_vars", 0, row, col),
+                    ("grid_vars", 1, row, col),
+                    ("grid_vars", 0, row, col + 1),
+                    ("additional_vars", 1, row + 1, col),
+                ]
+
+            else:
+                curr_keys = [
+                    ("grid_vars", 0, row, col),
+                    ("grid_vars", 1, row, col),
+                    ("additional_vars", 0, row, col + 1),
+                    ("additional_vars", 1, row + 1, col),
+                ]
+            if row % 2 == 0:
+                fg.add_factors(
+                    curr_keys,
+                    valid_configs_non_supp,
+                    np.zeros(valid_configs_non_supp.shape[0], dtype=float),
                 )
             else:
-                four_factor_keys.append(
-                    [
-                        ("grid_vars", 0, row, col),
-                        ("grid_vars", 1, row, col),
-                        ("additional_vars", 0, row, col + 1),
-                        ("additional_vars", 1, row + 1, col),
-                    ]
+                fg.add_factors(
+                    keys=curr_keys,
+                    configs=valid_configs_non_supp,
+                    factor_configs_log_potentials=np.zeros(
+                        valid_configs_non_supp.shape[0], dtype=float
+                    ),
                 )
 
     # Create an EnumerationFactorGroup for vertical suppression factors
@@ -326,13 +349,7 @@ def test_e2e_sanity_check():
                     ]
                 )
 
-    # Make kwargs dicts
-    # use this kwargs dict for 4 factors
-    fg.add_factors(
-        factor_factory=groups.EnumerationFactorGroup,
-        connected_var_keys=four_factor_keys,
-        factor_configs=valid_configs_non_supp,
-    )
+    # Add the suppression factors to the graph via kwargs
     fg.add_factors(
         factor_factory=groups.EnumerationFactorGroup,
         connected_var_keys=vert_suppression_keys,
@@ -345,33 +362,32 @@ def test_e2e_sanity_check():
     )
 
     # Run BP
-    final_msgs = fg.run_bp(1000, 0.5)
+    one_step_msgs = fg.run_bp(100, 0.5)
+    final_msgs = fg.run_bp(99, 0.5, one_step_msgs)
 
     # Test that the output messages are close to the true messages
     assert jnp.allclose(final_msgs, true_final_msgs_output, atol=1e-06)
+    assert fg.decode_map_states(final_msgs) == true_map_state_output
 
 
 def test_e2e_heretic():
     # Define some global constants
     im_size = (30, 30)
-    prng_key = jax.random.PRNGKey(42)
-
     # Instantiate all the Variables in the factor graph via VariableGroups
     pixel_vars = groups.NDVariableArray(3, im_size)
     hidden_vars = groups.NDVariableArray(
         17, (im_size[0] - 2, im_size[1] - 2)
     )  # Each hidden var is connected to a 3x3 patch of pixel vars
-    composite_vargroup = groups.CompositeVariableGroup((pixel_vars, hidden_vars))
 
     bXn = np.zeros((30, 30, 3))
-    bHn = np.zeros((28, 28, 17))
 
     # Create the factor graph
     fg = graph.FactorGraph((pixel_vars, hidden_vars))
 
     # Assign evidence to pixel vars
     fg.set_evidence(0, np.array(bXn))
-    fg.set_evidence(1, np.array(bHn))
+    fg.set_evidence(tuple([0, 0, 0]), np.array([0.0, 0.0, 0.0]))
+    fg.evidence_default_mode = "random"
 
     def binary_connected_variables(
         num_hidden_rows, num_hidden_cols, kernel_row, kernel_col
@@ -395,5 +411,7 @@ def test_e2e_heretic():
                 connected_var_keys=binary_connected_variables(28, 28, k_row, k_col),
                 log_potential_matrix=W_pot[:, :, k_row, k_col],
             )
+
+    assert isinstance(fg.evidence, np.ndarray)
 
     assert len(fg._factors) == 7056

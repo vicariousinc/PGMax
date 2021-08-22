@@ -104,10 +104,12 @@ class FactorGraph:
             **kwargs: optional mapping of keyword arguments. If specified, and if there
                 is no "factor_factory" key specified as part of this mapping, then these
                 args are taken to specify the arguments to be used to instantiate an
-                EnumerationFactor. If there is a "factor_factory" key, then these args
-                are taken to specify the arguments to be used to construct the class
-                specified by the "factor_factory" argument. Note that either *args or
-                **kwargs must be specified.
+                EnumerationFactor (specify a kwarg with the key 'keys' to indicate the
+                indices of variables ot be indexed to create the EnumerationFactor).
+                If there is a "factor_factory" key, then these args are taken to specify
+                the arguments to be used to construct the class specified by the
+                "factor_factory" argument. Note that either *args or **kwargs must be
+                specified.
         """
         factor_factory = kwargs.pop("factor_factory", None)
         if factor_factory is not None:
@@ -168,7 +170,7 @@ class FactorGraph:
         if self.evidence_default_mode == "zeros":
             evidence = np.zeros(self.num_var_states)
         elif self.evidence_default_mode == "random":
-            evidence = np.random.gumbel(self.num_var_states)
+            evidence = np.random.gumbel(size=self.num_var_states)
         else:
             raise NotImplementedError(
                 f"evidence_default_mode {self.evidence_default_mode} is not yet implemented"

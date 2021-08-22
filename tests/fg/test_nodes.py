@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-import pgmax.fg.nodes as nodes
+from pgmax.fg import nodes
 
 
 def test_enumfactor_configints_error():

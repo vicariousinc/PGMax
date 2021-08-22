@@ -133,13 +133,6 @@ class CompositeVariableGroup(VariableGroup):
     ]
 
     def __post_init__(self):
-        if (not isinstance(self.variable_group_container, Mapping)) and (
-            not isinstance(self.variable_group_container, Sequence)
-        ):
-            raise ValueError(
-                f"variable_group_container needs to be a mapping or a sequence. Got {type(self.variable_group_container)}"
-            )
-
         object.__setattr__(
             self, "_keys_to_vars", MappingProxyType(self._set_keys_to_vars())
         )
