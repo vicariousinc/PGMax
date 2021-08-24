@@ -206,7 +206,7 @@ class CompositeVariableGroup(VariableGroup):
 
         Args:
             evidence: A mapping or a sequence of evidences.
-                The type of evidence should match that of self.variable_group_container
+                The type of evidence should match that of self.variable_group_container.
 
         Returns:
             a dictionary mapping all possible variables to the corresponding evidence
@@ -337,7 +337,7 @@ class GenericVariableGroup(VariableGroup):
 
             if evidence[key].shape != (self.variable_size,):
                 raise ValueError(
-                    f"Variable {key} expect an evidence array of shape "
+                    f"Variable {key} expects an evidence array of shape "
                     f"({(self.variable_size,)})."
                     f"Got {evidence[key].shape}."
                 )
