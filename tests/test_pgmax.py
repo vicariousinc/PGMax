@@ -359,6 +359,9 @@ def test_e2e_sanity_check():
         factor_factory=groups.EnumerationFactorGroup,
         connected_var_keys=horz_suppression_keys,
         factor_configs=valid_configs_supp,
+        factor_configs_log_potentials=np.zeros(
+            valid_configs_supp.shape[0], dtype=float
+        ),
     )
 
     # Run BP

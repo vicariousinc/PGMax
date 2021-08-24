@@ -45,6 +45,33 @@ def test_ndvararray_evidence_error():
     assert "Input evidence" in str(verror.value)
 
 
+def test_facgroup_errors():
+    v_group = groups.NDVariableArray(3, (2, 2))
+    with pytest.raises(ValueError) as verror:
+        groups.FactorGroup(v_group, [])
+    assert "self.connected_var_keys is empty" == str(verror.value)
+
+    fac_group = groups.FactorGroup(v_group, [[(0, 0), (1, 1)]])
+    with pytest.raises(NotImplementedError) as nerror:
+        fac_group.factors
+    assert "Needs to be overriden by subclass" == str(nerror.value)
+
+
+def test_pairwisefacgroup_errors():
+    v_group = groups.NDVariableArray(3, (2, 2))
+    with pytest.raises(ValueError) as verror:
+        groups.PairwiseFactorGroup(
+            v_group, [[(0, 0), (1, 1), (0, 1)]], np.zeros((1,), dtype=float)
+        )
+    assert "All pairwise factors" in str(verror.value)
+
+    with pytest.raises(ValueError) as verror:
+        groups.PairwiseFactorGroup(
+            v_group, [[(0, 0), (1, 1)]], np.zeros((1,), dtype=float)
+        )
+    assert "self.log_potential_matrix must" in str(verror.value)
+
+
 def test_generic_evidence_errors():
     v_group = groups.GenericVariableGroup(3, tuple([0]))
     with pytest.raises(ValueError) as verror:

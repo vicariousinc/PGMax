@@ -1,13 +1,17 @@
+# fmt: off
 import itertools
 import typing
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any, Dict, Hashable, List, Mapping, Sequence, Tuple, Union
+from typing import (Any, Dict, Hashable, List, Mapping, Optional, Sequence,
+                    Tuple, Union)
 
 import numpy as np
 
 import pgmax.fg.nodes as nodes
 from pgmax.utils import cached_property
+
+# fmt: on
 
 
 @dataclass(frozen=True, eq=False)
@@ -31,11 +35,11 @@ class VariableGroup:
         )
 
     @typing.overload
-    def __getitem__(self, key: Hashable) -> nodes.Variable:
+    def __getitem__(self, key: Hashable) -> nodes.Variable:  # pragma: no cover
         pass
 
     @typing.overload
-    def __getitem__(self, key: List) -> List[nodes.Variable]:
+    def __getitem__(self, key: List) -> List[nodes.Variable]:  # pragma: no cover
         pass
 
     def __getitem__(self, key):
@@ -80,7 +84,9 @@ class VariableGroup:
             "Please subclass the VariableGroup class and override this method"
         )
 
-    def get_vars_to_evidence(self, evidence: Any) -> Dict[nodes.Variable, np.ndarray]:
+    def get_vars_to_evidence(
+        self, evidence: Any
+    ) -> Dict[nodes.Variable, np.ndarray]:  # pragma: no cover
         """Function that turns input evidence into a dictionary mapping variables to evidence.
 
         Returns:
@@ -137,11 +143,11 @@ class CompositeVariableGroup(VariableGroup):
             self, "_keys_to_vars", MappingProxyType(self._set_keys_to_vars())
         )
 
-    @typing.overload
+    @typing.overload  # pragma: no cover
     def __getitem__(self, key: Hashable) -> nodes.Variable:
         pass
 
-    @typing.overload
+    @typing.overload  # pragma: no cover
     def __getitem__(self, key: List) -> List[nodes.Variable]:
         pass
 
@@ -355,8 +361,8 @@ class FactorGroup:
         variable_group: either a VariableGroup or - if the elements of more than one VariableGroup
             are connected to this FactorGroup - then a CompositeVariableGroup. This holds
             all the variables that are connected to this FactorGroup
-        connected_var_keys: A list of tuples of tuples, where each innermost tuple contains a
-            key variable_group. Each list within the outer list is taken to contain the keys of variables
+        connected_var_keys: A list of list of tuples, where each innermost tuple contains a
+            key into variable_group. Each list within the outer list is taken to contain the keys of variables
             neighboring a particular factor to be added.
 
     Raises:
@@ -391,27 +397,24 @@ class EnumerationFactorGroup(FactorGroup):
     Attributes:
         factors: a tuple of all the factors belonging to this group. These are constructed
             internally by invoking the _get_connected_var_keys_for_factors method.
-        factor_configs_log_potentials: Can be specified by an inheriting class, or just left
-            unspecified (equivalent to specifying None). If specified, must have (num_val_configs,).
-            and contain the log of the potential value for every possible configuration.
-            If none, it is assumed the log potential is uniform 0 and such an array is automatically
-            initialized.
-
+        factor_configs_log_potentials: Optional ndarray of shape (num_val_configs,).
+            if specified. Must contain the log of the potential value for every possible
+            configuration. If left unspecified, it is assumed the log potential is uniform
+            0 and such an array is automatically initialized.
     """
 
     factor_configs: np.ndarray
+    factor_configs_log_potentials: Optional[np.ndarray] = None
 
     @cached_property
     def factors(self) -> Tuple[nodes.EnumerationFactor, ...]:
         """Returns a tuple of all the factors contained within this FactorGroup."""
-        if getattr(self, "factor_configs_log_potentials", None) is None:
+        if self.factor_configs_log_potentials is None:
             factor_configs_log_potentials = np.zeros(
                 self.factor_configs.shape[0], dtype=float
             )
         else:
-            factor_configs_log_potentials = getattr(
-                self, "factor_configs_log_potentials"
-            )
+            factor_configs_log_potentials = self.factor_configs_log_potentials
 
         return tuple(
             [
