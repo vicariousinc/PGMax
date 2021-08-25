@@ -425,10 +425,6 @@ class EnumerationFactorGroup(FactorGroup):
     Attributes:
         factors: a tuple of all the factors belonging to this group. These are constructed
             internally by invoking the _get_connected_var_keys_for_factors method.
-        factor_configs_log_potentials: Optional ndarray of shape (num_val_configs,).
-            if specified. Must contain the log of the potential value for every possible
-            configuration. If left unspecified, it is assumed the log potential is uniform
-            0 and such an array is automatically initialized.
     """
 
     factor_configs: np.ndarray
