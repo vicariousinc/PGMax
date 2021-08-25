@@ -393,7 +393,7 @@ class FactorGroup:
         wiring = fg_utils.concatenate_enumeration_wirings(wirings)
         return wiring
 
-    @property
+    @cached_property
     def factor_group_log_potentials(self) -> np.ndarray:
         """Function to compile potential array for the factor group
 

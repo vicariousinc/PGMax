@@ -118,7 +118,7 @@ class FactorGraph:
                 new_args = list(args)
                 new_args[0] = [args[0]]
                 factor_group = groups.EnumerationFactorGroup(
-                    self._composite_variable_group, *args, **kwargs
+                    self._composite_variable_group, *new_args, **kwargs
                 )
             else:
                 keys = kwargs.pop("keys")
@@ -188,9 +188,9 @@ class FactorGraph:
         return evidence
 
     @property
-    def factors(self) -> List[nodes.EnumerationFactor]:
+    def factors(self) -> Tuple[nodes.EnumerationFactor, ...]:
         """List of individual factors in the factor graph"""
-        return sum([factor_group.factors for factor_group in self._factor_groups], [])
+        return sum([factor_group.factors for factor_group in self._factor_groups], ())
 
     def get_init_msgs(self, context: Any = None):
         """Function to initialize messages.
@@ -211,7 +211,7 @@ class FactorGraph:
         self,
         key: Union[Tuple[Any, ...], Any],
         evidence: Union[Dict[Any, np.ndarray], np.ndarray],
-    ):
+    ) -> None:
         """Function to update the evidence for variables in the FactorGraph.
 
         Args:
