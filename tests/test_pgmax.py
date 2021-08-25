@@ -306,7 +306,7 @@ def test_e2e_sanity_check():
             else:
                 fg.add_factors(
                     keys=curr_keys,
-                    configs=valid_configs_non_supp,
+                    factor_configs=valid_configs_non_supp,
                     factor_configs_log_potentials=np.zeros(
                         valid_configs_non_supp.shape[0], dtype=float
                     ),
@@ -417,4 +417,4 @@ def test_e2e_heretic():
 
     assert isinstance(fg.evidence, np.ndarray)
 
-    assert len(fg._factors) == 7056
+    assert len(fg.factors) == 7056

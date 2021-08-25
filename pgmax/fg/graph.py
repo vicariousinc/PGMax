@@ -14,10 +14,7 @@ from pgmax.fg import fg_utils, groups, nodes
 
 @dataclass
 class FactorGraph:
-    """Base class to represent a factor graph.
-
-    Concrete factor graphs inherits from this class, and specifies get_evidence to generate
-    the evidence array, and optionally init_msgs (default to initializing all messages to 0)
+    """Class for representing a factor graph
 
     Args:
         variable_groups: A container containing multiple VariableGroups, or a CompositeVariableGroup.
@@ -32,7 +29,7 @@ class FactorGraph:
 
     Attributes:
         _composite_variable_group: CompositeVariableGroup. contains all involved VariableGroups
-        _factors: list. contains all involved factors
+        _factor_groups: List of added factor groups
         num_var_states: int. represents the sum of all variable states of all variables in the
             FactorGraph
         _vars_to_starts: MappingProxyType[nodes.Variable, int]. maps every variable to an int
@@ -84,7 +81,7 @@ class FactorGraph:
 
         self._vars_to_evidence: Dict[nodes.Variable, np.ndarray] = {}
 
-        self._factors: List[nodes.EnumerationFactor] = []
+        self._factor_groups: List[groups.FactorGroup] = []
 
     def add_factors(
         self,
@@ -113,20 +110,24 @@ class FactorGraph:
         """
         factor_factory = kwargs.pop("factor_factory", None)
         if factor_factory is not None:
-            factors = factor_factory(
+            factor_group = factor_factory(
                 self._composite_variable_group, *args, **kwargs
-            ).factors
+            )
         else:
             if len(args) > 0:
                 new_args = list(args)
-                new_args[0] = tuple(self._composite_variable_group[args[0]])
-                factors = [nodes.EnumerationFactor(*new_args, **kwargs)]
+                new_args[0] = [args[0]]
+                factor_group = groups.EnumerationFactorGroup(
+                    self._composite_variable_group, *new_args, **kwargs
+                )
             else:
                 keys = kwargs.pop("keys")
-                kwargs["variables"] = self._composite_variable_group[keys]
-                factors = [nodes.EnumerationFactor(**kwargs)]
+                kwargs["connected_var_keys"] = [keys]
+                factor_group = groups.EnumerationFactorGroup(
+                    self._composite_variable_group, **kwargs
+                )
 
-        self._factors.extend(factors)
+        self._factor_groups.append(factor_group)
 
     @property
     def wiring(self) -> nodes.EnumerationWiring:
@@ -138,7 +139,8 @@ class FactorGraph:
             compiled wiring from each individual factor
         """
         wirings = [
-            factor.compile_wiring(self._vars_to_starts) for factor in self._factors
+            factor_group.compile_wiring(self._vars_to_starts)
+            for factor_group in self._factor_groups
         ]
         wiring = fg_utils.concatenate_enumeration_wirings(wirings)
         return wiring
@@ -154,7 +156,10 @@ class FactorGraph:
                 valid configuration
         """
         return np.concatenate(
-            [factor.factor_configs_log_potentials for factor in self._factors]
+            [
+                factor_group.factor_group_log_potentials
+                for factor_group in self._factor_groups
+            ]
         )
 
     @property
@@ -182,6 +187,11 @@ class FactorGraph:
 
         return evidence
 
+    @property
+    def factors(self) -> Tuple[nodes.EnumerationFactor, ...]:
+        """List of individual factors in the factor graph"""
+        return sum([factor_group.factors for factor_group in self._factor_groups], ())
+
     def get_init_msgs(self, context: Any = None):
         """Function to initialize messages.
 
@@ -201,7 +211,7 @@ class FactorGraph:
         self,
         key: Union[Tuple[Any, ...], Any],
         evidence: Union[Dict[Any, np.ndarray], np.ndarray],
-    ):
+    ) -> None:
         """Function to update the evidence for variables in the FactorGraph.
 
         Args:
