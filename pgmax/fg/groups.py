@@ -7,6 +7,7 @@ from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple
 import numpy as np
 
 import pgmax.fg.nodes as nodes
+from pgmax.fg import fg_utils
 from pgmax.utils import cached_property
 
 
@@ -375,6 +376,32 @@ class FactorGroup:
     def factors(self) -> Tuple[nodes.EnumerationFactor, ...]:
         raise NotImplementedError("Needs to be overriden by subclass")
 
+    def compile_wiring(
+        self, vars_to_starts: Mapping[nodes.Variable, int]
+    ) -> nodes.EnumerationWiring:
+        """Function to compile wiring for the factor group.
+
+        Returns:
+            compiled wiring for the factor group
+        """
+        wirings = [factor.compile_wiring(vars_to_starts) for factor in self.factors]
+        wiring = fg_utils.concatenate_enumeration_wirings(wirings)
+        return wiring
+
+    @property
+    def factor_group_log_potentials(self) -> np.ndarray:
+        """Function to compile potential array for belief propagation..
+
+        If potential array has already beeen compiled, do nothing.
+
+        Returns:
+            a jnp array representing the log of the potential function for each
+                valid configuration
+        """
+        return np.concatenate(
+            [factor.factor_configs_log_potentials for factor in self.factors]
+        )
+
 
 @dataclass(frozen=True, eq=False)
 class EnumerationFactorGroup(FactorGroup):
@@ -387,6 +414,10 @@ class EnumerationFactorGroup(FactorGroup):
     Args:
         factor_configs: Array of shape (num_val_configs, num_variables)
             An array containing explicit enumeration of all valid configurations
+        factor_configs_log_potentials: Optional array of shape (num_val_configs,).
+            If specified, it contains the log of the potential value for every possible configuration.
+            If none, it is assumed the log potential is uniform 0 and such an array is automatically
+            initialized.
 
     Attributes:
         factors: a tuple of all the factors belonging to this group. These are constructed
