@@ -381,6 +381,11 @@ class FactorGroup:
     ) -> nodes.EnumerationWiring:
         """Function to compile wiring for the factor group.
 
+        Args:
+            vars_to_starts: A dictionary that maps variables to their global starting indices
+                For an n-state variable, a global start index of m means the global indices
+                of its n variable states are m, m + 1, ..., m + n - 1
+
         Returns:
             compiled wiring for the factor group
         """
@@ -390,13 +395,11 @@ class FactorGroup:
 
     @property
     def factor_group_log_potentials(self) -> np.ndarray:
-        """Function to compile potential array for belief propagation..
-
-        If potential array has already beeen compiled, do nothing.
+        """Function to compile potential array for the factor group
 
         Returns:
-            a jnp array representing the log of the potential function for each
-                valid configuration
+            a jnp array representing the log of the potential function for
+            the factor group
         """
         return np.concatenate(
             [factor.factor_configs_log_potentials for factor in self.factors]
