@@ -8,32 +8,31 @@
 #       format_version: '1.3'
 #       jupytext_version: 1.11.4
 #   kernelspec:
-#     display_name: 'Python 3.8.5 64-bit (''pgmax-JcKb81GE-py3.8'': poetry)'
-#     name: python3
+#     display_name: 'Python 3.7.11 64-bit (''pgmax-zIh0MZVc-py3.7'': venv)'
+#     name: python371164bitpgmaxzih0mzvcpy37venve540bb1b5cdf4292a3f5a12c4904cc40
 # ---
+
+from timeit import default_timer as timer
+from typing import Any, List, Tuple
+
+import jax
+import jax.numpy as jnp
 
 # %%
 # %matplotlib inline
-# fmt: off
-
 # Standard Package Imports
-import matplotlib.pyplot as plt  # isort:skip
-import numpy as np  # isort:skip
-import jax  # isort:skip
-import jax.numpy as jnp  # isort:skip
-from typing import Any, Tuple, List  # isort:skip
-from timeit import default_timer as timer  # isort:skip
+import matplotlib.pyplot as plt
+import numpy as np
+
+import pgmax.fg.graph as graph
 
 # Custom Imports
-import pgmax.fg.groups as groups  # isort:skip
-import pgmax.fg.graph as graph  # isort:skip
-
-# fmt: on
+import pgmax.fg.groups as groups
 
 # %% [markdown]
 # # Setup Variables
 
-# %%
+# %% tags=[]
 # Define some global constants
 im_size = (30, 30)
 prng_key = jax.random.PRNGKey(42)
@@ -100,7 +99,7 @@ fg.set_evidence(1, np.array(bHn_evidence))
 # %% [markdown]
 # # Add all Factors to graph via constructing FactorGroups
 
-# %%
+# %% tags=[]
 def binary_connected_variables(
     num_hidden_rows, num_hidden_cols, kernel_row, kernel_col
 ):
@@ -182,7 +181,7 @@ init_msgs = jax.device_put(
 # %% [markdown]
 # # Run Belief Propagation and Retrieve MAP Estimate
 
-# %%
+# %% tags=[]
 # Run BP
 bp_start_time = timer()
 final_msgs = fg.run_bp(

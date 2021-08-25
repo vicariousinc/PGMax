@@ -1,17 +1,13 @@
-# fmt: off
 import itertools
 import typing
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import (Any, Dict, Hashable, List, Mapping, Optional, Sequence,
-                    Tuple, Union)
+from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
 import pgmax.fg.nodes as nodes
 from pgmax.utils import cached_property
-
-# fmt: on
 
 
 @dataclass(frozen=True, eq=False)
@@ -36,11 +32,11 @@ class VariableGroup:
 
     @typing.overload
     def __getitem__(self, key: Hashable) -> nodes.Variable:
-        """This function must be overriden by a subclass; does nothing"""
+        """This function is a typing overload and is overwritten by the implemented __getitem__"""
 
     @typing.overload
     def __getitem__(self, key: List) -> List[nodes.Variable]:
-        """This function must be overriden by a subclass; does nothing"""
+        """This function is a typing overload and is overwritten by the implemented __getitem__"""
 
     def __getitem__(self, key):
         """Given a key, retrieve the associated Variable.
@@ -143,11 +139,11 @@ class CompositeVariableGroup(VariableGroup):
 
     @typing.overload
     def __getitem__(self, key: Hashable) -> nodes.Variable:
-        """This function must be overriden by a subclass; does nothing"""
+        """This function is a typing overload and is overwritten by the implemented __getitem__"""
 
     @typing.overload
     def __getitem__(self, key: List) -> List[nodes.Variable]:
-        """This function must be overriden by a subclass; does nothing"""
+        """This function is a typing overload and is overwritten by the implemented __getitem__"""
 
     def __getitem__(self, key):
         """Given a key, retrieve the associated Variable from the associated VariableGroup.
