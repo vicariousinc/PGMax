@@ -22,17 +22,13 @@ def test_composite_vargroup_evidence():
     v_group1 = groups.GenericVariableGroup(3, tuple([0, 1, 2]))
     v_group2 = groups.GenericVariableGroup(3, tuple([0, 1, 2]))
     comp_var_group = groups.CompositeVariableGroup(tuple([v_group1, v_group2]))
-    assert (
-        len(
-            comp_var_group.get_vars_to_evidence(
-                [{0: np.zeros(3)}, {0: np.zeros(3)}]
-            ).values()
-        )
-        == 2
-    )
-    for arr in comp_var_group.get_vars_to_evidence(
+    vars_to_evidence = comp_var_group.get_vars_to_evidence(
         [{0: np.zeros(3)}, {0: np.zeros(3)}]
-    ).values():
+    )
+    assert set(vars_to_evidence.keys()) == set(
+        [comp_var_group[0, 0], comp_var_group[1, 0]]
+    )
+    for arr in vars_to_evidence.values():
         assert (arr == np.zeros(3, dtype=float)).all()
 
 
