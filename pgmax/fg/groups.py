@@ -2,7 +2,7 @@ import itertools
 import typing
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any, Dict, Hashable, List, Mapping, Sequence, Tuple, Union
+from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -12,7 +12,7 @@ from pgmax.utils import cached_property
 
 @dataclass(frozen=True, eq=False)
 class VariableGroup:
-    """Base class to represent a group of variables.
+    """Class to represent a group of variables.
 
     All variables in the group are assumed to have the same size. Additionally, the
     variables are indexed by a "key", and can be retrieved by direct indexing (even indexing
@@ -32,11 +32,11 @@ class VariableGroup:
 
     @typing.overload
     def __getitem__(self, key: Hashable) -> nodes.Variable:
-        pass
+        """This function is a typing overload and is overwritten by the implemented __getitem__"""
 
     @typing.overload
     def __getitem__(self, key: List) -> List[nodes.Variable]:
-        pass
+        """This function is a typing overload and is overwritten by the implemented __getitem__"""
 
     def __getitem__(self, key):
         """Given a key, retrieve the associated Variable.
@@ -133,24 +133,17 @@ class CompositeVariableGroup(VariableGroup):
     ]
 
     def __post_init__(self):
-        if (not isinstance(self.variable_group_container, Mapping)) and (
-            not isinstance(self.variable_group_container, Sequence)
-        ):
-            raise ValueError(
-                f"variable_group_container needs to be a mapping or a sequence. Got {type(self.variable_group_container)}"
-            )
-
         object.__setattr__(
             self, "_keys_to_vars", MappingProxyType(self._set_keys_to_vars())
         )
 
     @typing.overload
     def __getitem__(self, key: Hashable) -> nodes.Variable:
-        pass
+        """This function is a typing overload and is overwritten by the implemented __getitem__"""
 
     @typing.overload
     def __getitem__(self, key: List) -> List[nodes.Variable]:
-        pass
+        """This function is a typing overload and is overwritten by the implemented __getitem__"""
 
     def __getitem__(self, key):
         """Given a key, retrieve the associated Variable from the associated VariableGroup.
@@ -213,7 +206,7 @@ class CompositeVariableGroup(VariableGroup):
 
         Args:
             evidence: A mapping or a sequence of evidences.
-                The type of evidence should match that of self.variable_group_container
+                The type of evidence should match that of self.variable_group_container.
 
         Returns:
             a dictionary mapping all possible variables to the corresponding evidence
@@ -344,7 +337,7 @@ class GenericVariableGroup(VariableGroup):
 
             if evidence[key].shape != (self.variable_size,):
                 raise ValueError(
-                    f"Variable {key} expect an evidence array of shape "
+                    f"Variable {key} expects an evidence array of shape "
                     f"({(self.variable_size,)})."
                     f"Got {evidence[key].shape}."
                 )
@@ -356,14 +349,14 @@ class GenericVariableGroup(VariableGroup):
 
 @dataclass(frozen=True, eq=False)
 class FactorGroup:
-    """Base class to represent a group of factors.
+    """Class to represent a group of factors.
 
     Args:
         variable_group: either a VariableGroup or - if the elements of more than one VariableGroup
             are connected to this FactorGroup - then a CompositeVariableGroup. This holds
             all the variables that are connected to this FactorGroup
-        connected_var_keys: A list of tuples of tuples, where each innermost tuple contains a
-            key variable_group. Each list within the outer list is taken to contain the keys of variables
+        connected_var_keys: A list of list of tuples, where each innermost tuple contains a
+            key into variable_group. Each list within the outer list is taken to contain the keys of variables
             neighboring a particular factor to be added.
 
     Raises:
@@ -385,7 +378,7 @@ class FactorGroup:
 
 @dataclass(frozen=True, eq=False)
 class EnumerationFactorGroup(FactorGroup):
-    """Base class to represent a group of EnumerationFactors.
+    """Class to represent a group of EnumerationFactors.
 
     All factors in the group are assumed to have the same set of valid configurations and
     the same potential function. Note that the log potential function is assumed to be
@@ -398,27 +391,24 @@ class EnumerationFactorGroup(FactorGroup):
     Attributes:
         factors: a tuple of all the factors belonging to this group. These are constructed
             internally by invoking the _get_connected_var_keys_for_factors method.
-        factor_configs_log_potentials: Can be specified by an inheriting class, or just left
-            unspecified (equivalent to specifying None). If specified, must have (num_val_configs,).
-            and contain the log of the potential value for every possible configuration.
-            If none, it is assumed the log potential is uniform 0 and such an array is automatically
-            initialized.
-
+        factor_configs_log_potentials: Optional ndarray of shape (num_val_configs,).
+            if specified. Must contain the log of the potential value for every possible
+            configuration. If left unspecified, it is assumed the log potential is uniform
+            0 and such an array is automatically initialized.
     """
 
     factor_configs: np.ndarray
+    factor_configs_log_potentials: Optional[np.ndarray] = None
 
     @cached_property
     def factors(self) -> Tuple[nodes.EnumerationFactor, ...]:
         """Returns a tuple of all the factors contained within this FactorGroup."""
-        if getattr(self, "factor_configs_log_potentials", None) is None:
+        if self.factor_configs_log_potentials is None:
             factor_configs_log_potentials = np.zeros(
                 self.factor_configs.shape[0], dtype=float
             )
         else:
-            factor_configs_log_potentials = getattr(
-                self, "factor_configs_log_potentials"
-            )
+            factor_configs_log_potentials = self.factor_configs_log_potentials
 
         return tuple(
             [
@@ -434,7 +424,7 @@ class EnumerationFactorGroup(FactorGroup):
 
 @dataclass(frozen=True, eq=False)
 class PairwiseFactorGroup(FactorGroup):
-    """Base class to represent a group of EnumerationFactors where each factor connects to
+    """Class to represent a group of EnumerationFactors where each factor connects to
     two different variables.
 
     All factors in the group are assumed to be such that all possible configuration of the two

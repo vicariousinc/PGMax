@@ -63,16 +63,22 @@ jobs:
       - name: Install library
         run: poetry install --no-interaction
       #----------------------------------------------
-      #              run test suite
+      #         run test suite with coverage
       #----------------------------------------------
-      - name: Test with pytest
+      - name: Test with coverage
         run: |
-          poetry run pytest
+          poetry run pytest --cov=pgmax --cov-report=xml
+      #----------------------------------------------
+      #      upload coverage report to codecov
+      #----------------------------------------------
+      - name: Upload Coverage to Codecov
+        uses: codecov/codecov-action@v2
+        with:
+          verbose: true # optional (default = false)
       #----------------------------------------------
       #        test docs build only on PR
       #----------------------------------------------
       - name: Test docs build
-        if: ${{ github.event_name == 'pull_request' }}
         run: |
           cd docs
           poetry run make html

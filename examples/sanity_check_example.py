@@ -14,24 +14,21 @@
 
 # %%
 # %matplotlib inline
-# fmt: off
 import os
+from timeit import default_timer as timer
+from typing import Any, Dict, List, Tuple
+
+# Standard Package Imports
+import matplotlib.pyplot as plt
+import numpy as np
+from numpy.random import default_rng
+from scipy import sparse
+from scipy.ndimage import gaussian_filter
 
 import pgmax.fg.graph as graph
 
 # Custom Imports
-import pgmax.fg.groups as groups  # isort:skip
-
-# Standard Package Imports
-import matplotlib.pyplot as plt  # isort:skip
-import numpy as np  # isort:skip
-from numpy.random import default_rng  # isort:skip
-from scipy import sparse  # isort:skip
-from scipy.ndimage import gaussian_filter  # isort:skip
-from typing import Any, Dict, Tuple, List  # isort:skip
-from timeit import default_timer as timer  # isort:skip
-
-# fmt: on
+import pgmax.fg.groups as groups
 
 # %% [markdown]
 # ## Setting up Image
