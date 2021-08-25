@@ -365,7 +365,7 @@ def test_e2e_sanity_check():
     )
 
     # Run BP
-    one_step_msgs = fg.run_bp(100, 0.5)
+    one_step_msgs = fg.run_bp(1, 0.5)
     final_msgs = fg.run_bp(99, 0.5, one_step_msgs)
 
     # Test that the output messages are close to the true messages

@@ -16,7 +16,7 @@ from pgmax.utils import cached_property
 
 @dataclass(frozen=True, eq=False)
 class VariableGroup:
-    """Base class to represent a group of variables.
+    """Class to represent a group of variables.
 
     All variables in the group are assumed to have the same size. Additionally, the
     variables are indexed by a "key", and can be retrieved by direct indexing (even indexing
@@ -35,12 +35,12 @@ class VariableGroup:
         )
 
     @typing.overload
-    def __getitem__(self, key: Hashable) -> nodes.Variable:  # pragma: no cover
-        pass
+    def __getitem__(self, key: Hashable) -> nodes.Variable:
+        """This function must be overriden by a subclass; does nothing"""
 
     @typing.overload
-    def __getitem__(self, key: List) -> List[nodes.Variable]:  # pragma: no cover
-        pass
+    def __getitem__(self, key: List) -> List[nodes.Variable]:
+        """This function must be overriden by a subclass; does nothing"""
 
     def __getitem__(self, key):
         """Given a key, retrieve the associated Variable.
@@ -84,9 +84,7 @@ class VariableGroup:
             "Please subclass the VariableGroup class and override this method"
         )
 
-    def get_vars_to_evidence(
-        self, evidence: Any
-    ) -> Dict[nodes.Variable, np.ndarray]:  # pragma: no cover
+    def get_vars_to_evidence(self, evidence: Any) -> Dict[nodes.Variable, np.ndarray]:
         """Function that turns input evidence into a dictionary mapping variables to evidence.
 
         Returns:
@@ -143,13 +141,13 @@ class CompositeVariableGroup(VariableGroup):
             self, "_keys_to_vars", MappingProxyType(self._set_keys_to_vars())
         )
 
-    @typing.overload  # pragma: no cover
+    @typing.overload
     def __getitem__(self, key: Hashable) -> nodes.Variable:
-        pass
+        """This function must be overriden by a subclass; does nothing"""
 
-    @typing.overload  # pragma: no cover
+    @typing.overload
     def __getitem__(self, key: List) -> List[nodes.Variable]:
-        pass
+        """This function must be overriden by a subclass; does nothing"""
 
     def __getitem__(self, key):
         """Given a key, retrieve the associated Variable from the associated VariableGroup.
@@ -355,7 +353,7 @@ class GenericVariableGroup(VariableGroup):
 
 @dataclass(frozen=True, eq=False)
 class FactorGroup:
-    """Base class to represent a group of factors.
+    """Class to represent a group of factors.
 
     Args:
         variable_group: either a VariableGroup or - if the elements of more than one VariableGroup
@@ -384,7 +382,7 @@ class FactorGroup:
 
 @dataclass(frozen=True, eq=False)
 class EnumerationFactorGroup(FactorGroup):
-    """Base class to represent a group of EnumerationFactors.
+    """Class to represent a group of EnumerationFactors.
 
     All factors in the group are assumed to have the same set of valid configurations and
     the same potential function. Note that the log potential function is assumed to be
@@ -430,7 +428,7 @@ class EnumerationFactorGroup(FactorGroup):
 
 @dataclass(frozen=True, eq=False)
 class PairwiseFactorGroup(FactorGroup):
-    """Base class to represent a group of EnumerationFactors where each factor connects to
+    """Class to represent a group of EnumerationFactors where each factor connects to
     two different variables.
 
     All factors in the group are assumed to be such that all possible configuration of the two

@@ -74,7 +74,6 @@ jobs:
       - name: Upload Coverage to Codecov
         uses: codecov/codecov-action@v2
         with:
-          token: ${{ secrets.CODECOV_TOKEN }} # not required for public repos
           verbose: true # optional (default = false)
       #----------------------------------------------
       #        test docs build only on PR
