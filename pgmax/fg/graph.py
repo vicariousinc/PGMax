@@ -209,6 +209,22 @@ class FactorGraph:
         """
         return jnp.zeros(self.wiring.var_states_for_edges.shape[0])
 
+    def new_get_init_msgs(self, mode: str = "zeros"):
+        """Function to initialize messages."""
+        if mode == "zeros":
+            init_msgs = jnp.zeros(self.wiring.var_states_for_edges.shape[0])
+        elif mode == "random":
+            init_msgs = jax.device_put(
+                np.random.gumbel(size=self.wiring.var_states_for_edges.shape[0])
+            )
+
+        return init_msgs
+
+    def update_msgs(
+        self, msgs: jnp.ndarray, factor_key: Hashable, factor_msgs: jnp.ndarray
+    ):
+        pass
+
     def set_evidence(
         self,
         key: Union[Tuple[Any, ...], Any],
