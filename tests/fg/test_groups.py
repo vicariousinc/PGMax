@@ -39,13 +39,6 @@ def test_ndvararray_evidence_error():
     assert "Input evidence" in str(verror.value)
 
 
-def test_facgroup_errors():
-    v_group = groups.NDVariableArray(3, (2, 2))
-    with pytest.raises(ValueError) as verror:
-        groups.FactorGroup(v_group, [])
-    assert "self.connected_var_keys is empty" == str(verror.value)
-
-
 def test_pairwisefacgroup_errors():
     v_group = groups.NDVariableArray(3, (2, 2))
     with pytest.raises(ValueError) as verror:
