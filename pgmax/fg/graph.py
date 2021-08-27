@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Dict, List, Mapping, Sequence, Tuple, Union
+from typing import Any, Dict, Hashable, List, Mapping, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -42,7 +42,7 @@ class FactorGraph:
     """
 
     variable_groups: Union[
-        Mapping[Any, groups.VariableGroup],
+        Mapping[Hashable, groups.VariableGroup],
         Sequence[groups.VariableGroup],
         groups.VariableGroup,
     ]
@@ -78,10 +78,9 @@ class FactorGraph:
             }
         )
         self.num_var_states = vars_num_states_cumsum[-1]
-
         self._vars_to_evidence: Dict[nodes.Variable, np.ndarray] = {}
-
         self._factor_groups: List[groups.FactorGroup] = []
+        self._named_factor_groups: Dict[Hashable, groups.FactorGroup] = {}
 
     def add_factors(
         self,
@@ -108,6 +107,7 @@ class FactorGraph:
                 "factor_factory" argument. Note that either *args or **kwargs must be
                 specified.
         """
+        name = kwargs.pop("name", None)
         factor_factory = kwargs.pop("factor_factory", None)
         if factor_factory is not None:
             factor_group = factor_factory(
@@ -128,6 +128,8 @@ class FactorGraph:
                 )
 
         self._factor_groups.append(factor_group)
+        if name is not None:
+            self._named_factor_groups[name] = factor_group
 
     @property
     def wiring(self) -> nodes.EnumerationWiring:
@@ -210,7 +212,7 @@ class FactorGraph:
     def set_evidence(
         self,
         key: Union[Tuple[Any, ...], Any],
-        evidence: Union[Dict[Any, np.ndarray], np.ndarray],
+        evidence: Union[Dict[Hashable, np.ndarray], np.ndarray],
     ) -> None:
         """Function to update the evidence for variables in the FactorGraph.
 

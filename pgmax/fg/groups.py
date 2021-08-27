@@ -23,12 +23,12 @@ class VariableGroup:
         _keys_to_vars: A private, immutable mapping from keys to variables
     """
 
-    _keys_to_vars: Mapping[Any, nodes.Variable] = field(init=False)
+    _keys_to_vars: Mapping[Hashable, nodes.Variable] = field(init=False)
 
     def __post_init__(self) -> None:
         """Initialize a private, immutable mapping from keys to variables."""
         object.__setattr__(
-            self, "_keys_to_vars", MappingProxyType(self._set_keys_to_vars())
+            self, "_keys_to_vars", MappingProxyType(self._get_keys_to_vars())
         )
 
     @typing.overload
@@ -71,7 +71,7 @@ class VariableGroup:
         else:
             return vars_list[0]
 
-    def _set_keys_to_vars(self) -> Dict[Any, nodes.Variable]:
+    def _get_keys_to_vars(self) -> Dict[Any, nodes.Variable]:
         """Function that generates a dictionary mapping keys to variables.
 
         Returns:
@@ -91,7 +91,7 @@ class VariableGroup:
             "Please subclass the VariableGroup class and override this method"
         )
 
-    @property
+    @cached_property
     def keys(self) -> Tuple[Any, ...]:
         """Function to return a tuple of all keys in the group.
 
@@ -100,7 +100,7 @@ class VariableGroup:
         """
         return tuple(self._keys_to_vars.keys())
 
-    @property
+    @cached_property
     def variables(self) -> Tuple[nodes.Variable, ...]:
         """Function to return a tuple of all variables in the group.
 
@@ -130,12 +130,12 @@ class CompositeVariableGroup(VariableGroup):
     """
 
     variable_group_container: Union[
-        Mapping[Any, VariableGroup], Sequence[VariableGroup]
+        Mapping[Hashable, VariableGroup], Sequence[VariableGroup]
     ]
 
     def __post_init__(self):
         object.__setattr__(
-            self, "_keys_to_vars", MappingProxyType(self._set_keys_to_vars())
+            self, "_keys_to_vars", MappingProxyType(self._get_keys_to_vars())
         )
 
     @typing.overload
@@ -180,13 +180,13 @@ class CompositeVariableGroup(VariableGroup):
         else:
             return vars_list[0]
 
-    def _set_keys_to_vars(self) -> Dict[Any, nodes.Variable]:
+    def _get_keys_to_vars(self) -> Dict[Hashable, nodes.Variable]:
         """Function that generates a dictionary mapping keys to variables.
 
         Returns:
             a dictionary mapping all possible keys to different variables.
         """
-        keys_to_vars = {}
+        keys_to_vars: Dict[Hashable, nodes.Variable] = {}
         for container_key in self.container_keys:
             for variable_group_key in self.variable_group_container[container_key].keys:
                 if isinstance(variable_group_key, tuple):
@@ -250,7 +250,7 @@ class NDVariableArray(VariableGroup):
     variable_size: int
     shape: Tuple[int, ...]
 
-    def _set_keys_to_vars(self) -> Dict[Tuple[int, ...], nodes.Variable]:
+    def _get_keys_to_vars(self) -> Dict[Tuple[int, ...], nodes.Variable]:
         """Function that generates a dictionary mapping keys to variables.
 
         Returns:
@@ -302,7 +302,7 @@ class GenericVariableGroup(VariableGroup):
     variable_size: int
     key_tuple: Tuple[Any, ...]
 
-    def _set_keys_to_vars(self) -> Dict[Tuple[int, ...], nodes.Variable]:
+    def _get_keys_to_vars(self) -> Dict[Tuple[int, ...], nodes.Variable]:
         """Function that generates a dictionary mapping keys to variables.
 
         Returns:
@@ -314,7 +314,7 @@ class GenericVariableGroup(VariableGroup):
         return keys_to_vars
 
     def get_vars_to_evidence(
-        self, evidence: Mapping[Any, np.ndarray]
+        self, evidence: Mapping[Hashable, np.ndarray]
     ) -> Dict[nodes.Variable, np.ndarray]:
         """Function that turns input evidence into a dictionary mapping variables to evidence.
 
@@ -365,16 +365,21 @@ class FactorGroup:
     """
 
     variable_group: Union[CompositeVariableGroup, VariableGroup]
-    connected_var_keys: List[List[Tuple[Any, ...]]]
+    _keys_to_factors: Mapping[Hashable, nodes.EnumerationFactor] = field(init=False)
 
     def __post_init__(self) -> None:
         """Initializes a tuple of all the factors contained within this FactorGroup."""
-        if len(self.connected_var_keys) == 0:
-            raise ValueError("self.connected_var_keys is empty")
+        object.__setattr__(
+            self, "_keys_to_factors", MappingProxyType(self._get_keys_to_factors())
+        )
 
-    @cached_property
-    def factors(self) -> Tuple[nodes.EnumerationFactor, ...]:
-        raise NotImplementedError("Needs to be overriden by subclass")
+    def __getitem__(self, key: Hashable) -> nodes.EnumerationFactor:
+        if key not in self._keys_to_factors:
+            raise ValueError(
+                f"The queried factor {key} is not present in the factor group"
+            )
+
+        return self._keys_to_factors[key]
 
     def compile_wiring(
         self, vars_to_starts: Mapping[nodes.Variable, int]
@@ -405,6 +410,24 @@ class FactorGroup:
             [factor.factor_configs_log_potentials for factor in self.factors]
         )
 
+    def _get_keys_to_factors(self) -> Dict[Hashable, nodes.EnumerationFactor]:
+        """Function that generates a dictionary mapping keys to factors.
+
+        Returns:
+            a dictionary mapping all possible keys to different factors.
+        """
+        raise NotImplementedError(
+            "Please subclass the VariableGroup class and override this method"
+        )
+
+    @cached_property
+    def keys(self) -> Tuple[Hashable, ...]:
+        return tuple(self._keys_to_factors.keys())
+
+    @cached_property
+    def factors(self) -> Tuple[nodes.EnumerationFactor, ...]:
+        return tuple(self._keys_to_factors.values())
+
 
 @dataclass(frozen=True, eq=False)
 class EnumerationFactorGroup(FactorGroup):
@@ -427,12 +450,14 @@ class EnumerationFactorGroup(FactorGroup):
             internally by invoking the _get_connected_var_keys_for_factors method.
     """
 
+    connected_var_keys: Union[
+        Sequence[List[Tuple[Hashable, ...]]],
+        Mapping[Any, List[Tuple[Hashable, ...]]],
+    ]
     factor_configs: np.ndarray
     factor_configs_log_potentials: Optional[np.ndarray] = None
 
-    @cached_property
-    def factors(self) -> Tuple[nodes.EnumerationFactor, ...]:
-        """Returns a tuple of all the factors contained within this FactorGroup."""
+    def _get_keys_to_factors(self) -> Dict[Hashable, nodes.EnumerationFactor]:
         if self.factor_configs_log_potentials is None:
             factor_configs_log_potentials = np.zeros(
                 self.factor_configs.shape[0], dtype=float
@@ -440,16 +465,20 @@ class EnumerationFactorGroup(FactorGroup):
         else:
             factor_configs_log_potentials = self.factor_configs_log_potentials
 
-        return tuple(
-            [
-                nodes.EnumerationFactor(
-                    tuple(self.variable_group[keys_list]),
-                    self.factor_configs,
-                    factor_configs_log_potentials,
-                )
-                for keys_list in self.connected_var_keys
-            ]
-        )
+        if isinstance(self.connected_var_keys, Sequence):
+            factor_keys = tuple(range(len(self.connected_var_keys)))
+        else:
+            factor_keys = tuple(self.connected_var_keys.keys())
+
+        keys_to_factors: Dict[Hashable, nodes.EnumerationFactor] = {
+            key: nodes.EnumerationFactor(
+                tuple(self.variable_group[self.connected_var_keys[key]]),
+                self.factor_configs,
+                factor_configs_log_potentials,
+            )
+            for key in factor_keys
+        }
+        return keys_to_factors
 
 
 @dataclass(frozen=True, eq=False)
@@ -480,10 +509,19 @@ class PairwiseFactorGroup(FactorGroup):
             each sub-list of self.connected_var_keys
     """
 
+    connected_var_keys: Union[
+        Sequence[List[Tuple[Hashable, ...]]],
+        Mapping[Any, List[Tuple[Hashable, ...]]],
+    ]
     log_potential_matrix: np.ndarray
 
     def __post_init__(self) -> None:
-        for fac_list in self.connected_var_keys:
+        if isinstance(self.connected_var_keys, Sequence):
+            connected_var_keys = self.connected_var_keys
+        else:
+            connected_var_keys = tuple(self.connected_var_keys.values())
+
+        for fac_list in connected_var_keys:
             if len(fac_list) != 2:
                 raise ValueError(
                     "All pairwise factors should connect to exactly 2 variables. Got a factor connecting to"
@@ -502,8 +540,7 @@ class PairwiseFactorGroup(FactorGroup):
                     + f"based on self.connected_var_keys. Instead, it has shape {self.log_potential_matrix.shape}"
                 )
 
-    @cached_property
-    def factors(self) -> Tuple[nodes.EnumerationFactor, ...]:
+    def _get_keys_to_factors(self) -> Dict[Hashable, nodes.EnumerationFactor]:
         """Returns a tuple of all the factors contained within this FactorGroup."""
         factor_configs = np.array(
             np.meshgrid(
@@ -514,13 +551,17 @@ class PairwiseFactorGroup(FactorGroup):
         factor_configs_log_potentials = self.log_potential_matrix[
             factor_configs[:, 0], factor_configs[:, 1]
         ]
-        return tuple(
-            [
-                nodes.EnumerationFactor(
-                    tuple(self.variable_group[keys_list]),
-                    factor_configs,
-                    factor_configs_log_potentials,
-                )
-                for keys_list in self.connected_var_keys
-            ]
-        )
+        if isinstance(self.connected_var_keys, Sequence):
+            factor_keys = tuple(range(len(self.connected_var_keys)))
+        else:
+            factor_keys = tuple(self.connected_var_keys.keys())
+
+        keys_to_factors: Dict[Hashable, nodes.EnumerationFactor] = {
+            key: nodes.EnumerationFactor(
+                tuple(self.variable_group[self.connected_var_keys[key]]),
+                factor_configs,
+                factor_configs_log_potentials,
+            )
+            for key in factor_keys
+        }
+        return keys_to_factors
