@@ -435,12 +435,31 @@ class Messages:
         ):
             factor, start = self.factor_graph.get_factor(keys[0])
             variable = self.factor_graph._composite_variable_group[keys[1]]
+            if data.shape != (variable.num_states,):
+                raise ValueError(
+                    f"Given message shape {data.shape} does not match expected "
+                    f"shape f{(variable.num_states,)} from factor {keys[0]} "
+                    f"to variable {keys[1]}."
+                )
+
             self._message_updates[
                 start
                 + np.sum(factor.edges_num_states[: factor.variables.index(variable)])
             ] = data
         elif keys in self.factor_graph._composite_variable_group.keys:
-            pass
+            variable = self.factor_graph._composite_variable_group[keys]
+            if data.shape != (variable.num_states,):
+                raise ValueError(
+                    f"Given belief shape {data.shape} does not match expected "
+                    f"shape f{(variable.num_states,)} for variable {keys}."
+                )
+
+            starts = np.nonzero(
+                self.factor_graph.wiring.var_states_for_edges
+                == self.factor_graph._vars_to_starts[variable]
+            )[0]
+            for start in starts:
+                self._message_updates[start] = data / starts.shape[0]
         else:
             raise ValueError("")
 
