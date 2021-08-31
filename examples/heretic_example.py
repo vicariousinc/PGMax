@@ -174,8 +174,11 @@ Mup = Mup - bHn / f_s ** 2
 reshaped_Mdown = Mdown.reshape(3, 3, 3, 28, 28)
 reshaped_Mup = Mup.reshape(17, 3, 3, 28, 28)
 
-init_msgs = jax.device_put(
-    custom_flatten_ordering(np.array(reshaped_Mdown), np.array(reshaped_Mup))
+init_msgs = graph.FToVMessages(
+    factor_graph=fg,
+    init_value=jax.device_put(
+        custom_flatten_ordering(np.array(reshaped_Mdown), np.array(reshaped_Mup))
+    ),
 )
 
 # %% [markdown]

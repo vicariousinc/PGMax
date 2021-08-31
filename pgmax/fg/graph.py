@@ -395,7 +395,7 @@ class FToVMessages:
         if self.default_mode is None and self.init_value is None:
             self.default_mode = "zeros"
 
-        if self.default_mode not in ("zeros", "random"):
+        if self.init_value is None and self.default_mode not in ("zeros", "random"):
             raise ValueError(
                 f"Unsupported default message mode {self.default_mode}. "
                 "Supported default modes are zeros or random"

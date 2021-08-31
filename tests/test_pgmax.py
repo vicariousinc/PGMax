@@ -369,7 +369,7 @@ def test_e2e_sanity_check():
     final_msgs = fg.run_bp(99, 0.5, one_step_msgs)
 
     # Test that the output messages are close to the true messages
-    assert jnp.allclose(final_msgs, true_final_msgs_output, atol=1e-06)
+    assert jnp.allclose(final_msgs.value, true_final_msgs_output, atol=1e-06)
     assert fg.decode_map_states(final_msgs) == true_map_state_output
 
 
