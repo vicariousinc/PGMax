@@ -422,3 +422,6 @@ def test_e2e_heretic():
     init_msgs[((0, 0), 0), (0, 0, 0)]
     init_msgs[((1, 1), 0), (1, 0, 0)] = np.ones(17)
     assert np.all(init_msgs[((1, 1), 0), (1, 0, 0)] == 1.0)
+    init_msgs[1, 0, 0] = np.ones(17)
+    assert jnp.all(init_msgs[((0, 0), 0), (1, 0, 0)] == 1.0 / 9)
+    assert np.all(init_msgs[((1, 1), 0), (1, 0, 0)] == 1.0 / 9)
