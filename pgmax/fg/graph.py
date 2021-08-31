@@ -488,5 +488,16 @@ class FToVMessages:
             raise ValueError("")
 
     @property
-    def data(self) -> jnp.ndarray:
-        pass
+    def value(self) -> jnp.ndarray:
+        if self.default_mode == "zeros":
+            msgs = jnp.zeros(self.factor_graph._total_factor_num_states)
+        elif self.default_mode == "random":
+            msgs = jax.device_put(
+                np.random.gumbel(size=(self.factor_graph._total_factor_num_states,))
+            )
+
+        for start in self._message_updates:
+            data = self._message_updates[start]
+            msgs = msgs.at[start : start + data.shape[0]].set(data)
+
+        return msgs
