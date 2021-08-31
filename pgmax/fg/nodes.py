@@ -120,10 +120,10 @@ class EnumerationFactor:
             Array of shape (num_edges,)
             Number of states for the variables connected to each edge
         """
-        edge_num_states = np.array(
+        edges_num_states = np.array(
             [variable.num_states for variable in self.variables], dtype=int
         )
-        return edge_num_states
+        return edges_num_states
 
     @utils.cached_property
     def factor_configs_edge_states(self) -> np.ndarray:

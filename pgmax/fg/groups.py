@@ -431,7 +431,7 @@ class FactorGroup:
     @cached_property
     def factor_num_states(self) -> np.ndarray:
         factor_num_states = np.array(
-            [np.sum(factor.edge_num_states) for factor in self.factors], dtype=int
+            [np.sum(factor.edges_num_states) for factor in self.factors], dtype=int
         )
         return factor_num_states
 

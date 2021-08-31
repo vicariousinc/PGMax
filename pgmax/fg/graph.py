@@ -5,7 +5,7 @@ from __future__ import annotations
 import typing
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Dict, Hashable, List, Mapping, Sequence, Tuple, Union
+from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -50,6 +50,7 @@ class FactorGraph:
         groups.VariableGroup,
     ]
     evidence_default_mode: str = "zeros"
+    messages_default_mode: str = "zeros"
 
     def __post_init__(self):
         if isinstance(self.variable_groups, groups.CompositeVariableGroup):
@@ -230,7 +231,7 @@ class FactorGraph:
         """List of individual factors in the factor graph"""
         return sum([factor_group.factors for factor_group in self._factor_groups], ())
 
-    def get_init_msgs(self, context: Any = None):
+    def get_init_msgs(self) -> FToVMessages:
         """Function to initialize messages.
 
         By default it initializes all messages to 0. Can be overwritten to support
@@ -243,7 +244,7 @@ class FactorGraph:
             array of shape (num_edge_state,) representing initialized factor to variable
                 messages
         """
-        return jnp.zeros(self.wiring.var_states_for_edges.shape[0])
+        return FToVMessages(factor_graph=self, default_mode=self.messages_default_mode)
 
     def set_evidence(
         self,
@@ -285,9 +286,8 @@ class FactorGraph:
         self,
         num_iters: int,
         damping_factor: float,
-        init_msgs: jnp.ndarray = None,
-        msgs_context: Any = None,
-    ) -> jnp.ndarray:
+        init_msgs: FToVMessages = None,
+    ) -> FToVMessages:
         """Function to perform belief propagation.
 
         Specifically, belief propagation is run on messages obtained from the self.get_init_msgs
@@ -306,9 +306,9 @@ class FactorGraph:
         # Retrieve the necessary data structures from the compiled self.wiring and
         # convert these to jax arrays.
         if init_msgs is not None:
-            msgs = init_msgs
+            msgs = init_msgs.value
         else:
-            msgs = self.get_init_msgs(msgs_context)
+            msgs = self.get_init_msgs().value
 
         wiring = jax.device_put(self.wiring)
         evidence = jax.device_put(self.evidence)
@@ -352,10 +352,9 @@ class FactorGraph:
             return msgs, None
 
         msgs_after_bp, _ = jax.lax.scan(message_passing_step, msgs, None, num_iters)
+        return FToVMessages(factor_graph=self, init_value=msgs_after_bp)
 
-        return msgs_after_bp
-
-    def decode_map_states(self, msgs: jnp.ndarray) -> Dict[Tuple[Any, ...], int]:
+    def decode_map_states(self, msgs: FToVMessages) -> Dict[Tuple[Any, ...], int]:
         """Function to computes the output of MAP inference on input messages.
 
         The final states are computed based on evidence obtained from the self.get_evidence
@@ -370,7 +369,7 @@ class FactorGraph:
         """
         var_states_for_edges = jax.device_put(self.wiring.var_states_for_edges)
         evidence = jax.device_put(self.evidence)
-        final_var_states = evidence.at[var_states_for_edges].add(msgs)
+        final_var_states = evidence.at[var_states_for_edges].add(msgs.value)
         var_key_to_map_dict: Dict[Tuple[Any, ...], int] = {}
         final_var_states_np = np.array(final_var_states)
         for var_key in self._composite_variable_group.keys:
@@ -385,10 +384,17 @@ class FactorGraph:
 @dataclass
 class FToVMessages:
     factor_graph: FactorGraph
-    default_mode: str = "zeros"
+    default_mode: Optional[str] = None
+    init_value: Optional[jnp.ndarray] = None
 
     def __post_init__(self):
         self._message_updates: Dict[int, jnp.ndarray] = {}
+        if self.default_mode is not None and self.init_value is not None:
+            raise ValueError("Should specify only one of default_mode and init_value.")
+
+        if self.default_mode is None and self.init_value is None:
+            self.default_mode = "zeros"
+
         if self.default_mode not in ("zeros", "random"):
             raise ValueError(
                 f"Unsupported default message mode {self.default_mode}. "
@@ -489,12 +495,23 @@ class FToVMessages:
 
     @property
     def value(self) -> jnp.ndarray:
-        if self.default_mode == "zeros":
-            msgs = jnp.zeros(self.factor_graph._total_factor_num_states)
-        elif self.default_mode == "random":
-            msgs = jax.device_put(
-                np.random.gumbel(size=(self.factor_graph._total_factor_num_states,))
-            )
+        if self.init_value is not None:
+            if not self.init_value.shape == (
+                self.factor_graph._total_factor_num_states,
+            ):
+                raise ValueError(
+                    f"Expected messages shape {(self.factor_graph._total_factor_num_states,)}. "
+                    f"Got {self.init_value.shape}."
+                )
+
+            msgs = self.init_value
+        else:
+            if self.default_mode == "zeros":
+                msgs = jnp.zeros(self.factor_graph._total_factor_num_states)
+            elif self.default_mode == "random":
+                msgs = jax.device_put(
+                    np.random.gumbel(size=(self.factor_graph._total_factor_num_states,))
+                )
 
         for start in self._message_updates:
             data = self._message_updates[start]
