@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Tuple
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pytest
 from numpy.random import default_rng
 from scipy.ndimage import gaussian_filter
 
@@ -422,6 +423,14 @@ def test_e2e_heretic():
                 name=(k_row, k_col),
             )
 
+    with pytest.raises(ValueError) as verror:
+        fg.get_factor((0, 0))
+
+    assert "Invalid factor key" in str(verror.value)
+    with pytest.raises(ValueError) as verror:
+        fg.get_factor((((0, 0), 0), (10, 20, 30)))
+
+    assert "Invalid factor key" in str(verror.value)
     assert isinstance(fg.evidence, np.ndarray)
     assert len(fg.factors) == 7056
     for msgs in [
@@ -432,6 +441,6 @@ def test_e2e_heretic():
         msgs[((1, 1), 0), (1, 0, 0)] = np.ones(17)
         assert np.all(msgs[((1, 1), 0), (1, 0, 0)] == 1.0)
         msgs[1, 0, 0] = np.ones(17)
-        assert jnp.all(msgs[((0, 0), 0), (1, 0, 0)] == 1.0 / 9)
+        assert np.all(msgs[((0, 0), 0), (1, 0, 0)] == 1.0 / 9)
         assert np.all(msgs[((1, 1), 0), (1, 0, 0)] == 1.0 / 9)
         fg.run_bp(1, 0.5, init_msgs=msgs)

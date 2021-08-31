@@ -390,7 +390,7 @@ class FactorGraph:
 class FToVMessages:
     factor_graph: FactorGraph
     default_mode: Optional[str] = None
-    init_value: Optional[jnp.ndarray] = None
+    init_value: Optional[Union[np.ndarray, jnp.ndarray]] = None
 
     def __post_init__(self):
         self._message_updates: Dict[int, jnp.ndarray] = {}
@@ -496,7 +496,13 @@ class FToVMessages:
             for start in starts:
                 self._message_updates[start] = data / starts.shape[0]
         else:
-            raise ValueError("")
+            raise ValueError(
+                "Invalid keys for setting messages. "
+                "Supported keys include a tuple of length 2 with factor "
+                "and variable keys for directly setting factor to variable "
+                "messages, or a valid variable key for spreading expected "
+                "beliefs at a variable"
+            )
 
     @property
     def value(self) -> jnp.ndarray:
