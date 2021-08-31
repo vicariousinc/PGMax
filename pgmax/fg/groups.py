@@ -374,7 +374,7 @@ class FactorGroup:
         )
 
     def __getitem__(self, key: Hashable) -> nodes.EnumerationFactor:
-        if key not in self._keys_to_factors:
+        if key not in self.keys:
             raise ValueError(
                 f"The queried factor {key} is not present in the factor group"
             )

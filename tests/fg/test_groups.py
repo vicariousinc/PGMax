@@ -52,6 +52,12 @@ def test_pairwisefacgroup_errors():
             v_group, [[(0, 0), (1, 1)]], np.zeros((1,), dtype=float)
         )
     assert "self.log_potential_matrix must" in str(verror.value)
+    factor_group = groups.PairwiseFactorGroup(
+        v_group, {0: [(0, 0), (1, 1)]}, np.zeros((3, 3), dtype=float)
+    )
+    with pytest.raises(ValueError) as verror:
+        factor_group[1]
+    assert "The queried factor" in str(verror.value)
 
 
 def test_generic_evidence_errors():
