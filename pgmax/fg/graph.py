@@ -27,8 +27,11 @@ class FactorGraph:
             For a sequence, the indices of the sequence are used to index the variable groups.
             Note that a CompositeVariableGroup will be created from this input, and the individual
             VariableGroups will need to be accessed by indexing this.
-        evidence_default: string representing a setting that specifies the default evidence value for
-            any variable whose evidence was not explicitly specified using 'set_evidence'
+        evidence_default_mode: default mode for initializing evidence.
+            Allowed values are "zeros" and "random".
+            Any variable whose evidence was not explicitly specified using 'set_evidence'
+        messages_default_mode: default mode for initializing messages.
+            Allowed values are "zeros" and "random".
 
     Attributes:
         _composite_variable_group: CompositeVariableGroup. contains all involved VariableGroups
@@ -42,6 +45,13 @@ class FactorGraph:
             representing the evidence for that variable
         _vargroups_set: Set[groups.VariableGroup]. keeps track of all the VariableGroup's that have
             been added to this FactorGraph
+        _named_factor_groups: Dict[Hashable, groups.FactorGroup]. A dictionary mapping the names of
+            named factor groups to the corresponding factor groups.
+            We only support setting messages from factors within explicitly named factor groups
+            to connected variables.
+        _total_factor_num_states: int. Current total number of edge states for the added factors.
+        _factor_group_to_starts: Dict[groups.FactorGroup, int]. Maps a factor group to its
+            corresponding starting index in the flat message array.
     """
 
     variable_groups: Union[
@@ -88,12 +98,12 @@ class FactorGraph:
         self._total_factor_num_states: int = 0
         self._factor_group_to_starts: Dict[groups.FactorGroup, int] = {}
 
-    def add_factors(
+    def add_factor(
         self,
         *args,
         **kwargs,
     ) -> None:
-        """Function to add factors to this FactorGraph.
+        """Function to add factor/factor group to this FactorGraph.
 
         Args:
             *args: optional sequence of arguments. If specified, and if there is no
@@ -110,7 +120,10 @@ class FactorGraph:
                 indices of variables ot be indexed to create the EnumerationFactor).
                 If there is a "factor_factory" key, then these args are taken to specify
                 the arguments to be used to construct the class specified by the
-                "factor_factory" argument. Note that either *args or **kwargs must be
+                "factor_factory" argument.
+                If there is a "name" key, we add the added factor/factor group to the list
+                of named factors within the factor graph.
+                Note that either *args or **kwargs must be
                 specified.
         """
         name = kwargs.pop("name", None)
@@ -140,6 +153,16 @@ class FactorGraph:
             self._named_factor_groups[name] = factor_group
 
     def get_factor(self, key: Any) -> Tuple[nodes.EnumerationFactor, int]:
+        """Function to get an individual factor and start index
+
+        Args:
+            key: the key for the factor.
+                The queried factor must be part of an named factor group.
+
+        Returns:
+            A tuple of length 2, containing the queried factor and its corresponding
+            start index in the flat message array.
+        """
         if key in self._named_factor_groups:
             if len(self._named_factor_groups[key].factors) != 1:
                 raise ValueError(
@@ -214,7 +237,7 @@ class FactorGraph:
             Array of shape (num_var_states,) representing the flattened evidence for each variable
 
         Raises:
-            NotImplementedError: if self.evidence_default is a string that is not listed
+            NotImplementedError: if self.evidence_default_mode is a string that is not listed
         """
         if self.evidence_default_mode == "zeros":
             evidence = np.zeros(self.num_var_states)
@@ -237,17 +260,10 @@ class FactorGraph:
         return sum([factor_group.factors for factor_group in self._factor_groups], ())
 
     def get_init_msgs(self) -> FToVMessages:
-        """Function to initialize messages.
-
-        By default it initializes all messages to 0. Can be overwritten to support
-        customized initialization schemes
-
-        Args:
-            context: Optional context for initializing messages
+        """Function to initialize ftov messages.
 
         Returns:
-            array of shape (num_edge_state,) representing initialized factor to variable
-                messages
+            Initialized ftov messages
         """
         return FToVMessages(factor_graph=self, default_mode=self.messages_default_mode)
 
@@ -291,22 +307,21 @@ class FactorGraph:
         self,
         num_iters: int,
         damping_factor: float,
-        init_msgs: FToVMessages = None,
+        init_msgs: Optional[FToVMessages] = None,
     ) -> FToVMessages:
         """Function to perform belief propagation.
 
-        Specifically, belief propagation is run on messages obtained from the self.get_init_msgs
-        method for num_iters iterations and returns the resulting messages.
+        Specifically, belief propagation is run for num_iters iterations and
+        returns the resulting messages.
 
         Args:
             num_iters: The number of iterations for which to perform message passing
             damping_factor: The damping factor to use for message updates between one timestep and the next
-            init_msgs: array of shape (num_edge_state,) representing the initial messaged on which to perform
-                belief propagation. If this argument is none, messages are generated by calling self.get_init_msgs()
-            msgs_context: Optional context for initializing messages
+            init_msgs: Initial messages to start the belief propagation.
+                If None, construct init_msgs by calling self.get_init_msgs()
 
         Returns:
-            an array of shape (num_edge_state,) that contains the message values after running BP for num_iters iterations
+            ftov messages after running BP for num_iters iterations
         """
         # Retrieve the necessary data structures from the compiled self.wiring and
         # convert these to jax arrays.
@@ -366,8 +381,7 @@ class FactorGraph:
         method as well as the internal wiring.
 
         Args:
-            msgs: an array of shape (num_edge_state,) that correspond to messages to perform inference
-                upon
+            msgs: ftov messages for deciding MAP states
 
         Returns:
             a dictionary mapping each variable key to the MAP states of the corresponding variable
@@ -388,6 +402,21 @@ class FactorGraph:
 
 @dataclass
 class FToVMessages:
+    """Class for storing and manipulating ftov messages.
+
+    Args:
+        factor_graph: associated factor graph
+        default_mode: default mode for initializing ftov messages.
+            Allowed values include "zeros" and "random"
+            If init_value is None, defaults to "zeros"
+        init_value: Optionally specify initial value for ftov messages
+
+    Attributes:
+        _message_updates: Dict[int, jnp.ndarray]. A dictionary containing
+            the message updates to make on top of initial message values.
+            Maps starting indices to the message values to update with.
+    """
+
     factor_graph: FactorGraph
     default_mode: Optional[str] = None
     init_value: Optional[Union[np.ndarray, jnp.ndarray]] = None
@@ -407,6 +436,16 @@ class FToVMessages:
             )
 
     def __getitem__(self, keys: Tuple[Any, Any]) -> jnp.ndarray:
+        """Function to query messages from a factor to a variable
+
+        Args:
+            keys: a tuple of length 2, with keys[0] being the key for
+                factor, and keys[1] being the key for variable
+
+        Returns:
+            An array containing the current ftov messages from factor
+            keys[0] to variable keys[1]
+        """
         if not (
             isinstance(keys, tuple)
             and len(keys) == 2
@@ -416,6 +455,7 @@ class FToVMessages:
                 f"Invalid keys {keys}. Please specify a tuple of factor, variable "
                 "keys to get the messages from a named factor to a variable"
             )
+
         factor, start = self.factor_graph.get_factor(keys[0])
         if start in self._message_updates:
             msgs = self._message_updates[start]
@@ -459,7 +499,9 @@ class FToVMessages:
 
         Args:
             keys: The key of the variable
-            data: An array containing the beliefs to be spread at variable keys
+            data: An array containing the beliefs to be spread uniformly
+                across all factor to variable messages involving this
+                variable.
         """
 
     def __setitem__(self, keys, data) -> None:
@@ -506,6 +548,12 @@ class FToVMessages:
 
     @property
     def value(self) -> jnp.ndarray:
+        """Functin to get the current flat message array
+
+        Returns:
+            The flat message array after initializing (according to default_mode
+            or init_value) and applying all message updates.
+        """
         if self.init_value is not None:
             if not self.init_value.shape == (
                 self.factor_graph._total_factor_num_states,

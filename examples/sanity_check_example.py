@@ -268,7 +268,7 @@ for row in range(M - 1):
                 ("additional_vars", 1, row + 1, col),
             ]
 
-        fg.add_factors(
+        fg.add_factor(
             curr_keys,
             valid_configs_non_supp,
             np.zeros(valid_configs_non_supp.shape[0], dtype=float),
@@ -321,12 +321,12 @@ horz_suppression_group = groups.EnumerationFactorGroup(
 # ### Add FactorGroups Remaining to FactorGraph
 
 # %%
-fg.add_factors(
+fg.add_factor(
     factor_factory=groups.EnumerationFactorGroup,
     connected_var_keys=vert_suppression_keys,
     factor_configs=valid_configs_supp,
 )
-fg.add_factors(
+fg.add_factor(
     factor_factory=groups.EnumerationFactorGroup,
     connected_var_keys=horz_suppression_keys,
     factor_configs=valid_configs_supp,

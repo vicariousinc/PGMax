@@ -299,14 +299,14 @@ def test_e2e_sanity_check():
                     ("additional_vars", 1, row + 1, col),
                 ]
             if row % 2 == 0:
-                fg.add_factors(
+                fg.add_factor(
                     curr_keys,
                     valid_configs_non_supp,
                     np.zeros(valid_configs_non_supp.shape[0], dtype=float),
                     name=(row, col),
                 )
             else:
-                fg.add_factors(
+                fg.add_factor(
                     keys=curr_keys,
                     factor_configs=valid_configs_non_supp,
                     factor_configs_log_potentials=np.zeros(
@@ -355,14 +355,14 @@ def test_e2e_sanity_check():
                 )
 
     # Add the suppression factors to the graph via kwargs
-    fg.add_factors(
+    fg.add_factor(
         factor_factory=groups.EnumerationFactorGroup,
         connected_var_keys={
             idx: keys for idx, keys in enumerate(vert_suppression_keys)
         },
         factor_configs=valid_configs_supp,
     )
-    fg.add_factors(
+    fg.add_factor(
         factor_factory=groups.EnumerationFactorGroup,
         connected_var_keys=horz_suppression_keys,
         factor_configs=valid_configs_supp,
@@ -416,7 +416,7 @@ def test_e2e_heretic():
     W_pot = np.zeros((17, 3, 3, 3), dtype=float)
     for k_row in range(3):
         for k_col in range(3):
-            fg.add_factors(
+            fg.add_factor(
                 factor_factory=groups.PairwiseFactorGroup,
                 connected_var_keys=binary_connected_variables(28, 28, k_row, k_col),
                 log_potential_matrix=W_pot[:, :, k_row, k_col],

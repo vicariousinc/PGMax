@@ -356,9 +356,9 @@ class FactorGroup:
         variable_group: either a VariableGroup or - if the elements of more than one VariableGroup
             are connected to this FactorGroup - then a CompositeVariableGroup. This holds
             all the variables that are connected to this FactorGroup
-        connected_var_keys: A list of list of tuples, where each innermost tuple contains a
-            key into variable_group. Each list within the outer list is taken to contain the keys of variables
-            neighboring a particular factor to be added.
+
+    Attributes:
+        _keys_to_factors: maps factor keys to the corresponding factors
 
     Raises:
         ValueError: if connected_var_keys is an empty list
@@ -374,6 +374,14 @@ class FactorGroup:
         )
 
     def __getitem__(self, key: Hashable) -> nodes.EnumerationFactor:
+        """Function to query individual factors in the factor group
+
+        Args:
+            key: a key used to query an individual factor in the factor group
+
+        Returns:
+            A queried individual factor
+        """
         if key not in self.keys:
             raise ValueError(
                 f"The queried factor {key} is not present in the factor group"
@@ -422,14 +430,17 @@ class FactorGroup:
 
     @cached_property
     def keys(self) -> Tuple[Hashable, ...]:
+        """Returns all keys in the factor group."""
         return tuple(self._keys_to_factors.keys())
 
     @cached_property
     def factors(self) -> Tuple[nodes.EnumerationFactor, ...]:
+        """Returns all factors in the factor group."""
         return tuple(self._keys_to_factors.values())
 
     @cached_property
     def factor_num_states(self) -> np.ndarray:
+        """Returns the list of total number of edge states for factors in the factor group."""
         factor_num_states = np.array(
             [np.sum(factor.edges_num_states) for factor in self.factors], dtype=int
         )
@@ -445,16 +456,15 @@ class EnumerationFactorGroup(FactorGroup):
     uniform 0 unless the inheriting class includes a factor_configs_log_potentials argument.
 
     Args:
+        connected_var_keys: A list of list of tuples, where each innermost tuple contains a
+            key into variable_group. Each list within the outer list is taken to contain the keys of variables
+            neighboring a particular factor to be added.
         factor_configs: Array of shape (num_val_configs, num_variables)
             An array containing explicit enumeration of all valid configurations
         factor_configs_log_potentials: Optional array of shape (num_val_configs,).
             If specified, it contains the log of the potential value for every possible configuration.
             If none, it is assumed the log potential is uniform 0 and such an array is automatically
             initialized.
-
-    Attributes:
-        factors: a tuple of all the factors belonging to this group. These are constructed
-            internally by invoking the _get_connected_var_keys_for_factors method.
     """
 
     connected_var_keys: Union[
@@ -465,6 +475,11 @@ class EnumerationFactorGroup(FactorGroup):
     factor_configs_log_potentials: Optional[np.ndarray] = None
 
     def _get_keys_to_factors(self) -> Dict[Hashable, nodes.EnumerationFactor]:
+        """Function that generates a dictionary mapping keys to factors.
+
+        Returns:
+            a dictionary mapping all possible keys to different factors.
+        """
         if self.factor_configs_log_potentials is None:
             factor_configs_log_potentials = np.zeros(
                 self.factor_configs.shape[0], dtype=float
@@ -499,21 +514,12 @@ class PairwiseFactorGroup(FactorGroup):
     one CompositeVariableGroup.
 
     Args:
+        connected_var_keys: A list of list of tuples, where each innermost tuple contains a
+            key into variable_group. Each list within the outer list is taken to contain the keys of variables
+            neighboring a particular factor to be added.
         log_potential_matrix: array of shape (var1.variable_size, var2.variable_size),
             where var1 and var2 are the 2 VariableGroups (that may refer to the same
             VariableGroup) whose keys are present in each sub-list from self.connected_var_keys.
-
-    Attributes:
-        factors: a tuple of all the factors belonging to this group. These are constructed
-            internally using self.connected_var_keys
-        factor_configs_log_potentials: array of shape (num_val_configs,), where
-            num_val_configs = var1.variable_size* var2.variable_size. This flattened array
-            contains the log of the potential value for every possible configuration.
-
-    Raises:
-        ValueError: if every sub-list within self.connected_var_keys has len != 2, or if the shape of the
-            log_potential_matrix is not the same as the variable sizes for each variable referenced in
-            each sub-list of self.connected_var_keys
     """
 
     connected_var_keys: Union[
@@ -523,7 +529,16 @@ class PairwiseFactorGroup(FactorGroup):
     log_potential_matrix: np.ndarray
 
     def _get_keys_to_factors(self) -> Dict[Hashable, nodes.EnumerationFactor]:
-        """Returns a tuple of all the factors contained within this FactorGroup."""
+        """Function that generates a dictionary mapping keys to factors.
+
+        Returns:
+            a dictionary mapping all possible keys to different factors.
+
+        Raises:
+            ValueError: if every sub-list within self.connected_var_keys has len != 2, or if the shape of the
+                log_potential_matrix is not the same as the variable sizes for each variable referenced in
+                each sub-list of self.connected_var_keys
+        """
         if isinstance(self.connected_var_keys, Sequence):
             factor_keys = tuple(range(len(self.connected_var_keys)))
             connected_var_keys = self.connected_var_keys
