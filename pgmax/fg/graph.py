@@ -383,12 +383,17 @@ class FactorGraph:
 
 
 @dataclass
-class Messages:
+class FToVMessages:
     factor_graph: FactorGraph
     default_mode: str = "zeros"
 
     def __post_init__(self):
         self._message_updates: Dict[int, jnp.ndarray] = {}
+        if self.default_mode not in ("zeros", "random"):
+            raise ValueError(
+                f"Unsupported default message mode {self.default_mode}. "
+                "Supported default modes are zeros or random"
+            )
 
     def __getitem__(self, keys: Tuple[Any, Any]) -> jnp.ndarray:
         if not (
@@ -396,7 +401,26 @@ class Messages:
             and len(keys) == 2
             and keys[1] in self.factor_graph._composite_variable_group.keys
         ):
-            raise ValueError("")
+            raise ValueError(
+                f"Invalid keys {keys}. Please specify a tuple of factor, variable "
+                "keys to get the messages from a named factor to a variable"
+            )
+        factor, start = self.factor_graph.get_factor(keys[0])
+        if start in self._message_updates:
+            msgs = self._message_updates[start]
+        else:
+            variable = self.factor_graph._composite_variable_group[keys[1]]
+            if self.default_mode == "zeros":
+                msgs = jnp.zeros(variable.num_states)
+            elif self.default_mode == "random":
+                msgs = jax.device_put(np.random.gumbel(size=(variable.num_states,)))
+            else:
+                raise ValueError(
+                    f"Unsupported default message mode {self.default_mode}. "
+                    "Supported default modes are zeros or random"
+                )
+
+        return msgs
 
     @typing.overload
     def __setitem__(
