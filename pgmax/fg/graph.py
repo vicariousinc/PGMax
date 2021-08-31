@@ -1,5 +1,8 @@
 """A module containing the core class to specify a Factor Graph."""
 
+from __future__ import annotations
+
+import typing
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Dict, Hashable, List, Mapping, Sequence, Tuple, Union
@@ -209,22 +212,6 @@ class FactorGraph:
         """
         return jnp.zeros(self.wiring.var_states_for_edges.shape[0])
 
-    def new_get_init_msgs(self, mode: str = "zeros"):
-        """Function to initialize messages."""
-        if mode == "zeros":
-            init_msgs = jnp.zeros(self.wiring.var_states_for_edges.shape[0])
-        elif mode == "random":
-            init_msgs = jax.device_put(
-                np.random.gumbel(size=self.wiring.var_states_for_edges.shape[0])
-            )
-
-        return init_msgs
-
-    def update_msgs(
-        self, msgs: jnp.ndarray, factor_key: Hashable, factor_msgs: jnp.ndarray
-    ):
-        pass
-
     def set_evidence(
         self,
         key: Union[Tuple[Any, ...], Any],
@@ -360,3 +347,65 @@ class FactorGraph:
                 final_var_states_np[start_index : start_index + var.num_states]
             )
         return var_key_to_map_dict
+
+
+@dataclass
+class Messages:
+    factor_graph: FactorGraph
+    default_mode: str = "zeros"
+
+    def __post_init__(self):
+        self._message_updates: Dict[int, jnp.ndarray] = {}
+
+    def __getitem__(self, keys: Tuple[Any, Any]) -> jnp.ndarray:
+        if not (
+            isinstance(keys, tuple)
+            and len(keys) == 2
+            and keys[1] in self.factor_graph._composite_variable_group.keys
+        ):
+            raise ValueError("")
+
+    @typing.overload
+    def __setitem__(
+        self,
+        keys: Tuple[Any, Any],
+        data: Union[np.ndarray, jnp.ndarray],
+    ) -> None:
+        """Setting messages from a factor to a variable
+
+        Args:
+            keys: A tuple of length 2
+                keys[0] is the key of the factor
+                keys[1] is the key of the variable
+            data: An array containing messages from factor keys[0]
+                to variable keys[1]
+        """
+
+    @typing.overload
+    def __setitem__(
+        self,
+        keys: Any,
+        data: Union[np.ndarray, jnp.ndarray],
+    ) -> None:
+        """Spreading beliefs at a variable to all connected factors
+
+        Args:
+            keys: The key of the variable
+            data: An array containing the beliefs to be spread at variable keys
+        """
+
+    def __setitem__(self, keys, data) -> None:
+        if (
+            isinstance(keys, tuple)
+            and len(keys) == 2
+            and keys[1] in self.factor_graph._composite_variable_group.keys
+        ):
+            pass
+        elif keys in self.factor_graph._composite_variable_group.keys:
+            pass
+        else:
+            raise ValueError("")
+
+    @property
+    def data(self) -> jnp.ndarray:
+        pass
