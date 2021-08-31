@@ -161,7 +161,11 @@ class FactorGraph:
                 )
 
             factor_group = self._named_factor_groups[key[0]]
-            factor = factor_group[key[1:]]
+            if len(key) == 2:
+                factor = factor_group[key[1]]
+            else:
+                factor = factor_group[key[1:]]
+
             start = self._factor_group_to_starts[factor_group] + np.sum(
                 factor_group.factor_num_states[: factor_group.factors.index(factor)]
             )
@@ -504,7 +508,7 @@ class FToVMessages:
                     f"Got {self.init_value.shape}."
                 )
 
-            msgs = self.init_value
+            msgs = jax.device_put(self.init_value)
         else:
             if self.default_mode == "zeros":
                 msgs = jnp.zeros(self.factor_graph._total_factor_num_states)

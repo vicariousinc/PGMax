@@ -413,8 +413,12 @@ def test_e2e_heretic():
                 factor_factory=groups.PairwiseFactorGroup,
                 connected_var_keys=binary_connected_variables(28, 28, k_row, k_col),
                 log_potential_matrix=W_pot[:, :, k_row, k_col],
+                name=(k_row, k_col),
             )
 
     assert isinstance(fg.evidence, np.ndarray)
-
     assert len(fg.factors) == 7056
+    init_msgs = fg.get_init_msgs()
+    init_msgs[((0, 0), 0), (0, 0, 0)]
+    init_msgs[((1, 1), 0), (1, 0, 0)] = np.ones(17)
+    assert np.all(init_msgs[((1, 1), 0), (1, 0, 0)] == 1.0)
