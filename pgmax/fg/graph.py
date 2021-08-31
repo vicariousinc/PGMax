@@ -152,19 +152,20 @@ class FactorGraph:
             factor = factor_group.factors[0]
             start = self._factor_group_to_starts[factor_group]
         else:
-            if not (isinstance(key, tuple) and key[0] in self._named_factor_groups):
+            if not (
+                isinstance(key, tuple)
+                and len(key) == 2
+                and key[0] in self._named_factor_groups
+            ):
                 raise ValueError(
                     f"Invalid factor key {key}. "
                     "Please provide a key either for an individual named factor, "
-                    "or a tuple specifying name of the factor group and index "
-                    "of individual factors"
+                    "or a tuple of length 2 specifying name of the factor group "
+                    "and index of individual factors"
                 )
 
             factor_group = self._named_factor_groups[key[0]]
-            if len(key) == 2:
-                factor = factor_group[key[1]]
-            else:
-                factor = factor_group[key[1:]]
+            factor = factor_group[key[1]]
 
             start = self._factor_group_to_starts[factor_group] + np.sum(
                 factor_group.factor_num_states[: factor_group.factors.index(factor)]

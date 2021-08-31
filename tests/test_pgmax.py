@@ -302,6 +302,7 @@ def test_e2e_sanity_check():
                     curr_keys,
                     valid_configs_non_supp,
                     np.zeros(valid_configs_non_supp.shape[0], dtype=float),
+                    name=(row, col),
                 )
             else:
                 fg.add_factors(
@@ -310,7 +311,10 @@ def test_e2e_sanity_check():
                     factor_configs_log_potentials=np.zeros(
                         valid_configs_non_supp.shape[0], dtype=float
                     ),
+                    name=(row, col),
                 )
+
+    assert fg.get_factor((0, 0))[1] == 0
 
     # Create an EnumerationFactorGroup for vertical suppression factors
     vert_suppression_keys: List[List[Tuple[Any, ...]]] = []
@@ -352,7 +356,9 @@ def test_e2e_sanity_check():
     # Add the suppression factors to the graph via kwargs
     fg.add_factors(
         factor_factory=groups.EnumerationFactorGroup,
-        connected_var_keys=vert_suppression_keys,
+        connected_var_keys={
+            idx: keys for idx, keys in enumerate(vert_suppression_keys)
+        },
         factor_configs=valid_configs_supp,
     )
     fg.add_factors(
@@ -418,10 +424,14 @@ def test_e2e_heretic():
 
     assert isinstance(fg.evidence, np.ndarray)
     assert len(fg.factors) == 7056
-    init_msgs = fg.get_init_msgs()
-    init_msgs[((0, 0), 0), (0, 0, 0)]
-    init_msgs[((1, 1), 0), (1, 0, 0)] = np.ones(17)
-    assert np.all(init_msgs[((1, 1), 0), (1, 0, 0)] == 1.0)
-    init_msgs[1, 0, 0] = np.ones(17)
-    assert jnp.all(init_msgs[((0, 0), 0), (1, 0, 0)] == 1.0 / 9)
-    assert np.all(init_msgs[((1, 1), 0), (1, 0, 0)] == 1.0 / 9)
+    for msgs in [
+        graph.FToVMessages(factor_graph=fg),
+        graph.FToVMessages(factor_graph=fg, default_mode="random"),
+    ]:
+        msgs[((0, 0), 0), (0, 0, 0)]
+        msgs[((1, 1), 0), (1, 0, 0)] = np.ones(17)
+        assert np.all(msgs[((1, 1), 0), (1, 0, 0)] == 1.0)
+        msgs[1, 0, 0] = np.ones(17)
+        assert jnp.all(msgs[((0, 0), 0), (1, 0, 0)] == 1.0 / 9)
+        assert np.all(msgs[((1, 1), 0), (1, 0, 0)] == 1.0 / 9)
+        fg.run_bp(1, 0.5, init_msgs=msgs)
