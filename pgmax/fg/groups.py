@@ -428,6 +428,13 @@ class FactorGroup:
     def factors(self) -> Tuple[nodes.EnumerationFactor, ...]:
         return tuple(self._keys_to_factors.values())
 
+    @cached_property
+    def factor_num_states(self) -> np.ndarray:
+        factor_num_states = np.array(
+            [np.sum(factor.edge_num_states) for factor in self.factors], dtype=int
+        )
+        return factor_num_states
+
 
 @dataclass(frozen=True, eq=False)
 class EnumerationFactorGroup(FactorGroup):

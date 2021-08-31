@@ -84,6 +84,8 @@ class FactorGraph:
         self._vars_to_evidence: Dict[nodes.Variable, np.ndarray] = {}
         self._factor_groups: List[groups.FactorGroup] = []
         self._named_factor_groups: Dict[Hashable, groups.FactorGroup] = {}
+        self._total_factor_num_states: int = 0
+        self._factor_group_to_starts: Dict[groups.FactorGroup, int] = {}
 
     def add_factors(
         self,
@@ -131,8 +133,39 @@ class FactorGraph:
                 )
 
         self._factor_groups.append(factor_group)
+        self._factor_group_to_starts[factor_group] = self._total_factor_num_states
+        self._total_factor_num_states += np.sum(factor_group.factor_num_states)
         if name is not None:
             self._named_factor_groups[name] = factor_group
+
+    def get_factor(self, key: Any) -> Tuple[nodes.EnumerationFactor, int]:
+        if key in self._named_factor_groups:
+            if len(self._named_factor_groups[key].factors) != 1:
+                raise ValueError(
+                    f"Invalid factor key {key}. "
+                    "Please provide a key for an individual factor, "
+                    "not a factor group"
+                )
+
+            factor_group = self._named_factor_groups[key]
+            factor = factor_group.factors[0]
+            start = self._factor_group_to_starts[factor_group]
+        else:
+            if not (isinstance(key, tuple) and key[0] in self._named_factor_groups):
+                raise ValueError(
+                    f"Invalid factor key {key}. "
+                    "Please provide a key either for an individual named factor, "
+                    "or a tuple specifying name of the factor group and index "
+                    "of individual factors"
+                )
+
+            factor_group = self._named_factor_groups[key[0]]
+            factor = factor_group[key[1:]]
+            start = self._factor_group_to_starts[factor_group] + np.sum(
+                factor_group.factor_num_states[: factor_group.factors.index(factor)]
+            )
+
+        return factor, start
 
     @property
     def wiring(self) -> nodes.EnumerationWiring:
@@ -400,7 +433,12 @@ class Messages:
             and len(keys) == 2
             and keys[1] in self.factor_graph._composite_variable_group.keys
         ):
-            pass
+            factor, start = self.factor_graph.get_factor(keys[0])
+            variable = self.factor_graph._composite_variable_group[keys[1]]
+            self._message_updates[
+                start
+                + np.sum(factor.edges_num_states[: factor.variables.index(variable)])
+            ] = data
         elif keys in self.factor_graph._composite_variable_group.keys:
             pass
         else:
