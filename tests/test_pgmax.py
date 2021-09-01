@@ -447,4 +447,5 @@ def test_e2e_heretic():
         assert np.all(
             msgs[((1, 1), frozenset([(1, 0, 0), (0, 1, 1)])), (1, 0, 0)] == 1.0 / 9
         )
-        fg.run_bp(1, 0.5, init_msgs=msgs)
+        msgs = fg.run_bp(1, 0.5, init_msgs=msgs)
+        msgs[((0, 0), frozenset([(1, 0, 0), (0, 0, 0)])), (0, 0, 0)]

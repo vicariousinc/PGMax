@@ -446,10 +446,12 @@ class FToVMessages:
             )
 
         factor, start = self.factor_graph.get_factor(keys[0])
+        variable = self.factor_graph._variable_group[keys[1]]
         if start in self._message_updates:
             msgs = self._message_updates[start]
+        elif self.init_value is not None:
+            msgs = self.init_value[start : start + variable.num_states]
         else:
-            variable = self.factor_graph._variable_group[keys[1]]
             if self.default_mode == "zeros":
                 msgs = jnp.zeros(variable.num_states)
             elif self.default_mode == "random":

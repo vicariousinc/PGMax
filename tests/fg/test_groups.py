@@ -20,6 +20,7 @@ def test_composite_vargroup_valueerror():
 
 def test_composite_vargroup_evidence():
     v_group1 = groups.GenericVariableGroup(3, tuple([0, 1, 2]))
+    v_group1.container_keys
     v_group2 = groups.GenericVariableGroup(3, tuple([0, 1, 2]))
     comp_var_group = groups.CompositeVariableGroup(tuple([v_group1, v_group2]))
     vars_to_evidence = comp_var_group.get_vars_to_evidence(
