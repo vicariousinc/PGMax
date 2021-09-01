@@ -111,10 +111,10 @@ class VariableGroup:
 
     @cached_property
     def container_keys(self) -> Tuple:
-        """Placeholder function. Returns an empty tuple for all variable groups
+        """Placeholder function. Returns a tuple containing slice(None) for all variable groups
         other than a composite variable group
         """
-        return tuple()
+        return (slice(None),)
 
 
 @dataclass(frozen=True, eq=False)

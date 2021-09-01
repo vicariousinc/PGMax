@@ -67,6 +67,12 @@ msgs.evidence[0, 0] = np.array([1.0, 1.0])
 msgs.evidence[0, 0]
 
 # %%
+# Set evidence for all variables using an array
+evidence = np.random.randn(50, 50, 2)
+msgs.evidence[:] = evidence
+msgs.evidence[10, 10] == evidence[10, 10]
+
+# %%
 # Query messages from the factor involving (0, 0), (0, 1) in factor group "factors" to variable (0, 0)
 msgs.ftov[("factors", frozenset([(0, 0), (0, 1)])), (0, 0)]
 

@@ -32,6 +32,7 @@ def test_onevar_graph():
 
     assert "A factor group with the name" in str(verror.value)
     init_msgs = fg.get_init_msgs()
+    init_msgs.evidence[:] = {0: np.ones(15)}
     with pytest.raises(ValueError) as verror:
         init_msgs.ftov["test", 1]
 

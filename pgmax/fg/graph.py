@@ -599,11 +599,14 @@ class Evidence:
                 variable_group.variable_size.
         """
         if key in self.factor_graph._variable_group.container_keys:
-            self._evidence_updates.update(
-                self.factor_graph._variable_group.variable_group_container[
-                    key
-                ].get_vars_to_evidence(evidence)
-            )
+            if key == slice(None):
+                variable_group = self.factor_graph._variable_group
+            else:
+                variable_group = (
+                    self.factor_graph._variable_group.variable_group_container[key]
+                )
+
+            self._evidence_updates.update(variable_group.get_vars_to_evidence(evidence))
         else:
             self._evidence_updates[self.factor_graph._variable_group[key]] = evidence
 
