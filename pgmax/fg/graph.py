@@ -27,11 +27,11 @@ class FactorGraph:
             For a sequence, the indices of the sequence are used to index the variable groups.
             Note that if not a VariableGroup, a CompositeVariableGroup will be created from
             this input, and the individual VariableGroups will need to be accessed by indexing this.
+        messages_default_mode: default mode for initializing messages.
+            Allowed values are "zeros" and "random".
         evidence_default_mode: default mode for initializing evidence.
             Allowed values are "zeros" and "random".
             Any variable whose evidence was not explicitly specified using 'set_evidence'
-        messages_default_mode: default mode for initializing messages.
-            Allowed values are "zeros" and "random".
 
     Attributes:
         _variable_group: VariableGroup. contains all involved VariableGroups
@@ -41,8 +41,6 @@ class FactorGraph:
         _vars_to_starts: MappingProxyType[nodes.Variable, int]. maps every variable to an int
             representing an index in the evidence array at which the first entry of the evidence
             for that particular variable should be placed.
-        _vars_to_evidence: Dict[nodes.Variable, np.ndarray]. maps every variable to an np.ndarray
-            representing the evidence for that variable
         _vargroups_set: Set[groups.VariableGroup]. keeps track of all the VariableGroup's that have
             been added to this FactorGraph
         _named_factor_groups: Dict[Hashable, groups.FactorGroup]. A dictionary mapping the names of
@@ -59,8 +57,8 @@ class FactorGraph:
         Sequence[groups.VariableGroup],
         groups.VariableGroup,
     ]
-    evidence_default_mode: str = "zeros"
     messages_default_mode: str = "zeros"
+    evidence_default_mode: str = "zeros"
 
     def __post_init__(self):
         if isinstance(self.variables, groups.VariableGroup):
@@ -83,7 +81,6 @@ class FactorGraph:
             }
         )
         self.num_var_states = vars_num_states_cumsum[-1]
-        self._vars_to_evidence: Dict[nodes.Variable, np.ndarray] = {}
         self._factor_groups: List[groups.FactorGroup] = []
         self._named_factor_groups: Dict[Hashable, groups.FactorGroup] = {}
         self._total_factor_num_states: int = 0
@@ -219,85 +216,31 @@ class FactorGraph:
         )
 
     @property
-    def evidence(self) -> np.ndarray:
-        """Function to generate evidence array. Need to be overwritten for concrete factor graphs
-
-        Returns:
-            Array of shape (num_var_states,) representing the flattened evidence for each variable
-
-        Raises:
-            NotImplementedError: if self.evidence_default_mode is a string that is not listed
-        """
-        if self.evidence_default_mode == "zeros":
-            evidence = np.zeros(self.num_var_states)
-        elif self.evidence_default_mode == "random":
-            evidence = np.random.gumbel(size=self.num_var_states)
-        else:
-            raise NotImplementedError(
-                f"evidence_default_mode {self.evidence_default_mode} is not yet implemented"
-            )
-
-        for var, evidence_val in self._vars_to_evidence.items():
-            start_index = self._vars_to_starts[var]
-            evidence[start_index : start_index + var.num_states] = evidence_val
-
-        return evidence
-
-    @property
     def factors(self) -> Tuple[nodes.EnumerationFactor, ...]:
         """List of individual factors in the factor graph"""
         return sum([factor_group.factors for factor_group in self._factor_groups], ())
 
-    def get_init_msgs(self) -> FToVMessages:
-        """Function to initialize ftov messages.
+    def get_init_msgs(self) -> Messages:
+        """Function to initialize messages.
 
         Returns:
-            Initialized ftov messages
+            Initialized messages
         """
-        return FToVMessages(factor_graph=self, default_mode=self.messages_default_mode)
-
-    def set_evidence(
-        self,
-        key: Union[Tuple[Any, ...], Any],
-        evidence: Union[Dict[Hashable, np.ndarray], np.ndarray],
-    ) -> None:
-        """Function to update the evidence for variables in the FactorGraph.
-
-        Args:
-            key: tuple that represents the index into the VariableGroup
-                (self._variable_group) that is created when the FactorGraph is instantiated. Note that
-                this can be an index referring to an entire VariableGroup (in which case, the evidence
-                is set for the entire VariableGroup at once), or to an individual Variable within the
-                VariableGroup.
-            evidence: a container for np.ndarrays representing the evidence
-                Currently supported containers are:
-                - an np.ndarray: if key indexes an NDVariableArray, then evidence_values
-                can simply be an np.ndarray with num_var_array_dims + 1 dimensions where
-                num_var_array_dims is the number of dimensions of the NDVariableArray, and the
-                +1 represents a dimension (that should be the final dimension) for the evidence.
-                Note that the size of the final dimension should be the same as
-                variable_group.variable_size. if key indexes a particular variable, then this array
-                must be of the same size as variable.num_states
-                - a dictionary: if key indexes a GenericVariableGroup, then evidence_values
-                must be a dictionary mapping keys of variable_group to np.ndarrays of evidence values.
-                Note that each np.ndarray in the dictionary values must have the same size as
-                variable_group.variable_size.
-        """
-        if key in self._variable_group.container_keys:
-            self._vars_to_evidence.update(
-                self._variable_group.variable_group_container[key].get_vars_to_evidence(
-                    evidence
-                )
-            )
-        else:
-            self._vars_to_evidence[self._variable_group[key]] = evidence
+        return Messages(
+            ftov=FToVMessages(
+                factor_graph=self, default_mode=self.messages_default_mode
+            ),
+            evidence=Evidence(
+                factor_graph=self, default_mode=self.evidence_default_mode
+            ),
+        )
 
     def run_bp(
         self,
         num_iters: int,
         damping_factor: float,
-        init_msgs: Optional[FToVMessages] = None,
-    ) -> FToVMessages:
+        init_msgs: Optional[Messages] = None,
+    ) -> Messages:
         """Function to perform belief propagation.
 
         Specifically, belief propagation is run for num_iters iterations and
@@ -314,13 +257,12 @@ class FactorGraph:
         """
         # Retrieve the necessary data structures from the compiled self.wiring and
         # convert these to jax arrays.
-        if init_msgs is not None:
-            msgs = init_msgs.value
-        else:
-            msgs = self.get_init_msgs().value
+        if init_msgs is None:
+            init_msgs = self.get_init_msgs()
 
+        msgs = jax.device_put(init_msgs.ftov.value)
+        evidence = jax.device_put(init_msgs.evidence.value)
         wiring = jax.device_put(self.wiring)
-        evidence = jax.device_put(self.evidence)
         factor_configs_log_potentials = jax.device_put(
             self.factor_configs_log_potentials
         )
@@ -361,9 +303,12 @@ class FactorGraph:
             return msgs, None
 
         msgs_after_bp, _ = jax.lax.scan(message_passing_step, msgs, None, num_iters)
-        return FToVMessages(factor_graph=self, init_value=msgs_after_bp)
+        return Messages(
+            ftov=FToVMessages(factor_graph=self, init_value=msgs_after_bp),
+            evidence=init_msgs.evidence,
+        )
 
-    def decode_map_states(self, msgs: FToVMessages) -> Dict[Tuple[Any, ...], int]:
+    def decode_map_states(self, msgs: Messages) -> Dict[Tuple[Any, ...], int]:
         """Function to computes the output of MAP inference on input messages.
 
         The final states are computed based on evidence obtained from the self.get_evidence
@@ -376,8 +321,8 @@ class FactorGraph:
             a dictionary mapping each variable key to the MAP states of the corresponding variable
         """
         var_states_for_edges = jax.device_put(self.wiring.var_states_for_edges)
-        evidence = jax.device_put(self.evidence)
-        final_var_states = evidence.at[var_states_for_edges].add(msgs.value)
+        evidence = jax.device_put(msgs.evidence.value)
+        final_var_states = evidence.at[var_states_for_edges].add(msgs.ftov.value)
         var_key_to_map_dict: Dict[Tuple[Any, ...], int] = {}
         final_var_states_np = np.array(final_var_states)
         for var_key in self._variable_group.keys:
@@ -418,11 +363,18 @@ class FToVMessages:
         if self.default_mode is None and self.init_value is None:
             self.default_mode = "zeros"
 
-        if self.init_value is None and self.default_mode not in ("zeros", "random"):
-            raise ValueError(
-                f"Unsupported default message mode {self.default_mode}. "
-                "Supported default modes are zeros or random"
-            )
+        if self.init_value is None:
+            if self.default_mode == "zeros":
+                self.init_value = np.zeros(self.factor_graph._total_factor_num_states)
+            elif self.default_mode == "random":
+                self.init_value = np.random.gumbel(
+                    size=(self.factor_graph._total_factor_num_states,)
+                )
+            else:
+                raise ValueError(
+                    f"Unsupported default message mode {self.default_mode}. "
+                    "Supported default modes are zeros or random"
+                )
 
     def __getitem__(self, keys: Tuple[Any, Any]) -> jnp.ndarray:
         """Function to query messages from a factor to a variable
@@ -446,23 +398,13 @@ class FToVMessages:
             )
 
         factor, start = self.factor_graph.get_factor(keys[0])
-        variable = self.factor_graph._variable_group[keys[1]]
         if start in self._message_updates:
             msgs = self._message_updates[start]
-        elif self.init_value is not None:
-            msgs = self.init_value[start : start + variable.num_states]
         else:
-            if self.default_mode == "zeros":
-                msgs = jnp.zeros(variable.num_states)
-            elif self.default_mode == "random":
-                msgs = jax.device_put(np.random.gumbel(size=(variable.num_states,)))
-            else:
-                raise ValueError(
-                    f"Unsupported default message mode {self.default_mode}. "
-                    "Supported default modes are zeros or random"
-                )
+            variable = self.factor_graph._variable_group[keys[1]]
+            msgs = jax.device_put(self.init_value)[start : start + variable.num_states]
 
-        return msgs
+        return jax.device_put(msgs)
 
     @typing.overload
     def __setitem__(
@@ -545,26 +487,113 @@ class FToVMessages:
             The flat message array after initializing (according to default_mode
             or init_value) and applying all message updates.
         """
-        if self.init_value is not None:
-            if not self.init_value.shape == (
-                self.factor_graph._total_factor_num_states,
-            ):
-                raise ValueError(
-                    f"Expected messages shape {(self.factor_graph._total_factor_num_states,)}. "
-                    f"Got {self.init_value.shape}."
-                )
+        init_value = jax.device_put(self.init_value)
+        if not init_value.shape == (self.factor_graph._total_factor_num_states,):
+            raise ValueError(
+                f"Expected messages shape {(self.factor_graph._total_factor_num_states,)}. "
+                f"Got {init_value.shape}."
+            )
 
-            msgs = jax.device_put(self.init_value)
-        else:
-            if self.default_mode == "zeros":
-                msgs = jnp.zeros(self.factor_graph._total_factor_num_states)
-            elif self.default_mode == "random":
-                msgs = jax.device_put(
-                    np.random.gumbel(size=(self.factor_graph._total_factor_num_states,))
-                )
-
+        msgs = init_value
         for start in self._message_updates:
             data = self._message_updates[start]
             msgs = msgs.at[start : start + data.shape[0]].set(data)
 
         return msgs
+
+
+@dataclass
+class Evidence:
+    """Evidence.
+
+    Attributes:
+        _evidence_updates: Dict[nodes.Variable, np.ndarray]. maps every variable to an np.ndarray
+            representing the evidence for that variable
+    """
+
+    factor_graph: FactorGraph
+    default_mode: Optional[str] = None
+    init_value: Optional[Union[np.ndarray, jnp.ndarray]] = None
+
+    def __post_init__(self):
+        self._evidence_updates: Dict[nodes.Variable, np.ndarray] = {}
+        if self.default_mode is not None and self.init_value is not None:
+            raise ValueError("Should specify only one of default_mode and init_value.")
+
+        if self.default_mode is None and self.init_value is None:
+            self.default_mode = "zeros"
+
+        if self.init_value is None and self.default_mode not in ("zeros", "random"):
+            raise ValueError(
+                f"Unsupported default message mode {self.default_mode}. "
+                "Supported default modes are zeros or random"
+            )
+
+        if self.init_value is None:
+            if self.default_mode == "zeros":
+                self.init_value = jnp.zeros(self.factor_graph.num_var_states)
+            else:
+                self.init_value = jax.device_put(
+                    np.random.gumbel(size=(self.factor_graph.num_var_states,))
+                )
+
+    def __setitem__(
+        self,
+        key: Any,
+        evidence: Union[Dict[Hashable, np.ndarray], np.ndarray],
+    ) -> None:
+        """Function to update the evidence for variables in the FactorGraph.
+
+        Args:
+            key: tuple that represents the index into the VariableGroup
+                (self._variable_group) that is created when the FactorGraph is instantiated. Note that
+                this can be an index referring to an entire VariableGroup (in which case, the evidence
+                is set for the entire VariableGroup at once), or to an individual Variable within the
+                VariableGroup.
+            evidence: a container for np.ndarrays representing the evidence
+                Currently supported containers are:
+                - an np.ndarray: if key indexes an NDVariableArray, then evidence_values
+                can simply be an np.ndarray with num_var_array_dims + 1 dimensions where
+                num_var_array_dims is the number of dimensions of the NDVariableArray, and the
+                +1 represents a dimension (that should be the final dimension) for the evidence.
+                Note that the size of the final dimension should be the same as
+                variable_group.variable_size. if key indexes a particular variable, then this array
+                must be of the same size as variable.num_states
+                - a dictionary: if key indexes a GenericVariableGroup, then evidence_values
+                must be a dictionary mapping keys of variable_group to np.ndarrays of evidence values.
+                Note that each np.ndarray in the dictionary values must have the same size as
+                variable_group.variable_size.
+        """
+        if key in self.factor_graph._variable_group.container_keys:
+            self._evidence_updates.update(
+                self.factor_graph._variable_group.variable_group_container[
+                    key
+                ].get_vars_to_evidence(evidence)
+            )
+        else:
+            self._evidence_updates[self.factor_graph._variable_group[key]] = evidence
+
+    @property
+    def value(self) -> jnp.ndarray:
+        """Function to generate evidence array. Need to be overwritten for concrete factor graphs
+
+        Returns:
+            Array of shape (num_var_states,) representing the flattened evidence for each variable
+
+        Raises:
+            NotImplementedError: if self.default_mode is a string that is not listed
+        """
+        evidence = jax.device_put(self.init_value)
+        for var, evidence_val in self._evidence_updates.items():
+            start_index = self.factor_graph._vars_to_starts[var]
+            evidence = evidence.at[start_index : start_index + var.num_states].set(
+                evidence_val
+            )
+
+        return evidence
+
+
+@dataclass
+class Messages:
+    ftov: FToVMessages
+    evidence: Evidence

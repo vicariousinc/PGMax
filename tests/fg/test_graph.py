@@ -21,24 +21,19 @@ def test_onevar_graph():
     fg.add_factor([0], np.arange(15)[:, None], name="test")
     init_msgs = fg.get_init_msgs()
     with pytest.raises(ValueError) as verror:
-        init_msgs["test", 1]
+        init_msgs.ftov["test", 1]
 
     assert "Invalid keys" in str(verror.value)
-    init_msgs.default_mode = "test"
     with pytest.raises(ValueError) as verror:
-        init_msgs["test", 0]
-
-    assert "Unsupported default message mode" in str(verror.value)
-    with pytest.raises(ValueError) as verror:
-        init_msgs["test", 0] = np.zeros(1)
+        init_msgs.ftov["test", 0] = np.zeros(1)
 
     assert "Given message shape" in str(verror.value)
     with pytest.raises(ValueError) as verror:
-        init_msgs[0] = np.zeros(1)
+        init_msgs.ftov[0] = np.zeros(1)
 
     assert "Given belief shape" in str(verror.value)
     with pytest.raises(ValueError) as verror:
-        init_msgs[1] = np.zeros(1)
+        init_msgs.ftov[1] = np.zeros(1)
 
     assert "Invalid keys for setting messages" in str(verror.value)
     with pytest.raises(ValueError) as verror:
