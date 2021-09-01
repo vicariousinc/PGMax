@@ -370,6 +370,7 @@ def test_e2e_sanity_check():
     init_msgs = fg.get_init_msgs()
     init_msgs.evidence["grid_vars"] = grid_evidence_arr
     init_msgs.evidence["additional_vars"] = additional_vars_evidence_dict
+    fg.run_bp(1, 0.5)
     one_step_msgs = fg.run_bp(1, 0.5, init_msgs=init_msgs)
     final_msgs = fg.run_bp(99, 0.5, one_step_msgs)
 
@@ -420,6 +421,8 @@ def test_e2e_heretic():
     init_msgs = fg.get_init_msgs()
     init_msgs.evidence[0] = np.array(bXn)
     init_msgs.evidence[0, 0, 0] = np.array([0.0, 0.0, 0.0])
+    init_msgs.evidence[0, 0, 0]
+    init_msgs.evidence[1, 0, 0]
     with pytest.raises(ValueError) as verror:
         fg.get_factor((0, 0))
 

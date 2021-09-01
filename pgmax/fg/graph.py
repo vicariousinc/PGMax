@@ -534,7 +534,7 @@ class Evidence:
 
         if self.init_value is None and self.default_mode not in ("zeros", "random"):
             raise ValueError(
-                f"Unsupported default message mode {self.default_mode}. "
+                f"Unsupported default evidence mode {self.default_mode}. "
                 "Supported default modes are zeros or random"
             )
 
@@ -561,7 +561,7 @@ class Evidence:
         else:
             start = self.factor_graph._vars_to_starts[variable]
             evidence = jax.device_put(self.init_value)[
-                start : start + variable.num_var_states
+                start : start + variable.num_states
             ]
 
         return evidence

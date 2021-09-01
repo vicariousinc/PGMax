@@ -18,6 +18,14 @@ def test_onevar_graph():
         graph.FToVMessages(factor_graph=fg, default_mode="test")
 
     assert "Unsupported default message mode" in str(verror.value)
+    with pytest.raises(ValueError) as verror:
+        graph.Evidence(factor_graph=fg, default_mode="zeros", init_value=np.zeros(1))
+
+    assert "Should specify only" in str(verror.value)
+    with pytest.raises(ValueError) as verror:
+        graph.Evidence(factor_graph=fg, default_mode="test")
+
+    assert "Unsupported default evidence mode" in str(verror.value)
     fg.add_factor([0], np.arange(15)[:, None], name="test")
     init_msgs = fg.get_init_msgs()
     with pytest.raises(ValueError) as verror:
