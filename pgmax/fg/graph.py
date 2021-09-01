@@ -516,7 +516,9 @@ class Evidence:
     init_value: Optional[Union[np.ndarray, jnp.ndarray]] = None
 
     def __post_init__(self):
-        self._evidence_updates: Dict[nodes.Variable, np.ndarray] = {}
+        self._evidence_updates: Dict[
+            nodes.Variable, Union[np.ndarray, jnp.ndarray]
+        ] = {}
         if self.default_mode is not None and self.init_value is not None:
             raise ValueError("Should specify only one of default_mode and init_value.")
 
@@ -536,6 +538,18 @@ class Evidence:
                 self.init_value = jax.device_put(
                     np.random.gumbel(size=(self.factor_graph.num_var_states,))
                 )
+
+    def __getitem__(self, key: Any) -> jnp.ndarray:
+        variable = self.factor_graph._variable_group[key]
+        if self.factor_graph._variable_group[key] in self._evidence_updates:
+            evidence = jax.device_put(self._evidence_updates[variable])
+        else:
+            start = self.factor_graph._vars_to_starts[variable]
+            evidence = jax.device_put(self.init_value)[
+                start : start + variable.num_var_states
+            ]
+
+        return evidence
 
     def __setitem__(
         self,

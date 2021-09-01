@@ -20,9 +20,15 @@ import numpy as np
 
 from pgmax.fg import graph, groups
 
+# %% [markdown]
+# ### Construct variable grid and initialize factor graph
+
 # %%
 variables = groups.NDVariableArray(variable_size=2, shape=(50, 50))
 fg = graph.FactorGraph(variables=variables, evidence_default_mode="random")
+
+# %% [markdown]
+# ### Add factors to the factor graph
 
 # %%
 connected_var_keys = []
@@ -36,8 +42,11 @@ for ii in range(50):
 fg.add_factor(
     factor_factory=groups.PairwiseFactorGroup,
     connected_var_keys=connected_var_keys,
-    log_potential_matrix=0.5 * np.array([[1.0, -1.0], [-1.0, 1.0]]),
+    log_potential_matrix=0.8 * np.array([[1.0, -1.0], [-1.0, 1.0]]),
 )
+
+# %% [markdown]
+# ### Run inference and visualize results
 
 # %%
 msgs = fg.run_bp(3000, 0.5)
