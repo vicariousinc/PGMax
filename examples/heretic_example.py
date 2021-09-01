@@ -91,13 +91,9 @@ bHn_evidence = bHn_evidence.swapaxes(1, 2)
 # Create the factor graph
 fg = graph.FactorGraph((pixel_vars, hidden_vars))
 
-# Assign evidence to pixel vars
-fg.set_evidence(0, np.array(bXn_evidence))
-fg.set_evidence(1, np.array(bHn_evidence))
-
-
 # %% [markdown]
 # # Add all Factors to graph via constructing FactorGroups
+
 
 # %% tags=[]
 def binary_connected_variables(
@@ -174,19 +170,22 @@ Mup = Mup - bHn / f_s ** 2
 reshaped_Mdown = Mdown.reshape(3, 3, 3, 28, 28)
 reshaped_Mup = Mup.reshape(17, 3, 3, 28, 28)
 
-init_msgs = graph.FToVMessages(
-    factor_graph=fg,
-    init_value=jax.device_put(
-        custom_flatten_ordering(np.array(reshaped_Mdown), np.array(reshaped_Mup))
-    ),
-)
-
 # %% [markdown]
 # # Run Belief Propagation and Retrieve MAP Estimate
 
 # %% tags=[]
 # Run BP
+init_msgs = fg.get_init_msgs()
+init_msgs.ftov = graph.FToVMessages(
+    factor_graph=fg,
+    init_value=jax.device_put(
+        custom_flatten_ordering(np.array(reshaped_Mdown), np.array(reshaped_Mup))
+    ),
+)
+init_msgs.evidence[0] = np.array(bXn_evidence)
+init_msgs.evidence[1] = np.array(bHn_evidence)
 bp_start_time = timer()
+# Assign evidence to pixel vars
 final_msgs = fg.run_bp(
     500,
     0.5,

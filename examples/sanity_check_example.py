@@ -156,13 +156,9 @@ for i in range(2):
 # Create the factor graph
 fg = graph.FactorGraph(variables=composite_grid_group)
 
-# Set the evidence
-fg.set_evidence("grid_vars", grid_evidence_arr)
-fg.set_evidence("additional_vars", additional_vars_evidence_dict)
-
-
 # %% [markdown]
 # ### Create Valid Configuration Arrays
+
 
 # %%
 # Helper function to easily generate a list of valid configurations for a given suppression diameter
@@ -335,8 +331,12 @@ fg.add_factor(
 
 # %%
 # Run BP
+# Set the evidence
+init_msgs = fg.get_init_msgs()
+init_msgs.evidence["grid_vars"] = grid_evidence_arr
+init_msgs.evidence["additional_vars"] = additional_vars_evidence_dict
 bp_start_time = timer()
-final_msgs = fg.run_bp(1000, 0.5)
+final_msgs = fg.run_bp(1000, 0.5, init_msgs=init_msgs)
 bp_end_time = timer()
 print(f"time taken for bp {bp_end_time - bp_start_time}")
 
