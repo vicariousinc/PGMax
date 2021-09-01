@@ -336,7 +336,7 @@ class FactorGraph:
 
 @dataclass
 class FToVMessages:
-    """Class for storing and manipulating ftov messages.
+    """Class for storing and manipulating factor to variable messages.
 
     Args:
         factor_graph: associated factor graph
@@ -504,7 +504,14 @@ class FToVMessages:
 
 @dataclass
 class Evidence:
-    """Evidence.
+    """Class for storing and manipulating evidence
+
+    Args:
+        factor_graph: associated factor graph
+        default_mode: default mode for initializing evidence.
+            Allowed values include "zeros" and "random"
+            If init_value is None, defaults to "zeros"
+        init_value: Optionally specify initial value for evidence
 
     Attributes:
         _evidence_updates: Dict[nodes.Variable, np.ndarray]. maps every variable to an np.ndarray
@@ -540,6 +547,14 @@ class Evidence:
                 )
 
     def __getitem__(self, key: Any) -> jnp.ndarray:
+        """Function to query evidence for a variable
+
+        Args:
+            key: key for the variable
+
+        Returns:
+            evidence for the queried variable
+        """
         variable = self.factor_graph._variable_group[key]
         if self.factor_graph._variable_group[key] in self._evidence_updates:
             evidence = jax.device_put(self._evidence_updates[variable])
@@ -556,11 +571,11 @@ class Evidence:
         key: Any,
         evidence: Union[Dict[Hashable, np.ndarray], np.ndarray],
     ) -> None:
-        """Function to update the evidence for variables in the FactorGraph.
+        """Function to update the evidence for variables
 
         Args:
             key: tuple that represents the index into the VariableGroup
-                (self._variable_group) that is created when the FactorGraph is instantiated. Note that
+                (self.factor_graph._variable_group) that is created when the FactorGraph is instantiated. Note that
                 this can be an index referring to an entire VariableGroup (in which case, the evidence
                 is set for the entire VariableGroup at once), or to an individual Variable within the
                 VariableGroup.
@@ -589,13 +604,10 @@ class Evidence:
 
     @property
     def value(self) -> jnp.ndarray:
-        """Function to generate evidence array. Need to be overwritten for concrete factor graphs
+        """Function to generate evidence array
 
         Returns:
             Array of shape (num_var_states,) representing the flattened evidence for each variable
-
-        Raises:
-            NotImplementedError: if self.default_mode is a string that is not listed
         """
         evidence = jax.device_put(self.init_value)
         for var, evidence_val in self._evidence_updates.items():
@@ -609,5 +621,12 @@ class Evidence:
 
 @dataclass
 class Messages:
+    """Container class for factor to variable messages and evidence.
+
+    Args:
+        ftov: factor to variable messages
+        evidence: evidence
+    """
+
     ftov: FToVMessages
     evidence: Evidence
