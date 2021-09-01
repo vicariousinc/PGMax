@@ -115,6 +115,11 @@ class FactorGraph:
                 specified.
         """
         name = kwargs.pop("name", None)
+        if name in self._named_factor_groups:
+            raise ValueError(
+                f"A factor group with the name {name} already exists. Please choose a different name!"
+            )
+
         factor_factory = kwargs.pop("factor_factory", None)
         if factor_factory is not None:
             factor_group = factor_factory(self._variable_group, *args, **kwargs)

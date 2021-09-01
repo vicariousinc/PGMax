@@ -27,6 +27,10 @@ def test_onevar_graph():
 
     assert "Unsupported default evidence mode" in str(verror.value)
     fg.add_factor([0], np.arange(15)[:, None], name="test")
+    with pytest.raises(ValueError) as verror:
+        fg.add_factor([0], np.arange(15)[:, None], name="test")
+
+    assert "A factor group with the name" in str(verror.value)
     init_msgs = fg.get_init_msgs()
     with pytest.raises(ValueError) as verror:
         init_msgs.ftov["test", 1]
