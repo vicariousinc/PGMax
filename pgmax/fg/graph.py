@@ -20,13 +20,13 @@ class FactorGraph:
     """Class for representing a factor graph
 
     Args:
-        variable_groups: A container containing multiple VariableGroups, or a CompositeVariableGroup.
-            If not a CompositeVariableGroup, supported containers include mapping, sequence and single
+        variables: A container containing variable groups.
+            If not a VariableGroup, supported containers include mapping, sequence and single
             VariableGroup.
             For a mapping, the keys of the mapping are used to index the variable groups.
             For a sequence, the indices of the sequence are used to index the variable groups.
-            Note that a CompositeVariableGroup will be created from this input, and the individual
-            VariableGroups will need to be accessed by indexing this.
+            Note that if not a VariableGroup, a CompositeVariableGroup will be created from
+            this input, and the individual VariableGroups will need to be accessed by indexing this.
         evidence_default_mode: default mode for initializing evidence.
             Allowed values are "zeros" and "random".
             Any variable whose evidence was not explicitly specified using 'set_evidence'
@@ -34,7 +34,7 @@ class FactorGraph:
             Allowed values are "zeros" and "random".
 
     Attributes:
-        _composite_variable_group: CompositeVariableGroup. contains all involved VariableGroups
+        _variable_group: VariableGroup. contains all involved VariableGroups
         _factor_groups: List of added factor groups
         num_var_states: int. represents the sum of all variable states of all variables in the
             FactorGraph
@@ -54,7 +54,7 @@ class FactorGraph:
             corresponding starting index in the flat message array.
     """
 
-    variable_groups: Union[
+    variables: Union[
         Mapping[Hashable, groups.VariableGroup],
         Sequence[groups.VariableGroup],
         groups.VariableGroup,
@@ -63,23 +63,14 @@ class FactorGraph:
     messages_default_mode: str = "zeros"
 
     def __post_init__(self):
-        if isinstance(self.variable_groups, groups.CompositeVariableGroup):
-            self._composite_variable_group = self.variable_groups
-        elif isinstance(self.variable_groups, groups.VariableGroup):
-            self._composite_variable_group = groups.CompositeVariableGroup(
-                [self.variable_groups]
-            )
+        if isinstance(self.variables, groups.VariableGroup):
+            self._variable_group = self.variables
         else:
-            self._composite_variable_group = groups.CompositeVariableGroup(
-                self.variable_groups
-            )
+            self._variable_group = groups.CompositeVariableGroup(self.variables)
 
         vars_num_states_cumsum = np.insert(
             np.array(
-                [
-                    variable.num_states
-                    for variable in self._composite_variable_group.variables
-                ],
+                [variable.num_states for variable in self._variable_group.variables],
                 dtype=int,
             ).cumsum(),
             0,
@@ -88,7 +79,7 @@ class FactorGraph:
         self._vars_to_starts = MappingProxyType(
             {
                 variable: vars_num_states_cumsum[vv]
-                for vv, variable in enumerate(self._composite_variable_group.variables)
+                for vv, variable in enumerate(self._variable_group.variables)
             }
         )
         self.num_var_states = vars_num_states_cumsum[-1]
@@ -129,21 +120,19 @@ class FactorGraph:
         name = kwargs.pop("name", None)
         factor_factory = kwargs.pop("factor_factory", None)
         if factor_factory is not None:
-            factor_group = factor_factory(
-                self._composite_variable_group, *args, **kwargs
-            )
+            factor_group = factor_factory(self._variable_group, *args, **kwargs)
         else:
             if len(args) > 0:
                 new_args = list(args)
                 new_args[0] = [args[0]]
                 factor_group = groups.EnumerationFactorGroup(
-                    self._composite_variable_group, *new_args, **kwargs
+                    self._variable_group, *new_args, **kwargs
                 )
             else:
                 keys = kwargs.pop("keys")
                 kwargs["connected_var_keys"] = [keys]
                 factor_group = groups.EnumerationFactorGroup(
-                    self._composite_variable_group, **kwargs
+                    self._variable_group, **kwargs
                 )
 
         self._factor_groups.append(factor_group)
@@ -275,11 +264,11 @@ class FactorGraph:
         """Function to update the evidence for variables in the FactorGraph.
 
         Args:
-            key: tuple that represents the index into the CompositeVariableGroup
-                (self._composite_variable_group) that is created when the FactorGraph is instantiated. Note that
+            key: tuple that represents the index into the VariableGroup
+                (self._variable_group) that is created when the FactorGraph is instantiated. Note that
                 this can be an index referring to an entire VariableGroup (in which case, the evidence
                 is set for the entire VariableGroup at once), or to an individual Variable within the
-                CompositeVariableGroup.
+                VariableGroup.
             evidence: a container for np.ndarrays representing the evidence
                 Currently supported containers are:
                 - an np.ndarray: if key indexes an NDVariableArray, then evidence_values
@@ -294,14 +283,14 @@ class FactorGraph:
                 Note that each np.ndarray in the dictionary values must have the same size as
                 variable_group.variable_size.
         """
-        if key in self._composite_variable_group.container_keys:
+        if key in self._variable_group.container_keys:
             self._vars_to_evidence.update(
-                self._composite_variable_group.variable_group_container[
-                    key
-                ].get_vars_to_evidence(evidence)
+                self._variable_group.variable_group_container[key].get_vars_to_evidence(
+                    evidence
+                )
             )
         else:
-            self._vars_to_evidence[self._composite_variable_group[key]] = evidence
+            self._vars_to_evidence[self._variable_group[key]] = evidence
 
     def run_bp(
         self,
@@ -391,8 +380,8 @@ class FactorGraph:
         final_var_states = evidence.at[var_states_for_edges].add(msgs.value)
         var_key_to_map_dict: Dict[Tuple[Any, ...], int] = {}
         final_var_states_np = np.array(final_var_states)
-        for var_key in self._composite_variable_group.keys:
-            var = self._composite_variable_group[var_key]
+        for var_key in self._variable_group.keys:
+            var = self._variable_group[var_key]
             start_index = self._vars_to_starts[var]
             var_key_to_map_dict[var_key] = np.argmax(
                 final_var_states_np[start_index : start_index + var.num_states]
@@ -449,7 +438,7 @@ class FToVMessages:
         if not (
             isinstance(keys, tuple)
             and len(keys) == 2
-            and keys[1] in self.factor_graph._composite_variable_group.keys
+            and keys[1] in self.factor_graph._variable_group.keys
         ):
             raise ValueError(
                 f"Invalid keys {keys}. Please specify a tuple of factor, variable "
@@ -460,7 +449,7 @@ class FToVMessages:
         if start in self._message_updates:
             msgs = self._message_updates[start]
         else:
-            variable = self.factor_graph._composite_variable_group[keys[1]]
+            variable = self.factor_graph._variable_group[keys[1]]
             if self.default_mode == "zeros":
                 msgs = jnp.zeros(variable.num_states)
             elif self.default_mode == "random":
@@ -508,10 +497,10 @@ class FToVMessages:
         if (
             isinstance(keys, tuple)
             and len(keys) == 2
-            and keys[1] in self.factor_graph._composite_variable_group.keys
+            and keys[1] in self.factor_graph._variable_group.keys
         ):
             factor, start = self.factor_graph.get_factor(keys[0])
-            variable = self.factor_graph._composite_variable_group[keys[1]]
+            variable = self.factor_graph._variable_group[keys[1]]
             if data.shape != (variable.num_states,):
                 raise ValueError(
                     f"Given message shape {data.shape} does not match expected "
@@ -523,8 +512,8 @@ class FToVMessages:
                 start
                 + np.sum(factor.edges_num_states[: factor.variables.index(variable)])
             ] = data
-        elif keys in self.factor_graph._composite_variable_group.keys:
-            variable = self.factor_graph._composite_variable_group[keys]
+        elif keys in self.factor_graph._variable_group.keys:
+            variable = self.factor_graph._variable_group[keys]
             if data.shape != (variable.num_states,):
                 raise ValueError(
                     f"Given belief shape {data.shape} does not match expected "

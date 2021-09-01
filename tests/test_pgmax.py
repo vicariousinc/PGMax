@@ -256,9 +256,7 @@ def test_e2e_sanity_check():
                         pass
 
     # Create the factor graph
-    fg = graph.FactorGraph(
-        variable_groups=composite_grid_group,
-    )
+    fg = graph.FactorGraph(variables=composite_grid_group)
 
     # Set the evidence
     fg.set_evidence("grid_vars", grid_evidence_arr)

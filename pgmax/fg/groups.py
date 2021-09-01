@@ -109,6 +109,13 @@ class VariableGroup:
         """
         return tuple(self._keys_to_vars.values())
 
+    @cached_property
+    def container_keys(self) -> Tuple:
+        """Placeholder function. Returns an empty tuple for all variable groups
+        other than a composite variable group
+        """
+        return tuple()
+
 
 @dataclass(frozen=True, eq=False)
 class CompositeVariableGroup(VariableGroup):

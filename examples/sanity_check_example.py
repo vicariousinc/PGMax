@@ -154,9 +154,7 @@ for i in range(2):
 
 # %%
 # Create the factor graph
-fg = graph.FactorGraph(
-    variable_groups=composite_grid_group,
-)
+fg = graph.FactorGraph(variables=composite_grid_group)
 
 # Set the evidence
 fg.set_evidence("grid_vars", grid_evidence_arr)
