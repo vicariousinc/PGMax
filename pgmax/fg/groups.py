@@ -495,18 +495,24 @@ class EnumerationFactorGroup(FactorGroup):
             factor_configs_log_potentials = self.factor_configs_log_potentials
 
         if isinstance(self.connected_var_keys, Sequence):
-            factor_keys = tuple(range(len(self.connected_var_keys)))
+            keys_to_factors: Dict[Hashable, nodes.EnumerationFactor] = {
+                frozenset(self.connected_var_keys[ii]): nodes.EnumerationFactor(
+                    tuple(self.variable_group[self.connected_var_keys[ii]]),
+                    self.factor_configs,
+                    factor_configs_log_potentials,
+                )
+                for ii in range(len(self.connected_var_keys))
+            }
         else:
-            factor_keys = tuple(self.connected_var_keys.keys())
+            keys_to_factors = {
+                key: nodes.EnumerationFactor(
+                    tuple(self.variable_group[self.connected_var_keys[key]]),
+                    self.factor_configs,
+                    factor_configs_log_potentials,
+                )
+                for key in self.connected_var_keys
+            }
 
-        keys_to_factors: Dict[Hashable, nodes.EnumerationFactor] = {
-            key: nodes.EnumerationFactor(
-                tuple(self.variable_group[self.connected_var_keys[key]]),
-                self.factor_configs,
-                factor_configs_log_potentials,
-            )
-            for key in factor_keys
-        }
         return keys_to_factors
 
 
@@ -547,10 +553,8 @@ class PairwiseFactorGroup(FactorGroup):
                 each sub-list of self.connected_var_keys
         """
         if isinstance(self.connected_var_keys, Sequence):
-            factor_keys = tuple(range(len(self.connected_var_keys)))
             connected_var_keys = self.connected_var_keys
         else:
-            factor_keys = tuple(self.connected_var_keys.keys())
             connected_var_keys = tuple(self.connected_var_keys.values())
 
         for fac_list in connected_var_keys:
@@ -571,6 +575,7 @@ class PairwiseFactorGroup(FactorGroup):
                     + f"{(self.variable_group[fac_list[0]].num_states, self.variable_group[fac_list[1]].num_states)} "
                     + f"based on self.connected_var_keys. Instead, it has shape {self.log_potential_matrix.shape}"
                 )
+
         factor_configs = np.array(
             np.meshgrid(
                 np.arange(self.log_potential_matrix.shape[0]),
@@ -580,12 +585,23 @@ class PairwiseFactorGroup(FactorGroup):
         factor_configs_log_potentials = self.log_potential_matrix[
             factor_configs[:, 0], factor_configs[:, 1]
         ]
-        keys_to_factors: Dict[Hashable, nodes.EnumerationFactor] = {
-            key: nodes.EnumerationFactor(
-                tuple(self.variable_group[self.connected_var_keys[key]]),
-                factor_configs,
-                factor_configs_log_potentials,
-            )
-            for key in factor_keys
-        }
+        if isinstance(self.connected_var_keys, Sequence):
+            keys_to_factors: Dict[Hashable, nodes.EnumerationFactor] = {
+                frozenset(self.connected_var_keys[ii]): nodes.EnumerationFactor(
+                    tuple(self.variable_group[self.connected_var_keys[ii]]),
+                    factor_configs,
+                    factor_configs_log_potentials,
+                )
+                for ii in range(len(self.connected_var_keys))
+            }
+        else:
+            keys_to_factors = {
+                key: nodes.EnumerationFactor(
+                    tuple(self.variable_group[self.connected_var_keys[key]]),
+                    factor_configs,
+                    factor_configs_log_potentials,
+                )
+                for key in self.connected_var_keys
+            }
+
         return keys_to_factors

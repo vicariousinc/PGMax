@@ -435,10 +435,16 @@ def test_e2e_heretic():
         graph.FToVMessages(factor_graph=fg),
         graph.FToVMessages(factor_graph=fg, default_mode="random"),
     ]:
-        msgs[((0, 0), 0), (0, 0, 0)]
-        msgs[((1, 1), 0), (1, 0, 0)] = np.ones(17)
-        assert np.all(msgs[((1, 1), 0), (1, 0, 0)] == 1.0)
+        msgs[((0, 0), frozenset([(1, 0, 0), (0, 0, 0)])), (0, 0, 0)]
+        msgs[((1, 1), frozenset([(1, 0, 0), (0, 1, 1)])), (1, 0, 0)] = np.ones(17)
+        assert np.all(
+            msgs[((1, 1), frozenset([(1, 0, 0), (0, 1, 1)])), (1, 0, 0)] == 1.0
+        )
         msgs[1, 0, 0] = np.ones(17)
-        assert np.all(msgs[((0, 0), 0), (1, 0, 0)] == 1.0 / 9)
-        assert np.all(msgs[((1, 1), 0), (1, 0, 0)] == 1.0 / 9)
+        assert np.all(
+            msgs[((0, 0), frozenset([(1, 0, 0), (0, 0, 0)])), (1, 0, 0)] == 1.0 / 9
+        )
+        assert np.all(
+            msgs[((1, 1), frozenset([(1, 0, 0), (0, 1, 1)])), (1, 0, 0)] == 1.0 / 9
+        )
         fg.run_bp(1, 0.5, init_msgs=msgs)
