@@ -8,7 +8,8 @@
 #       format_version: '1.3'
 #       jupytext_version: 1.11.4
 #   kernelspec:
-#     display_name: 'Python 3.8.5 64-bit (''pgmax-JcKb81GE-py3.8'': poetry)'
+#     display_name: Python 3
+#     language: python
 #     name: python3
 # ---
 
@@ -306,9 +307,6 @@ for row in range(M):
                     for c in range(start_col, start_col + SUPPRESSION_DIAMETER)
                 ]
             )
-horz_suppression_group = groups.EnumerationFactorGroup(
-    composite_grid_group, horz_suppression_keys, valid_configs_supp
-)
 
 
 # %% [markdown]

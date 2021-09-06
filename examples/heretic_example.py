@@ -8,10 +8,12 @@
 #       format_version: '1.3'
 #       jupytext_version: 1.11.4
 #   kernelspec:
-#     display_name: 'Python 3.7.11 64-bit (''pgmax-zIh0MZVc-py3.7'': venv)'
-#     name: python371164bitpgmaxzih0mzvcpy37venve540bb1b5cdf4292a3f5a12c4904cc40
+#     display_name: Python 3
+#     language: python
+#     name: python3
 # ---
 
+# %%
 from timeit import default_timer as timer
 from typing import Any, List, Tuple
 

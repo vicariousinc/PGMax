@@ -20,13 +20,12 @@ class FactorGraph:
     """Class for representing a factor graph
 
     Args:
-        variables: A container containing variable groups.
-            If not a VariableGroup, supported containers include mapping, sequence and single
-            VariableGroup.
+        variables: A single VariableGroup or a container containing variable groups.
+            If not a single VariableGroup, supported containers include mapping and sequence.
             For a mapping, the keys of the mapping are used to index the variable groups.
             For a sequence, the indices of the sequence are used to index the variable groups.
-            Note that if not a VariableGroup, a CompositeVariableGroup will be created from
-            this input, and the individual VariableGroups will need to be accessed by indexing this.
+            Note that if not a single VariableGroup, a CompositeVariableGroup will be created from
+            this input, and the individual VariableGroups will need to be accessed by indexing.
         messages_default_mode: default mode for initializing messages.
             Allowed values are "zeros" and "random".
         evidence_default_mode: default mode for initializing evidence.
@@ -111,8 +110,7 @@ class FactorGraph:
                 "factor_factory" argument.
                 If there is a "name" key, we add the added factor/factor group to the list
                 of named factors within the factor graph.
-                Note that either *args or **kwargs must be
-                specified.
+                Note that either *args or **kwargs must be specified.
         """
         name = kwargs.pop("name", None)
         if name in self._named_factor_groups:
