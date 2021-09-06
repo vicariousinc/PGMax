@@ -67,7 +67,7 @@ jobs:
       #----------------------------------------------
       - name: Test with coverage
         run: |
-          poetry run pytest --cov=pgmax --cov-report=xml
+          poetry run pytest --cov=pgmax --cov-report=xml --cov-report=term-missing:skip-covered
       #----------------------------------------------
       #      upload coverage report to codecov
       #----------------------------------------------

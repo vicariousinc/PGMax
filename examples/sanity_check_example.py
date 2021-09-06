@@ -8,7 +8,8 @@
 #       format_version: '1.3'
 #       jupytext_version: 1.11.4
 #   kernelspec:
-#     display_name: 'Python 3.8.5 64-bit (''pgmax-JcKb81GE-py3.8'': poetry)'
+#     display_name: Python 3
+#     language: python
 #     name: python3
 # ---
 
@@ -154,17 +155,11 @@ for i in range(2):
 
 # %%
 # Create the factor graph
-fg = graph.FactorGraph(
-    variable_groups=composite_grid_group,
-)
-
-# Set the evidence
-fg.set_evidence("grid_vars", grid_evidence_arr)
-fg.set_evidence("additional_vars", additional_vars_evidence_dict)
-
+fg = graph.FactorGraph(variables=composite_grid_group)
 
 # %% [markdown]
 # ### Create Valid Configuration Arrays
+
 
 # %%
 # Helper function to easily generate a list of valid configurations for a given suppression diameter
@@ -268,7 +263,7 @@ for row in range(M - 1):
                 ("additional_vars", 1, row + 1, col),
             ]
 
-        fg.add_factors(
+        fg.add_factor(
             curr_keys,
             valid_configs_non_supp,
             np.zeros(valid_configs_non_supp.shape[0], dtype=float),
@@ -312,21 +307,18 @@ for row in range(M):
                     for c in range(start_col, start_col + SUPPRESSION_DIAMETER)
                 ]
             )
-horz_suppression_group = groups.EnumerationFactorGroup(
-    composite_grid_group, horz_suppression_keys, valid_configs_supp
-)
 
 
 # %% [markdown]
 # ### Add FactorGroups Remaining to FactorGraph
 
 # %%
-fg.add_factors(
+fg.add_factor(
     factor_factory=groups.EnumerationFactorGroup,
     connected_var_keys=vert_suppression_keys,
     factor_configs=valid_configs_supp,
 )
-fg.add_factors(
+fg.add_factor(
     factor_factory=groups.EnumerationFactorGroup,
     connected_var_keys=horz_suppression_keys,
     factor_configs=valid_configs_supp,
@@ -337,8 +329,12 @@ fg.add_factors(
 
 # %%
 # Run BP
+# Set the evidence
+init_msgs = fg.get_init_msgs()
+init_msgs.evidence["grid_vars"] = grid_evidence_arr
+init_msgs.evidence["additional_vars"] = additional_vars_evidence_dict
 bp_start_time = timer()
-final_msgs = fg.run_bp(1000, 0.5)
+final_msgs = fg.run_bp(1000, 0.5, init_msgs=init_msgs)
 bp_end_time = timer()
 print(f"time taken for bp {bp_end_time - bp_start_time}")
 

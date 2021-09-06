@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Tuple
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pytest
 from numpy.random import default_rng
 from scipy.ndimage import gaussian_filter
 
@@ -255,13 +256,7 @@ def test_e2e_sanity_check():
                         pass
 
     # Create the factor graph
-    fg = graph.FactorGraph(
-        variable_groups=composite_grid_group,
-    )
-
-    # Set the evidence
-    fg.set_evidence("grid_vars", grid_evidence_arr)
-    fg.set_evidence("additional_vars", additional_vars_evidence_dict)
+    fg = graph.FactorGraph(variables=composite_grid_group)
 
     # Imperatively add EnumerationFactorGroups (each consisting of just one EnumerationFactor) to
     # the graph!
@@ -298,19 +293,23 @@ def test_e2e_sanity_check():
                     ("additional_vars", 1, row + 1, col),
                 ]
             if row % 2 == 0:
-                fg.add_factors(
+                fg.add_factor(
                     curr_keys,
                     valid_configs_non_supp,
                     np.zeros(valid_configs_non_supp.shape[0], dtype=float),
+                    name=(row, col),
                 )
             else:
-                fg.add_factors(
+                fg.add_factor(
                     keys=curr_keys,
                     factor_configs=valid_configs_non_supp,
                     factor_configs_log_potentials=np.zeros(
                         valid_configs_non_supp.shape[0], dtype=float
                     ),
+                    name=(row, col),
                 )
+
+    assert fg.get_factor((0, 0))[1] == 0
 
     # Create an EnumerationFactorGroup for vertical suppression factors
     vert_suppression_keys: List[List[Tuple[Any, ...]]] = []
@@ -350,12 +349,14 @@ def test_e2e_sanity_check():
                 )
 
     # Add the suppression factors to the graph via kwargs
-    fg.add_factors(
+    fg.add_factor(
         factor_factory=groups.EnumerationFactorGroup,
-        connected_var_keys=vert_suppression_keys,
+        connected_var_keys={
+            idx: keys for idx, keys in enumerate(vert_suppression_keys)
+        },
         factor_configs=valid_configs_supp,
     )
-    fg.add_factors(
+    fg.add_factor(
         factor_factory=groups.EnumerationFactorGroup,
         connected_var_keys=horz_suppression_keys,
         factor_configs=valid_configs_supp,
@@ -365,11 +366,16 @@ def test_e2e_sanity_check():
     )
 
     # Run BP
-    one_step_msgs = fg.run_bp(1, 0.5)
+    # Set the evidence
+    init_msgs = fg.get_init_msgs()
+    init_msgs.evidence["grid_vars"] = grid_evidence_arr
+    init_msgs.evidence["additional_vars"] = additional_vars_evidence_dict
+    fg.run_bp(1, 0.5)
+    one_step_msgs = fg.run_bp(1, 0.5, init_msgs=init_msgs)
     final_msgs = fg.run_bp(99, 0.5, one_step_msgs)
 
     # Test that the output messages are close to the true messages
-    assert jnp.allclose(final_msgs, true_final_msgs_output, atol=1e-06)
+    assert jnp.allclose(final_msgs.ftov.value, true_final_msgs_output, atol=1e-06)
     assert fg.decode_map_states(final_msgs) == true_map_state_output
 
 
@@ -385,12 +391,7 @@ def test_e2e_heretic():
     bXn = np.zeros((30, 30, 3))
 
     # Create the factor graph
-    fg = graph.FactorGraph((pixel_vars, hidden_vars))
-
-    # Assign evidence to pixel vars
-    fg.set_evidence(0, np.array(bXn))
-    fg.set_evidence(tuple([0, 0, 0]), np.array([0.0, 0.0, 0.0]))
-    fg.evidence_default_mode = "random"
+    fg = graph.FactorGraph((pixel_vars, hidden_vars), evidence_default_mode="random")
 
     def binary_connected_variables(
         num_hidden_rows, num_hidden_cols, kernel_row, kernel_col
@@ -409,12 +410,47 @@ def test_e2e_heretic():
     W_pot = np.zeros((17, 3, 3, 3), dtype=float)
     for k_row in range(3):
         for k_col in range(3):
-            fg.add_factors(
+            fg.add_factor(
                 factor_factory=groups.PairwiseFactorGroup,
                 connected_var_keys=binary_connected_variables(28, 28, k_row, k_col),
                 log_potential_matrix=W_pot[:, :, k_row, k_col],
+                name=(k_row, k_col),
             )
 
-    assert isinstance(fg.evidence, np.ndarray)
+    # Assign evidence to pixel vars
+    init_msgs = fg.get_init_msgs()
+    init_msgs.evidence[0] = np.array(bXn)
+    init_msgs.evidence[0, 0, 0] = np.array([0.0, 0.0, 0.0])
+    init_msgs.evidence[0, 0, 0]
+    init_msgs.evidence[1, 0, 0]
+    with pytest.raises(ValueError) as verror:
+        fg.get_factor((0, 0))
 
+    assert "Invalid factor key" in str(verror.value)
+    with pytest.raises(ValueError) as verror:
+        fg.get_factor((((0, 0), 0), (10, 20, 30)))
+
+    assert "Invalid factor key" in str(verror.value)
+    assert isinstance(init_msgs.evidence.value, jnp.ndarray)
     assert len(fg.factors) == 7056
+    evidence = graph.Evidence(factor_graph=fg)
+    for ftov_msgs in [
+        graph.FToVMessages(factor_graph=fg),
+        graph.FToVMessages(factor_graph=fg, default_mode="random"),
+    ]:
+        ftov_msgs[((0, 0), frozenset([(1, 0, 0), (0, 0, 0)])), (0, 0, 0)]
+        ftov_msgs[((1, 1), frozenset([(1, 0, 0), (0, 1, 1)])), (1, 0, 0)] = np.ones(17)
+        assert np.all(
+            ftov_msgs[((1, 1), frozenset([(1, 0, 0), (0, 1, 1)])), (1, 0, 0)] == 1.0
+        )
+        ftov_msgs[1, 0, 0] = np.ones(17)
+        assert np.all(
+            ftov_msgs[((0, 0), frozenset([(1, 0, 0), (0, 0, 0)])), (1, 0, 0)] == 1.0 / 9
+        )
+        assert np.all(
+            ftov_msgs[((1, 1), frozenset([(1, 0, 0), (0, 1, 1)])), (1, 0, 0)] == 1.0 / 9
+        )
+        msgs = fg.run_bp(
+            1, 0.5, init_msgs=graph.Messages(ftov=ftov_msgs, evidence=evidence)
+        )
+        msgs.ftov[((0, 0), frozenset([(1, 0, 0), (0, 0, 0)])), (0, 0, 0)]

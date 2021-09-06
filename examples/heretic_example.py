@@ -8,10 +8,12 @@
 #       format_version: '1.3'
 #       jupytext_version: 1.11.4
 #   kernelspec:
-#     display_name: 'Python 3.7.11 64-bit (''pgmax-zIh0MZVc-py3.7'': venv)'
-#     name: python371164bitpgmaxzih0mzvcpy37venve540bb1b5cdf4292a3f5a12c4904cc40
+#     display_name: Python 3
+#     language: python
+#     name: python3
 # ---
 
+# %%
 from timeit import default_timer as timer
 from typing import Any, List, Tuple
 
@@ -91,13 +93,9 @@ bHn_evidence = bHn_evidence.swapaxes(1, 2)
 # Create the factor graph
 fg = graph.FactorGraph((pixel_vars, hidden_vars))
 
-# Assign evidence to pixel vars
-fg.set_evidence(0, np.array(bXn_evidence))
-fg.set_evidence(1, np.array(bHn_evidence))
-
-
 # %% [markdown]
 # # Add all Factors to graph via constructing FactorGroups
+
 
 # %% tags=[]
 def binary_connected_variables(
@@ -118,7 +116,7 @@ def binary_connected_variables(
 W_pot = W_orig.swapaxes(0, 1)
 for k_row in range(3):
     for k_col in range(3):
-        fg.add_factors(
+        fg.add_factor(
             factor_factory=groups.PairwiseFactorGroup,
             connected_var_keys=binary_connected_variables(28, 28, k_row, k_col),
             log_potential_matrix=W_pot[:, :, k_row, k_col],
@@ -174,16 +172,22 @@ Mup = Mup - bHn / f_s ** 2
 reshaped_Mdown = Mdown.reshape(3, 3, 3, 28, 28)
 reshaped_Mup = Mup.reshape(17, 3, 3, 28, 28)
 
-init_msgs = jax.device_put(
-    custom_flatten_ordering(np.array(reshaped_Mdown), np.array(reshaped_Mup))
-)
-
 # %% [markdown]
 # # Run Belief Propagation and Retrieve MAP Estimate
 
 # %% tags=[]
 # Run BP
+init_msgs = fg.get_init_msgs()
+init_msgs.ftov = graph.FToVMessages(
+    factor_graph=fg,
+    init_value=jax.device_put(
+        custom_flatten_ordering(np.array(reshaped_Mdown), np.array(reshaped_Mup))
+    ),
+)
+init_msgs.evidence[0] = np.array(bXn_evidence)
+init_msgs.evidence[1] = np.array(bHn_evidence)
 bp_start_time = timer()
+# Assign evidence to pixel vars
 final_msgs = fg.run_bp(
     500,
     0.5,
