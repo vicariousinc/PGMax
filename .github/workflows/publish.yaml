@@ -10,7 +10,7 @@ jobs:
     strategy:
       matrix:
         python-version: [3.7]
-        poetry-version: [1.1.6]
+        poetry-version: [1.1.8]
     steps:
       #----------------------------------------------
       #       check-out repo and set-up python

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pgmax"
-version = "0.1.0"
+version = "0.2.0"
 description = "Loopy belief propagation for factor graphs on discrete variables, in JAX!"
 authors = ["Nishanth Kumar <nkumar@vicarious.com>", "Stannis Zhou <stannis@vicarious.com>", "Wolfgang Lehrach <wolf@vicarious.com>", "Miguel Lazaro-Gredilla <miguel@vicarious.com>"]
 # Additional info
