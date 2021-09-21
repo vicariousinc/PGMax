@@ -30,9 +30,9 @@ def _compute_valid_configs(
     for row in range(pool_size):
         for col in range(pool_size):
             min_row = max(0, row - perturb_radius)
-            max_row = min(pool_size, row + perturb_radius)
+            max_row = min(pool_size - 1, row + perturb_radius)
             min_col = max(0, col - perturb_radius)
-            max_col = min(pool_size, col + perturb_radius)
+            max_col = min(pool_size - 1, col + perturb_radius)
 
             for i in range(min_row, max_row):
                 for j in range(min_col, max_col):
