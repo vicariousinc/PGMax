@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import pgmax.fg.graph as graph
 import pgmax.fg.groups as groups
@@ -11,7 +11,7 @@ from rw_common.utils.pickle import PickleHound
 
 def _compute_valid_configs(
     perturb_radius: int, pool_size: int = 5
-) -> Dict[int, List[List[int, int], ...]]:
+) -> Dict[int, List[List[Tuple[int, int], Tuple[int, int]], ...]]:
     """
     Helper function to compute valid configurations given pool_size and perturb_radius. (WIP)
 
@@ -20,10 +20,31 @@ def _compute_valid_configs(
         pool_size: Pool size of the model.
 
     Returns
-        Dict with perturb radius as key and list of pairwise valid configurations
-        E.g {1: [[0,0], [0,1], [1, 0]...]}
+        Dict with perturb radius as key and list of pairwise valid configurations in tuples.
+        E.g {1: [[(0,0), (0,0)], [(0,0), (1,0)]...]}
     """
-    pass
+    valid_config = {}
+    list_of_configs = []
+
+    # For every element, check the neighbors given by perturb_radius
+    for row in range(pool_size):
+        for col in range(pool_size):
+            min_row = max(0, row - perturb_radius)
+            max_row = min(pool_size, row + perturb_radius)
+            min_col = max(0, col - perturb_radius)
+            max_col = min(pool_size, col + perturb_radius)
+
+            for i in range(min_row, max_row):
+                for j in range(min_col, max_col):
+                    euclidean_dist = ((row - i) ** 2 + (col - j)) ** 0.5
+
+                    if euclidean_dist <= perturb_radius:
+                        # TODO: Handle/Check for duplicates
+                        list_of_configs.append([(row, col), (i, j)])
+
+    valid_config[perturb_radius] = list_of_configs
+
+    return valid_config
 
 
 model_path = resolve_path(path_spec="pkg_data://rcn/config/base/model.pkl")
