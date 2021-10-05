@@ -54,7 +54,7 @@ def _compute_valid_configs(
 
             for i in range(min_row, max_row):
                 for j in range(min_col, max_col):
-                    euclidean_dist = ((row - i) ** 2 + (col - j)) ** 0.5
+                    euclidean_dist = ((row - i) ** 2 + (col - j) ** 2) ** 0.5
 
                     if euclidean_dist <= perturb_radius:
                         # Lookup config based on 2D grid row, col mapping
@@ -120,7 +120,7 @@ with open("edge_factors.npy", "rb") as f:
 generic_variable_group = groups.GenericVariableGroup(
     variable_size=variable_size, key_tuple=tuple(range(num_of_variables))
 )
-fg = graph.FactorGraph(variables=dict(pool_vars=generic_variable_group))
+fg = graph.FactorGraph(variables=generic_variable_group)
 
 valid_configs_dict = {}
 
@@ -141,16 +141,15 @@ for edge in edge_factors:
 
     valid_configs_dict[perturb_radius] = valid_config
 
-# From edges, add factors to the graph one by one.
-for edge in edge_factors:
+    # From edges, add factors to the graph one by one.
+    # for edge in edge_factors:
 
     curr_keys = [edge[0], edge[1]]
 
     fg.add_factor(
         curr_keys,
         valid_configs_dict[edge[-1]],
-        np.zeros(valid_configs_dict[edge[-1]], dtype=float),  # This line causes issues
-        # np.zeros_like(valid_configs_dict[edge[-1]], dtype=float)
+        np.zeros_like(valid_configs_dict[edge[-1]], dtype=float),
     )
 
 
@@ -161,7 +160,7 @@ with open("bu_evidence_extracted.npy", "rb") as f:
     bu_evidence_extracted = np.load(f)
 
 init_msgs = fg.get_init_msgs()
-evidence = bu_evidence_extracted
+evidence = np.reshape(bu_evidence_extracted, (bu_evidence_extracted.shape[0], -1))
 init_msgs.evidence[:] = evidence
 
 msgs = fg.run_bp(num_iters=3000, damping_factor=0.5, init_msgs=init_msgs)
