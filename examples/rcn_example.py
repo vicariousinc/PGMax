@@ -153,6 +153,19 @@ for edge in edge_factors:
         # np.zeros_like(valid_configs_dict[edge[-1]], dtype=float)
     )
 
+
+# Setup Evidence
+
+# Load the extracted bu_evidence
+with open("bu_evidence_extracted.npy", "rb") as f:
+    bu_evidence_extracted = np.load(f)
+
+init_msgs = fg.get_init_msgs()
+evidence = bu_evidence_extracted
+init_msgs.evidence[:] = evidence
+
+msgs = fg.run_bp(num_iters=3000, damping_factor=0.5, init_msgs=init_msgs)
+
 from IPython import embed
 
 embed()
