@@ -149,7 +149,7 @@ for edge in edge_factors:
     fg.add_factor(
         curr_keys,
         valid_configs_dict[edge[-1]],
-        np.zeros_like(valid_configs_dict[edge[-1]], dtype=float),
+        np.zeros(valid_configs_dict[edge[-1]].shape[0], dtype=float),
     )
 
 
