@@ -161,7 +161,10 @@ with open("bu_evidence_extracted.npy", "rb") as f:
 
 init_msgs = fg.get_init_msgs()
 evidence = np.reshape(bu_evidence_extracted, (bu_evidence_extracted.shape[0], -1))
-init_msgs.evidence[:] = evidence
+
+
+for i in range(evidence.shape[0]):
+    init_msgs.evidence[i] = evidence[i]
 
 msgs = fg.run_bp(num_iters=3000, damping_factor=0.5, init_msgs=init_msgs)
 
