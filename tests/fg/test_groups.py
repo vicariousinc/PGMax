@@ -33,6 +33,11 @@ def test_composite_vargroup_evidence():
         assert (arr == np.zeros(3, dtype=float)).all()
 
 
+def test_1dvararray_indexing():
+    v_group = groups.NDVariableArray(2, (1,))
+    v_group[0]
+
+
 def test_ndvararray_evidence_error():
     v_group = groups.NDVariableArray(3, (2, 2))
     with pytest.raises(ValueError) as verror:
