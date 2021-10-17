@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from pgmax.fg import groups
+from pgmax.fg import groups, nodes
 
 
 def test_vargroup_list_idx():
@@ -35,7 +35,7 @@ def test_composite_vargroup_evidence():
 
 def test_1dvararray_indexing():
     v_group = groups.NDVariableArray(2, (1,))
-    v_group[0]
+    assert isinstance(v_group[0], nodes.Variable)
 
 
 def test_ndvararray_evidence_error():

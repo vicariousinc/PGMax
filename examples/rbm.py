@@ -13,10 +13,9 @@
 #     name: python3
 # ---
 
-import itertools
-
 # %%
 # %matplotlib inline
+import itertools
 import os
 
 import matplotlib.pyplot as plt
