@@ -16,7 +16,6 @@
 # %%
 # %matplotlib inline
 import itertools
-import os
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -25,7 +24,7 @@ from pgmax.fg import graph, groups
 
 # %%
 # Load parameters
-params = np.load(os.path.join(os.path.dirname(__file__), "example_data/rbm_mnist.npz"))
+params = np.load("example_data/rbm_mnist.npz")
 bv = params["bv"]
 bh = params["bh"]
 W = params["W"]

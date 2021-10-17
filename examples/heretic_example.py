@@ -14,7 +14,6 @@
 # ---
 
 # %%
-import os
 from timeit import default_timer as timer
 from typing import Any, List, Tuple
 
@@ -52,14 +51,7 @@ composite_vargroup = groups.CompositeVariableGroup((pixel_vars, hidden_vars))
 
 # %%
 # Load weights and create evidence (taken directly from @lazarox's code)
-crbm_weights = np.load(
-    os.path.abspath(
-        os.path.join(
-            os.path.dirname(__file__),
-            "example_data/crbm_mnist_weights_surfaces_pmap002.npz",
-        )
-    )
-)
+crbm_weights = np.load("example_data/crbm_mnist_weights_surfaces_pmap002.npz")
 W_orig, bX, bH = crbm_weights["W"], crbm_weights["bX"], crbm_weights["bH"]
 n_samples = 1
 T = 1
