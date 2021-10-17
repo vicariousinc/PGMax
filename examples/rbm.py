@@ -19,18 +19,14 @@ import itertools
 # %matplotlib inline
 import os
 
-import joblib
 import matplotlib.pyplot as plt
 import numpy as np
-from tqdm import tqdm
 
 from pgmax.fg import graph, groups
 
 # %%
 # Load parameters
-params = joblib.load(
-    os.path.join(os.path.dirname(__file__), "example_data/rbm_mnist.joblib")
-)
+params = np.load(os.path.join(os.path.dirname(__file__), "example_data/rbm_mnist.npz"))
 bv = params["bv"]
 bh = params["bh"]
 W = params["W"]
@@ -44,7 +40,7 @@ hidden_variables = groups.NDVariableArray(variable_size=2, shape=(nh,))
 fg = graph.FactorGraph(
     variables=dict(visible=visible_variables, hidden=hidden_variables),
 )
-for ii in tqdm(range(nh)):
+for ii in range(nh):
     for jj in range(nv):
         fg.add_factor(
             [("hidden", ii), ("visible", jj)],
