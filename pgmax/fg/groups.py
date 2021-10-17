@@ -257,15 +257,19 @@ class NDVariableArray(VariableGroup):
     variable_size: int
     shape: Tuple[int, ...]
 
-    def _get_keys_to_vars(self) -> Dict[Tuple[int, ...], nodes.Variable]:
+    def _get_keys_to_vars(self) -> Dict[Union[int, Tuple[int, ...]], nodes.Variable]:
         """Function that generates a dictionary mapping keys to variables.
 
         Returns:
             a dictionary mapping all possible keys to different variables.
         """
-        keys_to_vars: Dict[Tuple[int, ...], nodes.Variable] = {}
+        keys_to_vars: Dict[Union[int, Tuple[int, ...]], nodes.Variable] = {}
         for key in itertools.product(*[list(range(k)) for k in self.shape]):
-            keys_to_vars[key] = nodes.Variable(self.variable_size)
+            if len(key) == 1:
+                keys_to_vars[key[0]] = nodes.Variable(self.variable_size)
+            else:
+                keys_to_vars[key] = nodes.Variable(self.variable_size)
+
         return keys_to_vars
 
     def get_vars_to_evidence(
