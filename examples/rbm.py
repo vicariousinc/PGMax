@@ -13,9 +13,11 @@
 #     name: python3
 # ---
 
+import itertools
+
 # %%
 # %matplotlib inline
-import itertools
+import os
 
 import joblib
 import matplotlib.pyplot as plt
@@ -26,7 +28,9 @@ from pgmax.fg import graph, groups
 
 # %%
 # Load parameters
-params = joblib.load("example_data/rbm_mnist.joblib")
+params = joblib.load(
+    os.path.join(os.path.dirname(__file__), "example_data/rbm_mnist.joblib")
+)
 bv = params["bv"]
 bh = params["bh"]
 W = params["W"]
