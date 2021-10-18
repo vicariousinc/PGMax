@@ -1,5 +1,7 @@
 """A module containing the core message-passing functions for belief propagation"""
 
+import functools
+
 import jax
 import jax.numpy as jnp
 
@@ -32,7 +34,7 @@ def pass_var_to_fac_messages(
     return vtof_msgs
 
 
-@jax.partial(jax.jit, static_argnames=("num_val_configs"))
+@functools.partial(jax.jit, static_argnames=("num_val_configs"))
 def pass_fac_to_var_messages(
     vtof_msgs: jnp.ndarray,
     factor_configs_edge_states: jnp.ndarray,
@@ -73,7 +75,7 @@ def pass_fac_to_var_messages(
     return ftov_msgs
 
 
-@jax.partial(jax.jit, static_argnames=("max_msg_size"))
+@functools.partial(jax.jit, static_argnames=("max_msg_size"))
 def normalize_and_clip_msgs(
     msgs: jnp.ndarray,
     edges_num_states: jnp.ndarray,

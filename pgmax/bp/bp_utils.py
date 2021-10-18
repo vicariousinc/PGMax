@@ -1,5 +1,7 @@
 """A module containing helper functions used for belief propagation."""
 
+import functools
+
 import jax
 import jax.numpy as jnp
 
@@ -8,7 +10,7 @@ NEG_INF = (
 )  # A large negative value to use as -inf for numerical stability reasons
 
 
-@jax.partial(jax.jit, static_argnames="max_segment_length")
+@functools.partial(jax.jit, static_argnames="max_segment_length")
 def segment_max_opt(
     data: jnp.ndarray, segments_lengths: jnp.ndarray, max_segment_length: int
 ) -> jnp.ndarray:
@@ -28,7 +30,7 @@ def segment_max_opt(
 
     """
 
-    @jax.partial(jax.vmap, in_axes=(None, 0, 0), out_axes=0)
+    @functools.partial(jax.vmap, in_axes=(None, 0, 0), out_axes=0)
     def get_max(data, start_index, segment_length):
         return jnp.max(
             jnp.where(
