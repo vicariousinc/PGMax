@@ -7,6 +7,8 @@ from pgmax.fg import graph, groups
 def test_onevar_graph():
     v_group = groups.VariableDict(15, (0,))
     fg = graph.FactorGraph(v_group)
+    evidence = graph.Evidence(factor_graph=fg, value=np.zeros(1))
+    assert np.all(evidence.value == 0)
     assert fg._variable_group[0].num_states == 15
     with pytest.raises(ValueError) as verror:
         graph.FToVMessages(
