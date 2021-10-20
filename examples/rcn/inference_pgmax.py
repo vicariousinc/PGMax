@@ -66,7 +66,7 @@ train_set, test_set = get_mnist_data_iters(data_dir, 20, 20)
 
 if debug:
     img = train_set[4][0]
-    temp_model = Model(img, 11, 11, max_cxn_length=100, factor_type="cpp", alpha=1.0)
+    temp_model = Model(img, 11, 11, max_cxn_length=100, factor_type="pgmax", alpha=1.0)
     plt.figure(figsize=(10, 10))
     temp_model.visualize_graph()
 
@@ -80,7 +80,7 @@ for idx in range(len(train_set)):
     img = train_set[idx][0]
     label = int(train_set[idx][1])
 
-    model = Model(img, hps, vps, max_cxn_length=100, factor_type="cpp", alpha=1.0)
+    model = Model(img, hps, vps, max_cxn_length=100, factor_type="pgmax", alpha=1.0)
     fg = make_pgmax_graph(model)
 
     models.append(model)
