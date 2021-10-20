@@ -13,6 +13,7 @@ import numpy as np
 
 from pgmax.bp import infer
 from pgmax.fg import fg_utils, groups, nodes
+from pgmax.utils import cached_property
 
 
 @dataclass
@@ -84,6 +85,9 @@ class FactorGraph:
         self._named_factor_groups: Dict[Hashable, groups.FactorGroup] = {}
         self._total_factor_num_states: int = 0
         self._factor_group_to_starts: Dict[groups.FactorGroup, int] = {}
+
+    def __hash__(self) -> int:
+        return hash(tuple(self._factor_groups))
 
     def add_factor(
         self,
@@ -185,7 +189,7 @@ class FactorGraph:
 
         return factor, start
 
-    @property
+    @cached_property
     def wiring(self) -> nodes.EnumerationWiring:
         """Function to compile wiring for belief propagation.
 
@@ -201,7 +205,7 @@ class FactorGraph:
         wiring = fg_utils.concatenate_enumeration_wirings(wirings)
         return wiring
 
-    @property
+    @cached_property
     def factor_configs_log_potentials(self) -> np.ndarray:
         """Function to compile potential array for belief propagation..
 
@@ -218,7 +222,7 @@ class FactorGraph:
             ]
         )
 
-    @property
+    @cached_property
     def factors(self) -> Tuple[nodes.EnumerationFactor, ...]:
         """List of individual factors in the factor graph"""
         return sum([factor_group.factors for factor_group in self._factor_groups], ())
