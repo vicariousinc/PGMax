@@ -225,7 +225,11 @@ class FactorGraph:
     @cached_property
     def factors(self) -> Tuple[nodes.EnumerationFactor, ...]:
         """List of individual factors in the factor graph"""
-        return sum([factor_group.factors for factor_group in self._factor_groups], ())
+        factors = []
+        for factor_group in self._factor_groups:
+            factors.extend(factor_group.factors)
+
+        return tuple(factors)
 
     def get_init_msgs(self) -> Messages:
         """Function to initialize messages.
