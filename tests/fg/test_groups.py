@@ -5,13 +5,13 @@ from pgmax.fg import groups, nodes
 
 
 def test_vargroup_list_idx():
-    v_group = groups.GenericVariableGroup(15, tuple([0, 1, 2]))
+    v_group = groups.VariableDict(15, tuple([0, 1, 2]))
     assert v_group[[0, 1, 2]][0].num_states == 15
 
 
 def test_composite_vargroup_valueerror():
-    v_group1 = groups.GenericVariableGroup(15, tuple([0, 1, 2]))
-    v_group2 = groups.GenericVariableGroup(15, tuple([0, 1, 2]))
+    v_group1 = groups.VariableDict(15, tuple([0, 1, 2]))
+    v_group2 = groups.VariableDict(15, tuple([0, 1, 2]))
     comp_var_group = groups.CompositeVariableGroup(tuple([v_group1, v_group2]))
     with pytest.raises(ValueError) as verror:
         comp_var_group[tuple([0])]
@@ -19,9 +19,9 @@ def test_composite_vargroup_valueerror():
 
 
 def test_composite_vargroup_evidence():
-    v_group1 = groups.GenericVariableGroup(3, tuple([0, 1, 2]))
+    v_group1 = groups.VariableDict(3, tuple([0, 1, 2]))
     v_group1.container_keys
-    v_group2 = groups.GenericVariableGroup(3, tuple([0, 1, 2]))
+    v_group2 = groups.VariableDict(3, tuple([0, 1, 2]))
     comp_var_group = groups.CompositeVariableGroup(tuple([v_group1, v_group2]))
     vars_to_evidence = comp_var_group.get_vars_to_evidence(
         [{0: np.zeros(3)}, {0: np.zeros(3)}]
@@ -67,7 +67,7 @@ def test_pairwisefacgroup_errors():
 
 
 def test_generic_evidence_errors():
-    v_group = groups.GenericVariableGroup(3, tuple([0]))
+    v_group = groups.VariableDict(3, tuple([0]))
     with pytest.raises(ValueError) as verror:
         v_group.get_vars_to_evidence({1: np.zeros((1, 1))})
     assert "The evidence is referring" in str(verror.value)

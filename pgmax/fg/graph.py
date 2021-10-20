@@ -10,7 +10,6 @@ from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple
 import jax
 import jax.numpy as jnp
 import numpy as np
-from tqdm import tqdm
 
 from pgmax.bp import infer
 from pgmax.fg import fg_utils, groups, nodes
@@ -201,7 +200,7 @@ class FactorGraph:
         """
         wirings = [
             factor_group.compile_wiring(self._vars_to_starts)
-            for factor_group in tqdm(self._factor_groups)
+            for factor_group in self._factor_groups
         ]
         wiring = fg_utils.concatenate_enumeration_wirings(wirings)
         return wiring
@@ -592,7 +591,7 @@ class Evidence:
                 Note that the size of the final dimension should be the same as
                 variable_group.variable_size. if key indexes a particular variable, then this array
                 must be of the same size as variable.num_states
-                - a dictionary: if key indexes a GenericVariableGroup, then evidence_values
+                - a dictionary: if key indexes a VariableDict, then evidence_values
                 must be a dictionary mapping keys of variable_group to np.ndarrays of evidence values.
                 Note that each np.ndarray in the dictionary values must have the same size as
                 variable_group.variable_size.

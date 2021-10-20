@@ -217,7 +217,7 @@ def test_e2e_sanity_check():
     extra_row_keys: List[Tuple[Any, ...]] = [(0, row, N - 1) for row in range(M - 1)]
     extra_col_keys: List[Tuple[Any, ...]] = [(1, M - 1, col) for col in range(N - 1)]
     additional_keys = tuple(extra_row_keys + extra_col_keys)
-    additional_keys_group = groups.GenericVariableGroup(3, additional_keys)
+    additional_keys_group = groups.VariableDict(3, additional_keys)
 
     # Combine these two VariableGroups into one CompositeVariableGroup
     composite_grid_group = groups.CompositeVariableGroup(

@@ -5,7 +5,7 @@ from pgmax.fg import graph, groups
 
 
 def test_onevar_graph():
-    v_group = groups.GenericVariableGroup(15, (0,))
+    v_group = groups.VariableDict(15, (0,))
     fg = graph.FactorGraph(v_group)
     assert fg._variable_group[0].num_states == 15
     with pytest.raises(ValueError) as verror:

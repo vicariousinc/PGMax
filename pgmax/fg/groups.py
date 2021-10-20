@@ -1,8 +1,20 @@
+import collections
 import itertools
 import typing
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple, Union
+from typing import (
+    Any,
+    Dict,
+    Hashable,
+    List,
+    Mapping,
+    Optional,
+    OrderedDict,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 import numpy as np
 
@@ -71,7 +83,7 @@ class VariableGroup:
         else:
             return vars_list[0]
 
-    def _get_keys_to_vars(self) -> Dict[Any, nodes.Variable]:
+    def _get_keys_to_vars(self) -> OrderedDict[Any, nodes.Variable]:
         """Function that generates a dictionary mapping keys to variables.
 
         Returns:
@@ -187,13 +199,13 @@ class CompositeVariableGroup(VariableGroup):
         else:
             return vars_list[0]
 
-    def _get_keys_to_vars(self) -> Dict[Hashable, nodes.Variable]:
+    def _get_keys_to_vars(self) -> OrderedDict[Hashable, nodes.Variable]:
         """Function that generates a dictionary mapping keys to variables.
 
         Returns:
             a dictionary mapping all possible keys to different variables.
         """
-        keys_to_vars: Dict[Hashable, nodes.Variable] = {}
+        keys_to_vars: OrderedDict[Hashable, nodes.Variable] = collections.OrderedDict()
         for container_key in self.container_keys:
             for variable_group_key in self.variable_group_container[container_key].keys:
                 if isinstance(variable_group_key, tuple):
@@ -257,13 +269,17 @@ class NDVariableArray(VariableGroup):
     variable_size: int
     shape: Tuple[int, ...]
 
-    def _get_keys_to_vars(self) -> Dict[Union[int, Tuple[int, ...]], nodes.Variable]:
+    def _get_keys_to_vars(
+        self,
+    ) -> OrderedDict[Union[int, Tuple[int, ...]], nodes.Variable]:
         """Function that generates a dictionary mapping keys to variables.
 
         Returns:
             a dictionary mapping all possible keys to different variables.
         """
-        keys_to_vars: Dict[Union[int, Tuple[int, ...]], nodes.Variable] = {}
+        keys_to_vars: OrderedDict[
+            Union[int, Tuple[int, ...]], nodes.Variable
+        ] = collections.OrderedDict()
         for key in itertools.product(*[list(range(k)) for k in self.shape]):
             if len(key) == 1:
                 keys_to_vars[key[0]] = nodes.Variable(self.variable_size)
@@ -294,34 +310,35 @@ class NDVariableArray(VariableGroup):
                 f"Got {evidence.shape}."
             )
 
-        vars_to_evidence = {
-            self._keys_to_vars[key]: evidence[key] for key in self._keys_to_vars
-        }
+        vars_to_evidence = {self._keys_to_vars[self.keys[0]]: evidence.ravel()}
         return vars_to_evidence
 
 
 @dataclass(frozen=True, eq=False)
-class GenericVariableGroup(VariableGroup):
-    """A generic variable group that contains a set of variables of the same size
+class VariableDict(VariableGroup):
+    """A variable dictionary that contains a set of variables of the same size
 
     Args:
         variable_size: The size of the variables in this variable group
-        key_tuple: A tuple of all keys in this variable group
+        variable_names: A tuple of all names of the variables in this variable group
 
     """
 
     variable_size: int
-    key_tuple: Tuple[Any, ...]
+    variable_names: Tuple[Any, ...]
 
-    def _get_keys_to_vars(self) -> Dict[Tuple[int, ...], nodes.Variable]:
+    def _get_keys_to_vars(self) -> OrderedDict[Tuple[int, ...], nodes.Variable]:
         """Function that generates a dictionary mapping keys to variables.
 
         Returns:
             a dictionary mapping all possible keys to different variables.
         """
-        keys_to_vars: Dict[Tuple[Any, ...], nodes.Variable] = {}
-        for key in self.key_tuple:
+        keys_to_vars: OrderedDict[
+            Tuple[Any, ...], nodes.Variable
+        ] = collections.OrderedDict()
+        for key in self.variable_names:
             keys_to_vars[key] = nodes.Variable(self.variable_size)
+
         return keys_to_vars
 
     def get_vars_to_evidence(
