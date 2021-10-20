@@ -530,31 +530,30 @@ class Evidence:
 
     factor_graph: FactorGraph
     default_mode: Optional[str] = None
-    init_value: Optional[Union[np.ndarray, jnp.ndarray]] = None
+    value: Optional[Union[np.ndarray, jnp.ndarray]] = None
 
     def __post_init__(self):
-        self._evidence_updates: Dict[
-            nodes.Variable, Union[np.ndarray, jnp.ndarray]
-        ] = {}
-        if self.default_mode is not None and self.init_value is not None:
-            raise ValueError("Should specify only one of default_mode and init_value.")
+        if self.default_mode is not None and self.value is not None:
+            raise ValueError("Should specify only one of default_mode and value.")
 
-        if self.default_mode is None and self.init_value is None:
+        if self.default_mode is None and self.value is None:
             self.default_mode = "zeros"
 
-        if self.init_value is None and self.default_mode not in ("zeros", "random"):
+        if self.value is None and self.default_mode not in ("zeros", "random"):
             raise ValueError(
                 f"Unsupported default evidence mode {self.default_mode}. "
                 "Supported default modes are zeros or random"
             )
 
-        if self.init_value is None:
+        if self.value is None:
             if self.default_mode == "zeros":
-                self.init_value = jnp.zeros(self.factor_graph.num_var_states)
+                self.value = jnp.zeros(self.factor_graph.num_var_states)
             else:
-                self.init_value = jax.device_put(
+                self.value = jax.device_put(
                     np.random.gumbel(size=(self.factor_graph.num_var_states,))
                 )
+        else:
+            self.value = jax.device_put(self.value)
 
     def __getitem__(self, key: Any) -> jnp.ndarray:
         """Function to query evidence for a variable
@@ -566,14 +565,8 @@ class Evidence:
             evidence for the queried variable
         """
         variable = self.factor_graph._variable_group[key]
-        if self.factor_graph._variable_group[key] in self._evidence_updates:
-            evidence = jax.device_put(self._evidence_updates[variable])
-        else:
-            start = self.factor_graph._vars_to_starts[variable]
-            evidence = jax.device_put(self.init_value)[
-                start : start + variable.num_states
-            ]
-
+        start = self.factor_graph._vars_to_starts[variable]
+        evidence = jax.device_put(self.value)[start : start + variable.num_states]
         return evidence
 
     def __setitem__(
@@ -611,25 +604,24 @@ class Evidence:
                     self.factor_graph._variable_group.variable_group_container[key]
                 )
 
-            self._evidence_updates.update(variable_group.get_vars_to_evidence(evidence))
+            for var, evidence_val in variable_group.get_vars_to_evidence(
+                evidence
+            ).items():
+                start_index = self.factor_graph._vars_to_starts[var]
+                self.value = (
+                    jax.device_put(self.value)
+                    .at[start_index : start_index + var.num_states]
+                    .set(evidence_val)
+                )
         else:
-            self._evidence_updates[self.factor_graph._variable_group[key]] = evidence
-
-    @property
-    def value(self) -> jnp.ndarray:
-        """Function to generate evidence array
-
-        Returns:
-            Array of shape (num_var_states,) representing the flattened evidence for each variable
-        """
-        evidence = jax.device_put(self.init_value)
-        for var, evidence_val in self._evidence_updates.items():
-            start_index = self.factor_graph._vars_to_starts[var]
-            evidence = evidence.at[start_index : start_index + var.num_states].set(
-                evidence_val
+            start_index = self.factor_graph._vars_to_starts[
+                self.factor_graph._variable_group[key]
+            ]
+            self.value = (
+                jax.device_put(self.value)
+                .at[start_index : start_index + var.num_states]
+                .set(evidence_val)
             )
-
-        return evidence
 
 
 @dataclass
