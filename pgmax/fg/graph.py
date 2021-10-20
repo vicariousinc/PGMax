@@ -10,6 +10,7 @@ from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple
 import jax
 import jax.numpy as jnp
 import numpy as np
+from tqdm import tqdm
 
 from pgmax.bp import infer
 from pgmax.fg import fg_utils, groups, nodes
@@ -200,7 +201,7 @@ class FactorGraph:
         """
         wirings = [
             factor_group.compile_wiring(self._vars_to_starts)
-            for factor_group in self._factor_groups
+            for factor_group in tqdm(self._factor_groups)
         ]
         wiring = fg_utils.concatenate_enumeration_wirings(wirings)
         return wiring
@@ -610,7 +611,7 @@ class Evidence:
                 start_index = self.factor_graph._vars_to_starts[var]
                 self.value = (
                     jax.device_put(self.value)
-                    .at[start_index : start_index + var.num_states]
+                    .at[start_index : start_index + evidence_val.shape[0]]
                     .set(evidence_val)
                 )
         else:
