@@ -19,7 +19,7 @@ def test_onevar_graph():
 
     assert "Unsupported default message mode" in str(verror.value)
     with pytest.raises(ValueError) as verror:
-        graph.Evidence(factor_graph=fg, default_mode="zeros", init_value=np.zeros(1))
+        graph.Evidence(factor_graph=fg, default_mode="zeros", value=np.zeros(1))
 
     assert "Should specify only" in str(verror.value)
     with pytest.raises(ValueError) as verror:

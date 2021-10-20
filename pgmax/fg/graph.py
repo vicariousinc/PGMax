@@ -614,13 +614,12 @@ class Evidence:
                     .set(evidence_val)
                 )
         else:
-            start_index = self.factor_graph._vars_to_starts[
-                self.factor_graph._variable_group[key]
-            ]
+            var = self.factor_graph._variable_group[key]
+            start_index = self.factor_graph._vars_to_starts[var]
             self.value = (
                 jax.device_put(self.value)
                 .at[start_index : start_index + var.num_states]
-                .set(evidence_val)
+                .set(evidence)
             )
 
 
