@@ -13,6 +13,7 @@ import numpy as np
 
 from pgmax.bp import infer
 from pgmax.fg import fg_utils, groups, nodes
+from pgmax.utils import cached_property
 
 
 @dataclass
@@ -84,6 +85,9 @@ class FactorGraph:
         self._named_factor_groups: Dict[Hashable, groups.FactorGroup] = {}
         self._total_factor_num_states: int = 0
         self._factor_group_to_starts: Dict[groups.FactorGroup, int] = {}
+
+    def __hash__(self) -> int:
+        return hash(tuple(self._factor_groups))
 
     def add_factor(
         self,
@@ -185,7 +189,7 @@ class FactorGraph:
 
         return factor, start
 
-    @property
+    @cached_property
     def wiring(self) -> nodes.EnumerationWiring:
         """Function to compile wiring for belief propagation.
 
@@ -201,7 +205,7 @@ class FactorGraph:
         wiring = fg_utils.concatenate_enumeration_wirings(wirings)
         return wiring
 
-    @property
+    @cached_property
     def factor_configs_log_potentials(self) -> np.ndarray:
         """Function to compile potential array for belief propagation..
 
@@ -218,10 +222,14 @@ class FactorGraph:
             ]
         )
 
-    @property
+    @cached_property
     def factors(self) -> Tuple[nodes.EnumerationFactor, ...]:
         """List of individual factors in the factor graph"""
-        return sum([factor_group.factors for factor_group in self._factor_groups], ())
+        factors = []
+        for factor_group in self._factor_groups:
+            factors.extend(factor_group.factors)
+
+        return tuple(factors)
 
     def get_init_msgs(self) -> Messages:
         """Function to initialize messages.
@@ -327,12 +335,11 @@ class FactorGraph:
         evidence = jax.device_put(msgs.evidence.value)
         final_var_states = evidence.at[var_states_for_edges].add(msgs.ftov.value)
         var_key_to_map_dict: Dict[Tuple[Any, ...], int] = {}
-        final_var_states_np = np.array(final_var_states)
         for var_key in self._variable_group.keys:
             var = self._variable_group[var_key]
             start_index = self._vars_to_starts[var]
-            var_key_to_map_dict[var_key] = np.argmax(
-                final_var_states_np[start_index : start_index + var.num_states]
+            var_key_to_map_dict[var_key] = int(
+                jnp.argmax(final_var_states[start_index : start_index + var.num_states])
             )
         return var_key_to_map_dict
 
@@ -523,31 +530,30 @@ class Evidence:
 
     factor_graph: FactorGraph
     default_mode: Optional[str] = None
-    init_value: Optional[Union[np.ndarray, jnp.ndarray]] = None
+    value: Optional[Union[np.ndarray, jnp.ndarray]] = None
 
     def __post_init__(self):
-        self._evidence_updates: Dict[
-            nodes.Variable, Union[np.ndarray, jnp.ndarray]
-        ] = {}
-        if self.default_mode is not None and self.init_value is not None:
-            raise ValueError("Should specify only one of default_mode and init_value.")
+        if self.default_mode is not None and self.value is not None:
+            raise ValueError("Should specify only one of default_mode and value.")
 
-        if self.default_mode is None and self.init_value is None:
+        if self.default_mode is None and self.value is None:
             self.default_mode = "zeros"
 
-        if self.init_value is None and self.default_mode not in ("zeros", "random"):
+        if self.value is None and self.default_mode not in ("zeros", "random"):
             raise ValueError(
                 f"Unsupported default evidence mode {self.default_mode}. "
                 "Supported default modes are zeros or random"
             )
 
-        if self.init_value is None:
+        if self.value is None:
             if self.default_mode == "zeros":
-                self.init_value = jnp.zeros(self.factor_graph.num_var_states)
+                self.value = jnp.zeros(self.factor_graph.num_var_states)
             else:
-                self.init_value = jax.device_put(
+                self.value = jax.device_put(
                     np.random.gumbel(size=(self.factor_graph.num_var_states,))
                 )
+        else:
+            self.value = jax.device_put(self.value)
 
     def __getitem__(self, key: Any) -> jnp.ndarray:
         """Function to query evidence for a variable
@@ -559,14 +565,8 @@ class Evidence:
             evidence for the queried variable
         """
         variable = self.factor_graph._variable_group[key]
-        if self.factor_graph._variable_group[key] in self._evidence_updates:
-            evidence = jax.device_put(self._evidence_updates[variable])
-        else:
-            start = self.factor_graph._vars_to_starts[variable]
-            evidence = jax.device_put(self.init_value)[
-                start : start + variable.num_states
-            ]
-
+        start = self.factor_graph._vars_to_starts[variable]
+        evidence = jax.device_put(self.value)[start : start + variable.num_states]
         return evidence
 
     def __setitem__(
@@ -591,7 +591,7 @@ class Evidence:
                 Note that the size of the final dimension should be the same as
                 variable_group.variable_size. if key indexes a particular variable, then this array
                 must be of the same size as variable.num_states
-                - a dictionary: if key indexes a GenericVariableGroup, then evidence_values
+                - a dictionary: if key indexes a VariableDict, then evidence_values
                 must be a dictionary mapping keys of variable_group to np.ndarrays of evidence values.
                 Note that each np.ndarray in the dictionary values must have the same size as
                 variable_group.variable_size.
@@ -604,25 +604,23 @@ class Evidence:
                     self.factor_graph._variable_group.variable_group_container[key]
                 )
 
-            self._evidence_updates.update(variable_group.get_vars_to_evidence(evidence))
+            for var, evidence_val in variable_group.get_vars_to_evidence(
+                evidence
+            ).items():
+                start_index = self.factor_graph._vars_to_starts[var]
+                self.value = (
+                    jax.device_put(self.value)
+                    .at[start_index : start_index + evidence_val.shape[0]]
+                    .set(evidence_val)
+                )
         else:
-            self._evidence_updates[self.factor_graph._variable_group[key]] = evidence
-
-    @property
-    def value(self) -> jnp.ndarray:
-        """Function to generate evidence array
-
-        Returns:
-            Array of shape (num_var_states,) representing the flattened evidence for each variable
-        """
-        evidence = jax.device_put(self.init_value)
-        for var, evidence_val in self._evidence_updates.items():
+            var = self.factor_graph._variable_group[key]
             start_index = self.factor_graph._vars_to_starts[var]
-            evidence = evidence.at[start_index : start_index + var.num_states].set(
-                evidence_val
+            self.value = (
+                jax.device_put(self.value)
+                .at[start_index : start_index + var.num_states]
+                .set(evidence)
             )
-
-        return evidence
 
 
 @dataclass
