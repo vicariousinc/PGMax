@@ -1,14 +1,11 @@
 # export
-import random
 from ctypes import CDLL, POINTER, byref, c_double, c_int, c_void_p
 
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
-from load_data import get_mnist_data_iters
 from numpy.ctypeslib import ndpointer
 from preproc import Preproc
-from scipy.sparse import csr_matrix
 from scipy.spatial import cKDTree, distance
 from scipy.special import logsumexp
 
@@ -383,6 +380,8 @@ class Model:
         for v in self.V:
             v.normalize_beliefs()
             v.set_initial_beliefs()
+
+        return bu_msg
 
     def visualize_graph(self):
         img = np.zeros(self.shape)
