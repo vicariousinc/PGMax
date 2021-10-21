@@ -1,3 +1,9 @@
+# export
+import os
+
+os.environ["XLA_PYTHON_ALLOCATOR"] = "platform"
+os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+
 import matplotlib.pyplot as plt
 import numpy as np
 from learning import Model, index_to_rc
@@ -8,11 +14,8 @@ debug = False
 
 import time
 
-from jax.interpreters import xla
-
+# export
 from pgmax.fg import graph, groups
-
-xla._xla_callable.cache_clear()
 
 
 def make_pgmax_graph(models):
@@ -104,16 +107,20 @@ def get_pgmax_scores(map_states, bu_msgs, models, supress_radius=3, verbose=Fals
     return np.array(scores)
 
 
-data_dir = "/home/skushagra/Documents/science_rcn/data/MNIST/"
+# export
+data_dir = "/storage/users/skushagra/MNIST/"
 train_set, test_set = get_mnist_data_iters(data_dir, 20, 20)
 
+# export
 if debug:
     img = train_set[5][0]
-    temp_model = Model(img, 11, 11, max_cxn_length=100, factor_type="cpp", alpha=1.0)
+    temp_model = Model(img, 11, 11, max_cxn_length=100, factor_type="pgmax", alpha=1.0)
     plt.figure(figsize=(10, 10))
     temp_model.visualize_graph()
 
+# export
 start = time.time()
+
 
 hps, vps = 11, 11
 models = []
@@ -124,7 +131,7 @@ for idx in range(len(train_set)):
 
     train_labels[idx] = int(train_set[idx][1])
     models.append(
-        Model(img, hps, vps, max_cxn_length=100, factor_type="cpp", alpha=1.0)
+        Model(img, hps, vps, max_cxn_length=100, factor_type="pgmax", alpha=1.0)
     )
 
     if idx % 10 == 0:
@@ -136,12 +143,19 @@ print(f"Making models took {end-start:.3f} seconds.")
 
 fg = make_pgmax_graph(models)
 
+# export
+import time
+
+from jax.interpreters import xla
+
+xla._xla_callable.cache_clear()
 
 test_labels = -1 + np.zeros(len(test_set))
 pgmax_scores = np.zeros((len(test_set), len(models)))
 
 start = time.time()
 for idx in range(len(test_set)):
+
     img = test_set[idx][0]
     test_labels[idx] = int(test_set[idx][1])
 
@@ -151,7 +165,7 @@ for idx in range(len(test_set)):
     xla._xla_callable.cache_clear()
     print(f"Done with test image {idx+1}")
 
-print(f"Making predictions on {idx+1} image took {time.time() - start} seconds.")
+print(f"Making predictions on {idx+1} model took {time.time() - start} seconds.")
 
 
 # export
