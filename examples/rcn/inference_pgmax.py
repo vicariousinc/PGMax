@@ -50,7 +50,7 @@ def make_pgmax_graph(models):
 
 
 def do_pgmax_inference(
-    inf_img, fg, models, num_iters=10, damping_factor=0.5, verbose=False
+    test_img, fg, models, num_iters=10, damping_factor=0.5, verbose=False
 ):
 
     start = time.time()
@@ -58,13 +58,13 @@ def do_pgmax_inference(
     init_msgs = fg.get_init_msgs()
     bu_msgs = [0] * len(models)
     for model_idx, model in enumerate(models):
-        bu_msgs[model_idx] = model.initialize_vertex_beliefs(inf_img)
+        bu_msgs[model_idx] = model.initialize_vertex_beliefs(test_img)
 
-        init_beliefs = np.zeros((len(model.V), model.factors[0].M))
+        unary_msgs = np.zeros((len(model.V), model.factors[0].M))
         for i, v in enumerate(model.V):
-            init_beliefs[i, :] = v.get_initial_beliefs()
+            unary_msgs[i, :] = v.get_initial_beliefs()
 
-        init_msgs.evidence[model_idx] = init_beliefs
+        init_msgs.evidence[model_idx] = unary_msgs
 
     end = time.time()
     if verbose:
@@ -80,7 +80,7 @@ def do_pgmax_inference(
     return map_states, bu_msgs
 
 
-def get_pgmax_scores(map_states, bu_msgs, models, supress_radius=3, verbose=False):
+def get_pgmax_scores(map_states, bu_msgs, models, verbose=False):
     start = time.time()
 
     scores = [0] * len(models)
@@ -170,6 +170,6 @@ print(f"Making predictions on {idx+1} model took {time.time() - start} seconds."
 
 # export
 test_preds = train_labels[pgmax_scores.argmax(axis=1)]
-accuracy = (test_preds == test_labels).sum()
+accuracy = (test_preds == test_labels).sum() / test_labels.shape[0]
 
 print(f"accuracy = {accuracy}")
