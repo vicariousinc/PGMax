@@ -278,46 +278,95 @@ class FactorGraph:
             self.factor_configs_log_potentials
         )
         max_msg_size = int(jnp.max(wiring.edges_num_states))
-
-        # Normalize the messages to ensure the maximum value is 0.
-        msgs = infer.normalize_and_clip_msgs(
-            msgs, wiring.edges_num_states, max_msg_size
-        )
         num_val_configs = int(wiring.factor_configs_edge_states[-1, 0]) + 1
 
         @jax.jit
-        def message_passing_step(msgs, _):
-            # Compute new variable to factor messages by message passing
-            vtof_msgs = infer.pass_var_to_fac_messages(
-                msgs,
-                evidence,
-                wiring.var_states_for_edges,
-            )
-            # Compute new factor to variable messages by message passing
-            ftov_msgs = infer.pass_fac_to_var_messages(
-                vtof_msgs,
-                wiring.factor_configs_edge_states,
-                factor_configs_log_potentials,
-                num_val_configs,
-            )
-            # Use the results of message passing to perform damping and
-            # update the factor to variable messages
-            delta_msgs = ftov_msgs - msgs
-            msgs = msgs + (1 - damping_factor) * delta_msgs
-            # Normalize and clip these damped, updated messages before returning
-            # them.
-            msgs = infer.normalize_and_clip_msgs(
-                msgs,
-                wiring.edges_num_states,
-                max_msg_size,
-            )
-            return msgs, None
+        def update_msgs(msgs: jnp.array, evidence: jnp.ndarray) -> jnp.ndarray:
+            def message_passing_step(msgs, _):
+                # Compute new variable to factor messages by message passing
+                vtof_msgs = infer.pass_var_to_fac_messages(
+                    msgs,
+                    evidence,
+                    wiring.var_states_for_edges,
+                )
+                # Compute new factor to variable messages by message passing
+                ftov_msgs = infer.pass_fac_to_var_messages(
+                    vtof_msgs,
+                    wiring.factor_configs_edge_states,
+                    factor_configs_log_potentials,
+                    num_val_configs,
+                )
+                # Use the results of message passing to perform damping and
+                # update the factor to variable messages
+                delta_msgs = ftov_msgs - msgs
+                msgs = msgs + (1 - damping_factor) * delta_msgs
+                # Normalize and clip these damped, updated messages before returning
+                # them.
+                msgs = infer.normalize_and_clip_msgs(
+                    msgs,
+                    wiring.edges_num_states,
+                    max_msg_size,
+                )
+                return msgs, None
 
-        msgs_after_bp, _ = jax.lax.scan(message_passing_step, msgs, None, num_iters)
+            # Normalize the messages to ensure the maximum value is 0.
+            msgs = infer.normalize_and_clip_msgs(
+                msgs, wiring.edges_num_states, max_msg_size
+            )
+            msgs_after_bp, _ = jax.lax.scan(message_passing_step, msgs, None, num_iters)
+            return msgs_after_bp
+
+        msgs_after_bp = update_msgs(msgs, evidence)
         return Messages(
             ftov=FToVMessages(factor_graph=self, init_value=msgs_after_bp),
             evidence=init_msgs.evidence,
         )
+
+    def make_run_bp_function(self, num_iters: int, damping_factor: float):
+        wiring = jax.device_put(self.wiring)
+        factor_configs_log_potentials = jax.device_put(
+            self.factor_configs_log_potentials
+        )
+        max_msg_size = int(jnp.max(wiring.edges_num_states))
+        num_val_configs = int(wiring.factor_configs_edge_states[-1, 0]) + 1
+
+        @jax.jit
+        def update_msgs(msgs: jnp.array, evidence: jnp.ndarray) -> jnp.ndarray:
+            def message_passing_step(msgs, _):
+                # Compute new variable to factor messages by message passing
+                vtof_msgs = infer.pass_var_to_fac_messages(
+                    msgs,
+                    evidence,
+                    wiring.var_states_for_edges,
+                )
+                # Compute new factor to variable messages by message passing
+                ftov_msgs = infer.pass_fac_to_var_messages(
+                    vtof_msgs,
+                    wiring.factor_configs_edge_states,
+                    factor_configs_log_potentials,
+                    num_val_configs,
+                )
+                # Use the results of message passing to perform damping and
+                # update the factor to variable messages
+                delta_msgs = ftov_msgs - msgs
+                msgs = msgs + (1 - damping_factor) * delta_msgs
+                # Normalize and clip these damped, updated messages before returning
+                # them.
+                msgs = infer.normalize_and_clip_msgs(
+                    msgs,
+                    wiring.edges_num_states,
+                    max_msg_size,
+                )
+                return msgs, None
+
+            # Normalize the messages to ensure the maximum value is 0.
+            msgs = infer.normalize_and_clip_msgs(
+                msgs, wiring.edges_num_states, max_msg_size
+            )
+            msgs_after_bp, _ = jax.lax.scan(message_passing_step, msgs, None, num_iters)
+            return msgs_after_bp
+
+        return update_msgs
 
     def decode_map_states(self, msgs: Messages) -> Dict[Tuple[Any, ...], int]:
         """Function to computes the output of MAP inference on input messages.
