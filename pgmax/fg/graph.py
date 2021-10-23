@@ -2,10 +2,22 @@
 
 from __future__ import annotations
 
+import collections
 import typing
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple, Union
+from typing import (
+    Any,
+    Dict,
+    FrozenSet,
+    Hashable,
+    Mapping,
+    Optional,
+    OrderedDict,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 import jax
 import jax.numpy as jnp
@@ -35,7 +47,6 @@ class FactorGraph:
 
     Attributes:
         _variable_group: VariableGroup. contains all involved VariableGroups
-        _factor_groups: List of added factor groups
         num_var_states: int. represents the sum of all variable states of all variables in the
             FactorGraph
         _vars_to_starts: MappingProxyType[nodes.Variable, int]. maps every variable to an int
@@ -81,13 +92,17 @@ class FactorGraph:
             }
         )
         self.num_var_states = vars_num_states_cumsum[-1]
-        self._factor_groups: List[groups.FactorGroup] = []
         self._named_factor_groups: Dict[Hashable, groups.FactorGroup] = {}
         self._total_factor_num_states: int = 0
-        self._factor_group_to_starts: Dict[groups.FactorGroup, int] = {}
+        self._factor_group_to_starts: OrderedDict[
+            groups.FactorGroup, int
+        ] = collections.OrderedDict()
+        self._variables_to_factors: OrderedDict[
+            FrozenSet, nodes.EnumerationFactor
+        ] = collections.OrderedDict()
 
     def __hash__(self) -> int:
-        return hash(tuple(self._factor_groups))
+        return hash(self.factor_groups)
 
     def add_factor(
         self,
@@ -139,7 +154,15 @@ class FactorGraph:
                     self._variable_group, **kwargs
                 )
 
-        self._factor_groups.append(factor_group)
+        duplicate_factors = set(factor_group._variables_to_factors).intersection(
+            set(self._variables_to_factors)
+        )
+        if len(duplicate_factors) > 0:
+            raise ValueError(
+                f"Factors involving variables {duplicate_factors} already exist. Please merge the corresponding factors."
+            )
+
+        self._variables_to_factors.update(factor_group._variables_to_factors)
         self._factor_group_to_starts[factor_group] = self._total_factor_num_states
         self._total_factor_num_states += np.sum(factor_group.factor_num_states)
         if name is not None:
@@ -150,7 +173,6 @@ class FactorGraph:
 
         Args:
             key: the key for the factor.
-                The queried factor must be part of an named factor group.
 
         Returns:
             A tuple of length 2, containing the queried factor and its corresponding
@@ -217,18 +239,19 @@ class FactorGraph:
         return np.concatenate(
             [
                 factor_group.factor_group_log_potentials
-                for factor_group in self._factor_groups
+                for factor_group in self.factor_groups
             ]
         )
 
     @cached_property
     def factors(self) -> Tuple[nodes.EnumerationFactor, ...]:
-        """List of individual factors in the factor graph"""
-        factors = []
-        for factor_group in self._factor_groups:
-            factors.extend(factor_group.factors)
+        """Tuple of individual factors in the factor graph"""
+        return tuple(self._variables_to_factors.values())
 
-        return tuple(factors)
+    @property
+    def factor_groups(self) -> Tuple[groups.FactorGroup, ...]:
+        """Tuple of factor groups in the factor graph"""
+        return tuple(self._factor_group_to_starts.keys())
 
     def get_init_msgs(self) -> Messages:
         """Function to initialize messages.
