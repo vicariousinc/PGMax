@@ -59,7 +59,7 @@ class FactorGraph:
             We only support setting messages from factors within explicitly named factor groups
             to connected variables.
         _total_factor_num_states: int. Current total number of edge states for the added factors.
-        _factor_group_to_starts: Dict[groups.FactorGroup, int]. Maps a factor group to its
+        _factor_group_to_msgs_starts: Dict[groups.FactorGroup, int]. Maps a factor group to its
             corresponding starting index in the flat message array.
     """
 
@@ -85,22 +85,31 @@ class FactorGraph:
             0,
             0,
         )
+        self.num_var_states = vars_num_states_cumsum[-1]
         self._vars_to_starts = MappingProxyType(
             {
                 variable: vars_num_states_cumsum[vv]
                 for vv, variable in enumerate(self._variable_group.variables)
             }
         )
-        self.num_var_states = vars_num_states_cumsum[-1]
         self._named_factor_groups: Dict[Hashable, groups.FactorGroup] = {}
-        self._total_factor_num_states: int = 0
-        self._factor_group_to_starts: OrderedDict[
-            groups.FactorGroup, int
-        ] = collections.OrderedDict()
         self._variables_to_factors: OrderedDict[
             FrozenSet, nodes.EnumerationFactor
         ] = collections.OrderedDict()
-        self._factor_to_starts: OrderedDict[
+        # For ftov messages
+        self._total_factor_num_states: int = 0
+        self._factor_group_to_msgs_starts: OrderedDict[
+            groups.FactorGroup, int
+        ] = collections.OrderedDict()
+        self._factor_to_msgs_starts: OrderedDict[
+            nodes.EnumerationFactor, int
+        ] = collections.OrderedDict()
+        # For log potentials
+        self._total_factor_num_configs: int = 0
+        self._factor_group_to_potentials_starts: OrderedDict[
+            groups.FactorGroup, int
+        ] = collections.OrderedDict()
+        self._factor_to_potentials_starts = OrderedDict[
             nodes.EnumerationFactor, int
         ] = collections.OrderedDict()
 
@@ -157,10 +166,14 @@ class FactorGraph:
                     self._variable_group, **kwargs
                 )
 
-        self._factor_group_to_starts[factor_group] = self._total_factor_num_states
+        self._factor_group_to_msgs_starts[factor_group] = self._total_factor_num_states
+        self._factor_group_to_potentials_starts[
+            factor_group
+        ] = self._total_factor_num_configs
         factor_num_states_cumsum = np.insert(
             factor_group.factor_num_states.cumsum(), 0, 0
         )
+        factor_group_num_configs = 0
         for vv, variables in enumerate(factor_group._variables_to_factors):
             if variables in self._variables_to_factors:
                 raise ValueError(
@@ -169,12 +182,26 @@ class FactorGraph:
 
             factor = factor_group._variables_to_factors[variables]
             self._variables_to_factors[variables] = factor
-            self._factor_to_starts[factor] = (
-                self._factor_group_to_starts[factor_group]
+            self._factor_to_msgs_starts[factor] = (
+                self._factor_group_to_msgs_starts[factor_group]
                 + factor_num_states_cumsum[vv]
+            )
+            self._factor_group_to_potentials_starts[factor] = (
+                self._factor_group_to_potentials_starts[factor_group]
+                + vv * factor.log_potentials.shape[0]
+            )
+            factor_group_num_configs += factor.log_potentials.shape[0]
+
+        if (
+            factor_group_num_configs
+            != factor_group.factor_group_log_potentials.shape[0]
+        ):
+            raise ValueError(
+                "Factors in a factor group should have the same number of valid configurations."
             )
 
         self._total_factor_num_states += factor_num_states_cumsum[-1]
+        self._total_factor_num_configs += factor_group_num_configs
         if name is not None:
             self._named_factor_groups[name] = factor_group
 
@@ -218,7 +245,7 @@ class FactorGraph:
     @property
     def factor_groups(self) -> Tuple[groups.FactorGroup, ...]:
         """Tuple of factor groups in the factor graph"""
-        return tuple(self._factor_group_to_starts.keys())
+        return tuple(self._factor_group_to_msgs_starts.keys())
 
     def get_init_msgs(self) -> Messages:
         """Function to initialize messages.
@@ -332,6 +359,66 @@ class FactorGraph:
 
 
 @dataclass
+class LogPotentials:
+    factor_graph: FactorGraph
+    value: Optional[Union[np.ndarray, jnp.ndarray]] = None
+
+    def __post_init__(self):
+        if self.value is None:
+            self.value = jax.device_put(self.factor_graph.log_potentials)
+        else:
+            if not self.value.shape == self.factor_graph.log_potentials.shape:
+                raise ValueError(
+                    f"Expected log potentials shape shape {self.factor_graph.log_potentials.shape}. "
+                    f"Got {self.value.shape}."
+                )
+
+            self.value = jax.device_put(self.value)
+
+    def __getitem__(self, key: Any):
+        if key in self.factor_graph._named_factor_groups:
+            factor_group = self.factor_graph._named_factor_groups[key]
+            start = self.factor_graph._factor_group_to_potentials_starts[factor_group]
+            log_potentials = jax.device_put(self.value)[
+                start : start + factor_group.factor_group_log_potentials.shape[0]
+            ]
+        elif frozenset(key) in self.factor_graph._variables_to_factors:
+            factor = self.factor_graph._variables_to_factors[frozenset(key)]
+            start = self.factor_graph._factor_to_potentials_starts[factor]
+            log_potentials = jax.device_put(self.value)[
+                start : start + factor.log_potentials.shape[0]
+            ]
+        else:
+            raise ValueError("")
+
+        return log_potentials
+
+    def __setitem__(
+        self,
+        key: Any,
+        data: Union[np.ndarray, jnp.ndarray],
+    ):
+        if key in self.factor_graph._named_factor_groups:
+            factor_group = self.factor_graph._named_factor_groups[key]
+            start = self.factor_graph._factor_group_to_potentials_starts[factor_group]
+            self.value = (
+                jax.device_put(self.value)
+                .at[start : start + factor_group.factor_group_log_potentials.shape[0]]
+                .set(data)
+            )
+        elif frozenset(key) in self.factor_graph._variables_to_factors:
+            factor = self.factor_graph._variables_to_factors[frozenset(key)]
+            start = self.factor_graph._factor_to_potentials_starts[factor]
+            self.value = (
+                jax.device_put(self.value)
+                .at[start : start + factor.log_potentials.shape[0]]
+                .set(data)
+            )
+        else:
+            raise ValueError("")
+
+
+@dataclass
 class FToVMessages:
     """Class for storing and manipulating factor to variable messages.
 
@@ -372,12 +459,13 @@ class FToVMessages:
                     "Supported default modes are zeros or random"
                 )
         else:
-            value = jax.device_put(self.value)
-            if not value.shape == (self.factor_graph._total_factor_num_states,):
+            if not self.value.shape == (self.factor_graph._total_factor_num_states,):
                 raise ValueError(
                     f"Expected messages shape {(self.factor_graph._total_factor_num_states,)}. "
-                    f"Got {value.shape}."
+                    f"Got {self.value.shape}."
                 )
+
+            self.value = jax.device_put(self.value)
 
     def __getitem__(self, keys: Tuple[Any, Any]) -> jnp.ndarray:
         """Function to query messages from a factor to a variable
@@ -402,7 +490,7 @@ class FToVMessages:
 
         factor = self.factor_graph._variables_to_factors[frozenset(keys[0])]
         variable = self.factor_graph._variable_group[keys[1]]
-        start = self.factor_graph._factor_to_starts[factor] + np.sum(
+        start = self.factor_graph._factor_to_msgs_starts[factor] + np.sum(
             factor.edges_num_states[: factor.variables.index(variable)]
         )
         msgs = jax.device_put(self.value)[start : start + variable.num_states]
@@ -447,7 +535,7 @@ class FToVMessages:
         ):
             factor = self.factor_graph._variables_to_factors[frozenset(keys[0])]
             variable = self.factor_graph._variable_group[keys[1]]
-            start = self.factor_graph._factor_to_starts[factor] + np.sum(
+            start = self.factor_graph._factor_to_msgs_starts[factor] + np.sum(
                 factor.edges_num_states[: factor.variables.index(variable)]
             )
             if data.shape != (variable.num_states,):
