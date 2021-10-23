@@ -199,8 +199,7 @@ class FactorGraph:
             compiled wiring from each individual factor
         """
         wirings = [
-            factor_group.compile_wiring(self._vars_to_starts)
-            for factor_group in self._factor_groups
+            factor.compile_wiring(self._vars_to_starts) for factor in self.factors
         ]
         wiring = fg_utils.concatenate_enumeration_wirings(wirings)
         return wiring
