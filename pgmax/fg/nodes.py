@@ -65,7 +65,7 @@ class EnumerationFactor:
         variables: List of involved variables
         configs: Array of shape (num_val_configs, num_variables)
             An array containing an explicit enumeration of all valid configurations
-        factor_configs_log_potentials: Array of shape (num_val_configs,). An array containing
+        log_potentials: Array of shape (num_val_configs,). An array containing
             the log of the potential value for every possible configuration
 
     Raises:
@@ -82,7 +82,7 @@ class EnumerationFactor:
 
     variables: Tuple[Variable, ...]
     configs: np.ndarray
-    factor_configs_log_potentials: np.ndarray
+    log_potentials: np.ndarray
 
     def __post_init__(self):
         self.configs.flags.writeable = False
@@ -91,9 +91,9 @@ class EnumerationFactor:
                 f"Configurations should be integers. Got {self.configs.dtype}."
             )
 
-        if not np.issubdtype(self.factor_configs_log_potentials.dtype, np.floating):
+        if not np.issubdtype(self.log_potentials.dtype, np.floating):
             raise ValueError(
-                f"Potential should be floats. Got {self.factor_configs_log_potentials.dtype}."
+                f"Potential should be floats. Got {self.log_potentials.dtype}."
             )
 
         if len(self.variables) != self.configs.shape[1]:
@@ -101,9 +101,9 @@ class EnumerationFactor:
                 f"Number of variables {len(self.variables)} doesn't match given configurations {self.configs.shape}"
             )
 
-        if self.configs.shape[0] != self.factor_configs_log_potentials.shape[0]:
+        if self.configs.shape[0] != self.log_potentials.shape[0]:
             raise ValueError(
-                f"The potential array has {self.factor_configs_log_potentials.shape[0]} rows, which is not equal to the number of configurations ({self.configs.shape[0]})"
+                f"The potential array has {self.log_potentials.shape[0]} rows, which is not equal to the number of configurations ({self.configs.shape[0]})"
             )
 
         vars_num_states = np.array([variable.num_states for variable in self.variables])

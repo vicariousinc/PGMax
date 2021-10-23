@@ -453,9 +453,7 @@ class FactorGroup:
             a jnp array representing the log of the potential function for
             the factor group
         """
-        return np.concatenate(
-            [factor.factor_configs_log_potentials for factor in self.factors]
-        )
+        return np.concatenate([factor.log_potentials for factor in self.factors])
 
     def _get_variables_to_factors(
         self,
@@ -489,7 +487,7 @@ class EnumerationFactorGroup(FactorGroup):
 
     All factors in the group are assumed to have the same set of valid configurations and
     the same potential function. Note that the log potential function is assumed to be
-    uniform 0 unless the inheriting class includes a factor_configs_log_potentials argument.
+    uniform 0 unless the inheriting class includes a log_potentials argument.
 
     Args:
         connected_var_keys: A list of list of tuples, where each innermost tuple contains a
@@ -497,7 +495,7 @@ class EnumerationFactorGroup(FactorGroup):
             neighboring a particular factor to be added.
         factor_configs: Array of shape (num_val_configs, num_variables)
             An array containing explicit enumeration of all valid configurations
-        factor_configs_log_potentials: Optional array of shape (num_val_configs,).
+        log_potentials: Optional array of shape (num_val_configs,).
             If specified, it contains the log of the potential value for every possible configuration.
             If none, it is assumed the log potential is uniform 0 and such an array is automatically
             initialized.
@@ -505,7 +503,7 @@ class EnumerationFactorGroup(FactorGroup):
 
     connected_var_keys: Sequence[List[Tuple[Hashable, ...]]]
     factor_configs: np.ndarray
-    factor_configs_log_potentials: Optional[np.ndarray] = None
+    log_potentials: Optional[np.ndarray] = None
 
     def _get_variables_to_factors(
         self,
@@ -515,12 +513,10 @@ class EnumerationFactorGroup(FactorGroup):
         Returns:
             a dictionary mapping all possible set of involved variables to different factors.
         """
-        if self.factor_configs_log_potentials is None:
-            factor_configs_log_potentials = np.zeros(
-                self.factor_configs.shape[0], dtype=float
-            )
+        if self.log_potentials is None:
+            log_potentials = np.zeros(self.factor_configs.shape[0], dtype=float)
         else:
-            factor_configs_log_potentials = self.factor_configs_log_potentials
+            log_potentials = self.log_potentials
 
         variables_to_factors = collections.OrderedDict(
             [
@@ -529,7 +525,7 @@ class EnumerationFactorGroup(FactorGroup):
                     nodes.EnumerationFactor(
                         tuple(self.variable_group[self.connected_var_keys[ii]]),
                         self.factor_configs,
-                        factor_configs_log_potentials,
+                        log_potentials,
                     ),
                 )
                 for ii in range(len(self.connected_var_keys))
@@ -598,7 +594,7 @@ class PairwiseFactorGroup(FactorGroup):
                 np.arange(self.log_potential_matrix.shape[1]),
             )
         ).T.reshape((-1, 2))
-        factor_configs_log_potentials = self.log_potential_matrix[
+        log_potentials = self.log_potential_matrix[
             factor_configs[:, 0], factor_configs[:, 1]
         ]
         variables_to_factors = collections.OrderedDict(
@@ -608,7 +604,7 @@ class PairwiseFactorGroup(FactorGroup):
                     nodes.EnumerationFactor(
                         tuple(self.variable_group[self.connected_var_keys[ii]]),
                         factor_configs,
-                        factor_configs_log_potentials,
+                        log_potentials,
                     ),
                 )
                 for ii in range(len(self.connected_var_keys))

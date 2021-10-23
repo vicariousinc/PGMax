@@ -303,7 +303,7 @@ def test_e2e_sanity_check():
                 fg.add_factor(
                     keys=curr_keys,
                     factor_configs=valid_configs_non_supp,
-                    factor_configs_log_potentials=np.zeros(
+                    log_potentials=np.zeros(
                         valid_configs_non_supp.shape[0], dtype=float
                     ),
                     name=(row, col),
@@ -360,9 +360,7 @@ def test_e2e_sanity_check():
         factor_factory=groups.EnumerationFactorGroup,
         connected_var_keys=horz_suppression_keys,
         factor_configs=valid_configs_supp,
-        factor_configs_log_potentials=np.zeros(
-            valid_configs_supp.shape[0], dtype=float
-        ),
+        log_potentials=np.zeros(valid_configs_supp.shape[0], dtype=float),
     )
 
     # Run BP
