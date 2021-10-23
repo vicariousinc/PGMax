@@ -446,7 +446,7 @@ class FactorGroup:
             [factor.factor_configs_log_potentials for factor in self.factors]
         )
 
-    def _get_keys_to_factors(self) -> Dict[Hashable, nodes.EnumerationFactor]:
+    def _get_keys_to_factors(self) -> OrderedDict[Hashable, nodes.EnumerationFactor]:
         """Function that generates a dictionary mapping keys to factors.
 
         Returns:
@@ -502,7 +502,7 @@ class EnumerationFactorGroup(FactorGroup):
     factor_configs: np.ndarray
     factor_configs_log_potentials: Optional[np.ndarray] = None
 
-    def _get_keys_to_factors(self) -> Dict[Hashable, nodes.EnumerationFactor]:
+    def _get_keys_to_factors(self) -> OrderedDict[Hashable, nodes.EnumerationFactor]:
         """Function that generates a dictionary mapping keys to factors.
 
         Returns:
@@ -516,24 +516,35 @@ class EnumerationFactorGroup(FactorGroup):
             factor_configs_log_potentials = self.factor_configs_log_potentials
 
         if isinstance(self.connected_var_keys, Sequence):
-            keys_to_factors: Dict[Hashable, nodes.EnumerationFactor] = {
-                frozenset(self.connected_var_keys[ii]): nodes.EnumerationFactor(
-                    tuple(self.variable_group[self.connected_var_keys[ii]]),
-                    self.factor_configs,
-                    factor_configs_log_potentials,
-                )
-                for ii in range(len(self.connected_var_keys))
-            }
+            keys_to_factors: OrderedDict[
+                Hashable, nodes.EnumerationFactor
+            ] = collections.OrderedDict(
+                [
+                    (
+                        frozenset(self.connected_var_keys[ii]),
+                        nodes.EnumerationFactor(
+                            tuple(self.variable_group[self.connected_var_keys[ii]]),
+                            self.factor_configs,
+                            factor_configs_log_potentials,
+                        ),
+                    )
+                    for ii in range(len(self.connected_var_keys))
+                ]
+            )
         else:
-            keys_to_factors = {
-                key: nodes.EnumerationFactor(
-                    tuple(self.variable_group[self.connected_var_keys[key]]),
-                    self.factor_configs,
-                    factor_configs_log_potentials,
-                )
-                for key in self.connected_var_keys
-            }
-
+            keys_to_factors = collections.OrderedDict(
+                [
+                    (
+                        key,
+                        nodes.EnumerationFactor(
+                            tuple(self.variable_group[self.connected_var_keys[key]]),
+                            self.factor_configs,
+                            factor_configs_log_potentials,
+                        ),
+                    )
+                    for key in self.connected_var_keys
+                ]
+            )
         return keys_to_factors
 
 
@@ -562,7 +573,7 @@ class PairwiseFactorGroup(FactorGroup):
     ]
     log_potential_matrix: np.ndarray
 
-    def _get_keys_to_factors(self) -> Dict[Hashable, nodes.EnumerationFactor]:
+    def _get_keys_to_factors(self) -> OrderedDict[Hashable, nodes.EnumerationFactor]:
         """Function that generates a dictionary mapping keys to factors.
 
         Returns:
@@ -607,22 +618,34 @@ class PairwiseFactorGroup(FactorGroup):
             factor_configs[:, 0], factor_configs[:, 1]
         ]
         if isinstance(self.connected_var_keys, Sequence):
-            keys_to_factors: Dict[Hashable, nodes.EnumerationFactor] = {
-                frozenset(self.connected_var_keys[ii]): nodes.EnumerationFactor(
-                    tuple(self.variable_group[self.connected_var_keys[ii]]),
-                    factor_configs,
-                    factor_configs_log_potentials,
-                )
-                for ii in range(len(self.connected_var_keys))
-            }
+            keys_to_factors: OrderedDict[
+                Hashable, nodes.EnumerationFactor
+            ] = collections.OrderedDict(
+                [
+                    (
+                        frozenset(self.connected_var_keys[ii]),
+                        nodes.EnumerationFactor(
+                            tuple(self.variable_group[self.connected_var_keys[ii]]),
+                            factor_configs,
+                            factor_configs_log_potentials,
+                        ),
+                    )
+                    for ii in range(len(self.connected_var_keys))
+                ]
+            )
         else:
-            keys_to_factors = {
-                key: nodes.EnumerationFactor(
-                    tuple(self.variable_group[self.connected_var_keys[key]]),
-                    factor_configs,
-                    factor_configs_log_potentials,
-                )
-                for key in self.connected_var_keys
-            }
+            keys_to_factors = collections.OrderedDict(
+                [
+                    (
+                        key,
+                        nodes.EnumerationFactor(
+                            tuple(self.variable_group[self.connected_var_keys[key]]),
+                            factor_configs,
+                            factor_configs_log_potentials,
+                        ),
+                    )
+                    for key in self.connected_var_keys
+                ]
+            )
 
         return keys_to_factors
