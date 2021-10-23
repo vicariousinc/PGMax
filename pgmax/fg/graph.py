@@ -100,6 +100,9 @@ class FactorGraph:
         self._variables_to_factors: OrderedDict[
             FrozenSet, nodes.EnumerationFactor
         ] = collections.OrderedDict()
+        self._factor_to_starts: OrderedDict[
+            nodes.EnumerationFactor, int
+        ] = collections.OrderedDict()
 
     def __hash__(self) -> int:
         return hash(self.factor_groups)
@@ -154,62 +157,26 @@ class FactorGraph:
                     self._variable_group, **kwargs
                 )
 
-        duplicate_factors = set(factor_group._variables_to_factors).intersection(
-            set(self._variables_to_factors)
+        self._factor_group_to_starts[factor_group] = self._total_factor_num_states
+        factor_num_states_cumsum = np.insert(
+            factor_group.factor_num_states.cumsum(), 0, 0
         )
-        if len(duplicate_factors) > 0:
-            raise ValueError(
-                f"Factors involving variables {duplicate_factors} already exist. Please merge the corresponding factors."
+        for vv, variables in enumerate(factor_group._variables_to_factors):
+            if variables in self._variables_to_factors:
+                raise ValueError(
+                    f"A factor involving variables {variables} already exists. Please merge the corresponding factors."
+                )
+
+            factor = factor_group._variables_to_factors[variables]
+            self._variables_to_factors[variables] = factor
+            self._factor_to_starts[factor] = (
+                self._factor_group_to_starts[factor_group]
+                + factor_num_states_cumsum[vv]
             )
 
-        self._variables_to_factors.update(factor_group._variables_to_factors)
-        self._factor_group_to_starts[factor_group] = self._total_factor_num_states
-        self._total_factor_num_states += np.sum(factor_group.factor_num_states)
+        self._total_factor_num_states += factor_num_states_cumsum[-1]
         if name is not None:
             self._named_factor_groups[name] = factor_group
-
-    def get_factor(self, key: Any) -> Tuple[nodes.EnumerationFactor, int]:
-        """Function to get an individual factor and start index
-
-        Args:
-            key: the key for the factor.
-
-        Returns:
-            A tuple of length 2, containing the queried factor and its corresponding
-            start index in the flat message array.
-        """
-        if key in self._named_factor_groups:
-            if len(self._named_factor_groups[key].factors) != 1:
-                raise ValueError(
-                    f"Invalid factor key {key}. "
-                    "Please provide a key for an individual factor, "
-                    "not a factor group"
-                )
-
-            factor_group = self._named_factor_groups[key]
-            factor = factor_group.factors[0]
-            start = self._factor_group_to_starts[factor_group]
-        else:
-            if not (
-                isinstance(key, tuple)
-                and len(key) == 2
-                and key[0] in self._named_factor_groups
-            ):
-                raise ValueError(
-                    f"Invalid factor key {key}. "
-                    "Please provide a key either for an individual named factor, "
-                    "or a tuple of length 2 specifying name of the factor group "
-                    "and index of individual factors"
-                )
-
-            factor_group = self._named_factor_groups[key[0]]
-            factor = factor_group[key[1]]
-
-            start = self._factor_group_to_starts[factor_group] + np.sum(
-                factor_group.factor_num_states[: factor_group.factors.index(factor)]
-            )
-
-        return factor, start
 
     @cached_property
     def wiring(self) -> nodes.EnumerationWiring:
@@ -337,7 +304,7 @@ class FactorGraph:
 
         msgs_after_bp, _ = jax.lax.scan(message_passing_step, msgs, None, num_iters)
         return Messages(
-            ftov=FToVMessages(factor_graph=self, init_value=msgs_after_bp),
+            ftov=FToVMessages(factor_graph=self, value=msgs_after_bp),
             evidence=init_msgs.evidence,
         )
 
@@ -374,8 +341,8 @@ class FToVMessages:
         factor_graph: associated factor graph
         default_mode: default mode for initializing ftov messages.
             Allowed values include "zeros" and "random"
-            If init_value is None, defaults to "zeros"
-        init_value: Optionally specify initial value for ftov messages
+            If value is None, defaults to "zeros"
+        value: Optionally specify initial value for ftov messages
 
     Attributes:
         _message_updates: Dict[int, jnp.ndarray]. A dictionary containing
@@ -385,27 +352,33 @@ class FToVMessages:
 
     factor_graph: FactorGraph
     default_mode: Optional[str] = None
-    init_value: Optional[Union[np.ndarray, jnp.ndarray]] = None
+    value: Optional[Union[np.ndarray, jnp.ndarray]] = None
 
     def __post_init__(self):
-        self._message_updates: Dict[int, jnp.ndarray] = {}
-        if self.default_mode is not None and self.init_value is not None:
-            raise ValueError("Should specify only one of default_mode and init_value.")
+        if self.default_mode is not None and self.value is not None:
+            raise ValueError("Should specify only one of default_mode and value.")
 
-        if self.default_mode is None and self.init_value is None:
+        if self.default_mode is None and self.value is None:
             self.default_mode = "zeros"
 
-        if self.init_value is None:
+        if self.value is None:
             if self.default_mode == "zeros":
-                self.init_value = np.zeros(self.factor_graph._total_factor_num_states)
+                self.value = jnp.zeros(self.factor_graph._total_factor_num_states)
             elif self.default_mode == "random":
-                self.init_value = np.random.gumbel(
-                    size=(self.factor_graph._total_factor_num_states,)
+                self.value = jax.device_put(
+                    np.random.gumbel(size=(self.factor_graph._total_factor_num_states,))
                 )
             else:
                 raise ValueError(
                     f"Unsupported default message mode {self.default_mode}. "
                     "Supported default modes are zeros or random"
+                )
+        else:
+            value = jax.device_put(self.value)
+            if not value.shape == (self.factor_graph._total_factor_num_states,):
+                raise ValueError(
+                    f"Expected messages shape {(self.factor_graph._total_factor_num_states,)}. "
+                    f"Got {value.shape}."
                 )
 
     def __getitem__(self, keys: Tuple[Any, Any]) -> jnp.ndarray:
@@ -429,13 +402,12 @@ class FToVMessages:
                 "keys to get the messages from a named factor to a variable"
             )
 
-        factor, start = self.factor_graph.get_factor(keys[0])
-        if start in self._message_updates:
-            msgs = self._message_updates[start]
-        else:
-            variable = self.factor_graph._variable_group[keys[1]]
-            msgs = jax.device_put(self.init_value)[start : start + variable.num_states]
-
+        factor = self.factor_graph._variables_to_factors[frozenset(keys[0])]
+        variable = self.factor_graph._variable_group[keys[1]]
+        start = self.factor_graph._factor_to_starts[factor] + np.sum(
+            factor.edges_num_states[: factor.variables.index(variable)]
+        )
+        msgs = jax.device_put(self.value)[start : start + variable.num_states]
         return jax.device_put(msgs)
 
     @typing.overload
@@ -475,8 +447,11 @@ class FToVMessages:
             and len(keys) == 2
             and keys[1] in self.factor_graph._variable_group.keys
         ):
-            factor, start = self.factor_graph.get_factor(keys[0])
+            factor = self.factor_graph._variables_to_factors[frozenset(keys[0])]
             variable = self.factor_graph._variable_group[keys[1]]
+            start = self.factor_graph._factor_to_starts[factor] + np.sum(
+                factor.edges_num_states[: factor.variables.index(variable)]
+            )
             if data.shape != (variable.num_states,):
                 raise ValueError(
                     f"Given message shape {data.shape} does not match expected "
@@ -484,10 +459,11 @@ class FToVMessages:
                     f"to variable {keys[1]}."
                 )
 
-            self._message_updates[
-                start
-                + np.sum(factor.edges_num_states[: factor.variables.index(variable)])
-            ] = data
+            self.value = (
+                jax.device_put(self.value)
+                .at[start : start + variable.num_states]
+                .set(data)
+            )
         elif keys in self.factor_graph._variable_group.keys:
             variable = self.factor_graph._variable_group[keys]
             if data.shape != (variable.num_states,):
@@ -501,7 +477,11 @@ class FToVMessages:
                 == self.factor_graph._vars_to_starts[variable]
             )[0]
             for start in starts:
-                self._message_updates[start] = data / starts.shape[0]
+                self.value = (
+                    jax.device_put(self.value)
+                    .at[start : start + variable.num_states]
+                    .st(data / starts.shape[0])
+                )
         else:
             raise ValueError(
                 "Invalid keys for setting messages. "
@@ -510,28 +490,6 @@ class FToVMessages:
                 "messages, or a valid variable key for spreading expected "
                 "beliefs at a variable"
             )
-
-    @property
-    def value(self) -> jnp.ndarray:
-        """Functin to get the current flat message array
-
-        Returns:
-            The flat message array after initializing (according to default_mode
-            or init_value) and applying all message updates.
-        """
-        init_value = jax.device_put(self.init_value)
-        if not init_value.shape == (self.factor_graph._total_factor_num_states,):
-            raise ValueError(
-                f"Expected messages shape {(self.factor_graph._total_factor_num_states,)}. "
-                f"Got {init_value.shape}."
-            )
-
-        msgs = init_value
-        for start in self._message_updates:
-            data = self._message_updates[start]
-            msgs = msgs.at[start : start + data.shape[0]].set(data)
-
-        return msgs
 
 
 @dataclass
@@ -542,8 +500,8 @@ class Evidence:
         factor_graph: associated factor graph
         default_mode: default mode for initializing evidence.
             Allowed values include "zeros" and "random"
-            If init_value is None, defaults to "zeros"
-        init_value: Optionally specify initial value for evidence
+            If value is None, defaults to "zeros"
+        value: Optionally specify initial value for evidence
 
     Attributes:
         _evidence_updates: Dict[nodes.Variable, np.ndarray]. maps every variable to an np.ndarray
