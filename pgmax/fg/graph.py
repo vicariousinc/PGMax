@@ -371,7 +371,7 @@ class LogPotentials:
         else:
             if not self.value.shape == self.factor_graph.log_potentials.shape:
                 raise ValueError(
-                    f"Expected log potentials shape shape {self.factor_graph.log_potentials.shape}. "
+                    f"Expected log potentials shape {self.factor_graph.log_potentials.shape}. "
                     f"Got {self.value.shape}."
                 )
 

@@ -495,7 +495,7 @@ class EnumerationFactorGroup(FactorGroup):
             neighboring a particular factor to be added.
         factor_configs: Array of shape (num_val_configs, num_variables)
             An array containing explicit enumeration of all valid configurations
-        log_potentials: Optional array of shape (num_val_configs,).
+        log_potentials: Optional array of shape (num_val_configs,) or (num_factors, num_val_configs).
             If specified, it contains the log of the potential value for every possible configuration.
             If none, it is assumed the log potential is uniform 0 and such an array is automatically
             initialized.
@@ -513,10 +513,25 @@ class EnumerationFactorGroup(FactorGroup):
         Returns:
             a dictionary mapping all possible set of involved variables to different factors.
         """
+        num_factors = len(self.connected_var_keys)
+        num_val_configs = self.factor_configs.shape[0]
         if self.log_potentials is None:
-            log_potentials = np.zeros(self.factor_configs.shape[0], dtype=float)
+            log_potentials = np.zeros((num_factors, num_val_configs), dtype=float)
         else:
-            log_potentials = self.log_potentials
+            if self.log_potentials.shape != (
+                self.factor_configs.shape[0],
+            ) or self.log_potentials.shape != (
+                num_factors,
+                self.factor_configs.shape[0],
+            ):
+                raise ValueError(
+                    f"Expected log potentials shape: {(num_val_configs,)} or {(num_factors, num_val_configs)}. "
+                    f"Got {self.log_potentials.shape}."
+                )
+
+            log_potentials = np.broadcast_to(
+                self.log_potentials, (num_factors, self.factor_configs.shape[0])
+            )
 
         variables_to_factors = collections.OrderedDict(
             [
@@ -525,7 +540,7 @@ class EnumerationFactorGroup(FactorGroup):
                     nodes.EnumerationFactor(
                         tuple(self.variable_group[self.connected_var_keys[ii]]),
                         self.factor_configs,
-                        log_potentials,
+                        log_potentials[ii],
                     ),
                 )
                 for ii in range(len(self.connected_var_keys))
@@ -569,34 +584,51 @@ class PairwiseFactorGroup(FactorGroup):
                 log_potential_matrix is not the same as the variable sizes for each variable referenced in
                 each sub-list of self.connected_var_keys
         """
+        if not (
+            self.log_potential_matrix.ndim == 2 or self.log_potential_matrix.ndim == 3
+        ):
+            raise ValueError(
+                "log_potential_matrix should be either a 2D array, specifying shared parameters for all "
+                "pairwise factors, or 3D array, specifying parameters for individual pairwise factors. "
+                f"Got a {self.log_potential_matrix.ndim}D log_potential_matrix array."
+            )
+
+        if self.log_potential_matrix.ndim == 3 and self.log_potential_matrix.shape[
+            0
+        ] != len(self.connected_var_keys):
+            raise ValueError(
+                f"Expected log_potential_matrix for {len(self.connected_var_keys)} factors. "
+                f"Got log_potential_matrix for {self.log_potential_matrix.shape[0]} factors."
+            )
+
         for fac_list in self.connected_var_keys:
             if len(fac_list) != 2:
                 raise ValueError(
                     "All pairwise factors should connect to exactly 2 variables. Got a factor connecting to"
                     f" more or less than 2 variables ({fac_list})."
                 )
+
             if not (
-                self.log_potential_matrix.shape
+                self.log_potential_matrix.shape[-2:]
                 == (
                     self.variable_group[fac_list[0]].num_states,
                     self.variable_group[fac_list[1]].num_states,
                 )
             ):
                 raise ValueError(
-                    "self.log_potential_matrix must have shape"
-                    + f"{(self.variable_group[fac_list[0]].num_states, self.variable_group[fac_list[1]].num_states)} "
-                    + f"based on self.connected_var_keys. Instead, it has shape {self.log_potential_matrix.shape}"
+                    f"The specified pairwise factor {fac_list} (with "
+                    f"{(self.variable_group[fac_list[0]].num_states, self.variable_group[fac_list[1]].num_states)} "
+                    "configurations) does not match the specified log_potential_matrix "
+                    "(with {self.log_potential_matrix.shape[-2:]} configurations)."
                 )
 
-        factor_configs = np.array(
-            np.meshgrid(
-                np.arange(self.log_potential_matrix.shape[0]),
-                np.arange(self.log_potential_matrix.shape[1]),
-            )
-        ).T.reshape((-1, 2))
-        log_potentials = self.log_potential_matrix[
-            factor_configs[:, 0], factor_configs[:, 1]
-        ]
+        factor_configs = np.mgrid[
+            : self.log_potential_matrix.shape[0], : self.log_potential_matrix.shape[1]
+        ].T.reshape((-1, 2))
+        log_potential_matrix = np.broadcast_to(
+            self.log_potential_matrix,
+            (len(self.connected_var_keys),) + self.log_potential_matrix.shape[-2:],
+        )
         variables_to_factors = collections.OrderedDict(
             [
                 (
@@ -604,7 +636,9 @@ class PairwiseFactorGroup(FactorGroup):
                     nodes.EnumerationFactor(
                         tuple(self.variable_group[self.connected_var_keys[ii]]),
                         factor_configs,
-                        log_potentials,
+                        log_potential_matrix[
+                            ii, factor_configs[:, 0], factor_configs[:, 1]
+                        ],
                     ),
                 )
                 for ii in range(len(self.connected_var_keys))
