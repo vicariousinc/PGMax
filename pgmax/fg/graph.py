@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import collections
+import copy
 import typing
 from dataclasses import dataclass
 from types import MappingProxyType
@@ -254,6 +255,7 @@ class FactorGraph:
             Initialized messages
         """
         return BPState(
+            wiring=self.wiring,
             log_potentials=LogPotentials(factor_graph=self),
             ftov=FToVMessages(
                 factor_graph=self, default_mode=self.messages_default_mode
@@ -330,6 +332,7 @@ class FactorGraph:
 
         msgs_after_bp, _ = jax.lax.scan(message_passing_step, msgs, None, num_iters)
         return BPState(
+            wiring=self.wiring,
             log_potentials=LogPotentials(factor_graph=self),
             ftov=FToVMessages(factor_graph=self, value=msgs_after_bp),
             evidence=init_msgs.evidence,
@@ -360,33 +363,42 @@ class FactorGraph:
         return var_key_to_map_dict
 
 
-@dataclass
 class LogPotentials:
-    factor_graph: FactorGraph
-    value: Optional[Union[np.ndarray, jnp.ndarray]] = None
-
-    def __post_init__(self):
-        if self.value is None:
-            self.value = jax.device_put(self.factor_graph.log_potentials)
+    def __init__(
+        self,
+        factor_graph: FactorGraph,
+        value: Optional[Union[np.ndarray, jnp.ndarray]] = None,
+    ):
+        if value is None:
+            self.value = jax.device_put(factor_graph.log_potentials)
         else:
-            if not self.value.shape == self.factor_graph.log_potentials.shape:
+            if not value.shape == factor_graph.log_potentials.shape:
                 raise ValueError(
-                    f"Expected log potentials shape {self.factor_graph.log_potentials.shape}. "
+                    f"Expected log potentials shape {factor_graph.log_potentials.shape}. "
                     f"Got {self.value.shape}."
                 )
 
-            self.value = jax.device_put(self.value)
+            self.value = jax.device_put(value)
+
+        self._named_factor_groups = copy.copy(factor_graph._named_factor_groups)
+        self._factor_group_to_potentials_starts = copy.copy(
+            factor_graph._factor_group_to_potentials_starts
+        )
+        self._factor_to_potentials_starts = copy.copy(
+            factor_graph._factor_to_potentials_starts
+        )
+        self._variables_to_factors = copy.copy(factor_graph._variables_to_factors)
 
     def __getitem__(self, key: Any):
-        if key in self.factor_graph._named_factor_groups:
-            factor_group = self.factor_graph._named_factor_groups[key]
-            start = self.factor_graph._factor_group_to_potentials_starts[factor_group]
+        if key in self._named_factor_groups:
+            factor_group = self._named_factor_groups[key]
+            start = self._factor_group_to_potentials_starts[factor_group]
             log_potentials = jax.device_put(self.value)[
                 start : start + factor_group.factor_group_log_potentials.shape[0]
             ]
-        elif frozenset(key) in self.factor_graph._variables_to_factors:
-            factor = self.factor_graph._variables_to_factors[frozenset(key)]
-            start = self.factor_graph._factor_to_potentials_starts[factor]
+        elif frozenset(key) in self._variables_to_factors:
+            factor = self._variables_to_factors[frozenset(key)]
+            start = self._factor_to_potentials_starts[factor]
             log_potentials = jax.device_put(self.value)[
                 start : start + factor.log_potentials.shape[0]
             ]
@@ -400,29 +412,29 @@ class LogPotentials:
         key: Any,
         data: Union[np.ndarray, jnp.ndarray],
     ):
-        if key in self.factor_graph._named_factor_groups:
-            factor_group = self.factor_graph._named_factor_groups[key]
+        if key in self._named_factor_groups:
+            factor_group = self._named_factor_groups[key]
             if data.shape != factor_group.factor_group_log_potentials.shape:
                 raise ValueError(
                     f"Expected log potentials shape {factor_group.factor_group_log_potentials.shape} "
                     f"for factor group {key}. Got {data.shape}."
                 )
 
-            start = self.factor_graph._factor_group_to_potentials_starts[factor_group]
+            start = self._factor_group_to_potentials_starts[factor_group]
             self.value = (
                 jax.device_put(self.value)
                 .at[start : start + factor_group.factor_group_log_potentials.shape[0]]
                 .set(data)
             )
-        elif frozenset(key) in self.factor_graph._variables_to_factors:
-            factor = self.factor_graph._variables_to_factors[frozenset(key)]
+        elif frozenset(key) in self._variables_to_factors:
+            factor = self._variables_to_factors[frozenset(key)]
             if data.shape != factor.log_potentials.shape:
                 raise ValueError(
                     f"Expected log potentials shape {factor.log_potentials.shape} "
                     f"for factor {key}. Got {data.shape}."
                 )
 
-            start = self.factor_graph._factor_to_potentials_starts[factor]
+            start = self._factor_to_potentials_starts[factor]
             self.value = (
                 jax.device_put(self.value)
                 .at[start : start + factor.log_potentials.shape[0]]
@@ -432,7 +444,6 @@ class LogPotentials:
             raise ValueError("")
 
 
-@dataclass
 class FToVMessages:
     """Class for storing and manipulating factor to variable messages.
 
@@ -449,37 +460,44 @@ class FToVMessages:
             Maps starting indices to the message values to update with.
     """
 
-    factor_graph: FactorGraph
-    default_mode: Optional[str] = None
-    value: Optional[Union[np.ndarray, jnp.ndarray]] = None
-
-    def __post_init__(self):
-        if self.default_mode is not None and self.value is not None:
+    def __init__(
+        self,
+        factor_graph: FactorGraph,
+        default_mode: Optional[str] = None,
+        value: Optional[Union[np.ndarray, jnp.ndarray]] = None,
+    ):
+        if default_mode is not None and value is not None:
             raise ValueError("Should specify only one of default_mode and value.")
 
-        if self.default_mode is None and self.value is None:
-            self.default_mode = "zeros"
+        if default_mode is None and value is None:
+            default_mode = "zeros"
 
-        if self.value is None:
-            if self.default_mode == "zeros":
-                self.value = jnp.zeros(self.factor_graph._total_factor_num_states)
-            elif self.default_mode == "random":
+        if value is None:
+            if default_mode == "zeros":
+                self.value = jnp.zeros(factor_graph._total_factor_num_states)
+            elif default_mode == "random":
                 self.value = jax.device_put(
-                    np.random.gumbel(size=(self.factor_graph._total_factor_num_states,))
+                    np.random.gumbel(size=(factor_graph._total_factor_num_states,))
                 )
             else:
                 raise ValueError(
-                    f"Unsupported default message mode {self.default_mode}. "
+                    f"Unsupported default message mode {default_mode}. "
                     "Supported default modes are zeros or random"
                 )
         else:
-            if not self.value.shape == (self.factor_graph._total_factor_num_states,):
+            if not value.shape == (factor_graph._total_factor_num_states,):
                 raise ValueError(
-                    f"Expected messages shape {(self.factor_graph._total_factor_num_states,)}. "
-                    f"Got {self.value.shape}."
+                    f"Expected messages shape {(factor_graph._total_factor_num_states,)}. "
+                    f"Got {value.shape}."
                 )
 
-            self.value = jax.device_put(self.value)
+            self.value = jax.device_put(value)
+
+        self._variable_group = factor_graph._variable_group
+        self._vars_to_starts = factor_graph._vars_to_starts
+        self._variables_to_factors = copy.copy(factor_graph._variables_to_factors)
+        self._factor_to_msgs_starts = copy.copy(factor_graph._factor_to_msgs_starts)
+        self._var_states_for_edges = factor_graph.wiring.var_states_for_edges
 
     def __getitem__(self, keys: Tuple[Any, Any]) -> jnp.ndarray:
         """Function to query messages from a factor to a variable
@@ -495,16 +513,16 @@ class FToVMessages:
         if not (
             isinstance(keys, tuple)
             and len(keys) == 2
-            and keys[1] in self.factor_graph._variable_group.keys
+            and keys[1] in self._variable_group.keys
         ):
             raise ValueError(
                 f"Invalid keys {keys}. Please specify a tuple of factor, variable "
                 "keys to get the messages from a named factor to a variable"
             )
 
-        factor = self.factor_graph._variables_to_factors[frozenset(keys[0])]
-        variable = self.factor_graph._variable_group[keys[1]]
-        start = self.factor_graph._factor_to_msgs_starts[factor] + np.sum(
+        factor = self._variables_to_factors[frozenset(keys[0])]
+        variable = self._variable_group[keys[1]]
+        start = self._factor_to_msgs_starts[factor] + np.sum(
             factor.edges_num_states[: factor.variables.index(variable)]
         )
         msgs = jax.device_put(self.value)[start : start + variable.num_states]
@@ -545,11 +563,11 @@ class FToVMessages:
         if (
             isinstance(keys, tuple)
             and len(keys) == 2
-            and keys[1] in self.factor_graph._variable_group.keys
+            and keys[1] in self._variable_group.keys
         ):
-            factor = self.factor_graph._variables_to_factors[frozenset(keys[0])]
-            variable = self.factor_graph._variable_group[keys[1]]
-            start = self.factor_graph._factor_to_msgs_starts[factor] + np.sum(
+            factor = self._variables_to_factors[frozenset(keys[0])]
+            variable = self._variable_group[keys[1]]
+            start = self._factor_to_msgs_starts[factor] + np.sum(
                 factor.edges_num_states[: factor.variables.index(variable)]
             )
             if data.shape != (variable.num_states,):
@@ -564,8 +582,8 @@ class FToVMessages:
                 .at[start : start + variable.num_states]
                 .set(data)
             )
-        elif keys in self.factor_graph._variable_group.keys:
-            variable = self.factor_graph._variable_group[keys]
+        elif keys in self._variable_group.keys:
+            variable = self._variable_group[keys]
             if data.shape != (variable.num_states,):
                 raise ValueError(
                     f"Given belief shape {data.shape} does not match expected "
@@ -573,8 +591,7 @@ class FToVMessages:
                 )
 
             starts = np.nonzero(
-                self.factor_graph.wiring.var_states_for_edges
-                == self.factor_graph._vars_to_starts[variable]
+                self._var_states_for_edges == self._vars_to_starts[variable]
             )[0]
             for start in starts:
                 self.value = (
@@ -592,7 +609,6 @@ class FToVMessages:
             )
 
 
-@dataclass
 class Evidence:
     """Class for storing and manipulating evidence
 
@@ -608,32 +624,36 @@ class Evidence:
             representing the evidence for that variable
     """
 
-    factor_graph: FactorGraph
-    default_mode: Optional[str] = None
-    value: Optional[Union[np.ndarray, jnp.ndarray]] = None
-
-    def __post_init__(self):
-        if self.default_mode is not None and self.value is not None:
+    def __init__(
+        self,
+        factor_graph: FactorGraph,
+        default_mode: Optional[str] = None,
+        value: Optional[Union[np.ndarray, jnp.ndarray]] = None,
+    ):
+        if default_mode is not None and value is not None:
             raise ValueError("Should specify only one of default_mode and value.")
 
-        if self.default_mode is None and self.value is None:
-            self.default_mode = "zeros"
+        if default_mode is None and value is None:
+            default_mode = "zeros"
 
-        if self.value is None and self.default_mode not in ("zeros", "random"):
+        if value is None and default_mode not in ("zeros", "random"):
             raise ValueError(
-                f"Unsupported default evidence mode {self.default_mode}. "
+                f"Unsupported default evidence mode {default_mode}. "
                 "Supported default modes are zeros or random"
             )
 
-        if self.value is None:
-            if self.default_mode == "zeros":
-                self.value = jnp.zeros(self.factor_graph.num_var_states)
+        if value is None:
+            if default_mode == "zeros":
+                self.value = jnp.zeros(factor_graph.num_var_states)
             else:
                 self.value = jax.device_put(
-                    np.random.gumbel(size=(self.factor_graph.num_var_states,))
+                    np.random.gumbel(size=(factor_graph.num_var_states,))
                 )
         else:
-            self.value = jax.device_put(self.value)
+            self.value = jax.device_put(value)
+
+        self._variable_group = factor_graph._variable_group
+        self._vars_to_starts = factor_graph._vars_to_starts
 
     def __getitem__(self, key: Any) -> jnp.ndarray:
         """Function to query evidence for a variable
@@ -644,8 +664,8 @@ class Evidence:
         Returns:
             evidence for the queried variable
         """
-        variable = self.factor_graph._variable_group[key]
-        start = self.factor_graph._vars_to_starts[variable]
+        variable = self._variable_group[key]
+        start = self._vars_to_starts[variable]
         evidence = jax.device_put(self.value)[start : start + variable.num_states]
         return evidence
 
@@ -658,7 +678,7 @@ class Evidence:
 
         Args:
             key: tuple that represents the index into the VariableGroup
-                (self.factor_graph._variable_group) that is created when the FactorGraph is instantiated. Note that
+                (self._variable_group) that is created when the FactorGraph is instantiated. Note that
                 this can be an index referring to an entire VariableGroup (in which case, the evidence
                 is set for the entire VariableGroup at once), or to an individual Variable within the
                 VariableGroup.
@@ -676,26 +696,24 @@ class Evidence:
                 Note that each np.ndarray in the dictionary values must have the same size as
                 variable_group.variable_size.
         """
-        if key in self.factor_graph._variable_group.container_keys:
+        if key in self._variable_group.container_keys:
             if key == slice(None):
-                variable_group = self.factor_graph._variable_group
+                variable_group = self._variable_group
             else:
-                variable_group = (
-                    self.factor_graph._variable_group.variable_group_container[key]
-                )
+                variable_group = self._variable_group.variable_group_container[key]
 
             for var, evidence_val in variable_group.get_vars_to_evidence(
                 evidence
             ).items():
-                start_index = self.factor_graph._vars_to_starts[var]
+                start_index = self._vars_to_starts[var]
                 self.value = (
                     jax.device_put(self.value)
                     .at[start_index : start_index + evidence_val.shape[0]]
                     .set(evidence_val)
                 )
         else:
-            var = self.factor_graph._variable_group[key]
-            start_index = self.factor_graph._vars_to_starts[var]
+            var = self._variable_group[key]
+            start_index = self._vars_to_starts[var]
             self.value = (
                 jax.device_put(self.value)
                 .at[start_index : start_index + var.num_states]
@@ -714,6 +732,7 @@ class BPState:
         evidence: evidence
     """
 
+    wiring: nodes.EnumerationWiring
     log_potentials: LogPotentials
     ftov: FToVMessages
     evidence: Evidence
