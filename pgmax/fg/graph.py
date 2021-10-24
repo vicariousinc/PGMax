@@ -400,6 +400,12 @@ class LogPotentials:
     ):
         if key in self.factor_graph._named_factor_groups:
             factor_group = self.factor_graph._named_factor_groups[key]
+            if data.shape != factor_group.factor_group_log_potentials.shape:
+                raise ValueError(
+                    f"Expected log potentials shape {factor_group.factor_group_log_potentials.shape} "
+                    f"for factor group {key}. Got {data.shape}."
+                )
+
             start = self.factor_graph._factor_group_to_potentials_starts[factor_group]
             self.value = (
                 jax.device_put(self.value)
@@ -408,6 +414,12 @@ class LogPotentials:
             )
         elif frozenset(key) in self.factor_graph._variables_to_factors:
             factor = self.factor_graph._variables_to_factors[frozenset(key)]
+            if data.shape != factor.log_potentials.shape:
+                raise ValueError(
+                    f"Expected log potentials shape {factor.log_potentials.shape} "
+                    f"for factor {key}. Got {data.shape}."
+                )
+
             start = self.factor_graph._factor_to_potentials_starts[factor]
             self.value = (
                 jax.device_put(self.value)
