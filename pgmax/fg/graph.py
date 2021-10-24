@@ -247,13 +247,14 @@ class FactorGraph:
         """Tuple of factor groups in the factor graph"""
         return tuple(self._factor_group_to_msgs_starts.keys())
 
-    def get_init_msgs(self) -> Messages:
+    def get_init_msgs(self) -> BPState:
         """Function to initialize messages.
 
         Returns:
             Initialized messages
         """
-        return Messages(
+        return BPState(
+            log_potentials=LogPotentials(factor_graph=self),
             ftov=FToVMessages(
                 factor_graph=self, default_mode=self.messages_default_mode
             ),
@@ -266,8 +267,8 @@ class FactorGraph:
         self,
         num_iters: int,
         damping_factor: float,
-        init_msgs: Optional[Messages] = None,
-    ) -> Messages:
+        init_msgs: Optional[BPState] = None,
+    ) -> BPState:
         """Function to perform belief propagation.
 
         Specifically, belief propagation is run for num_iters iterations and
@@ -328,12 +329,13 @@ class FactorGraph:
             return msgs, None
 
         msgs_after_bp, _ = jax.lax.scan(message_passing_step, msgs, None, num_iters)
-        return Messages(
+        return BPState(
+            log_potentials=LogPotentials(factor_graph=self),
             ftov=FToVMessages(factor_graph=self, value=msgs_after_bp),
             evidence=init_msgs.evidence,
         )
 
-    def decode_map_states(self, msgs: Messages) -> Dict[Tuple[Any, ...], int]:
+    def decode_map_states(self, msgs: BPState) -> Dict[Tuple[Any, ...], int]:
         """Function to computes the output of MAP inference on input messages.
 
         The final states are computed based on evidence obtained from the self.get_evidence
@@ -702,13 +704,16 @@ class Evidence:
 
 
 @dataclass
-class Messages:
-    """Container class for factor to variable messages and evidence.
+class BPState:
+    """Container class for belief propagation states, including log potentials,
+    ftov messages and evidence (unary log potentials).
 
     Args:
+        log_potentials: log potentials of the model
         ftov: factor to variable messages
         evidence: evidence
     """
 
+    log_potentials: LogPotentials
     ftov: FToVMessages
     evidence: Evidence
