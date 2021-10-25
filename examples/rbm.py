@@ -17,6 +17,7 @@
 # %matplotlib inline
 import itertools
 
+import jax
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -50,20 +51,35 @@ for ii in range(nh):
 run_bp, _, _, decode_map_states = graph.BP(fg.bp_state, 100)
 
 # %%
-# Run inference and decode
-bp_arrays = run_bp(
+# Run inference and decode using vmap
+n_samples = 16
+bp_arrays = jax.vmap(run_bp, in_axes=0, out_axes=0)(
     evidence_updates={
         "hidden": np.stack(
-            [np.zeros_like(bh), bh + np.random.logistic(size=bh.shape)], axis=1
+            [
+                np.zeros((n_samples,) + bh.shape),
+                bh + np.random.logistic(size=(n_samples,) + bh.shape),
+            ],
+            axis=-1,
         ),
         "visible": np.stack(
-            [np.zeros_like(bv), bv + np.random.logistic(size=bv.shape)], axis=1
+            [
+                np.zeros((n_samples,) + bv.shape),
+                bv + np.random.logistic(size=(n_samples,) + bv.shape),
+            ],
+            axis=-1,
         ),
     }
 )
-map_states = decode_map_states(bp_arrays)
+map_states = jax.vmap(decode_map_states, in_axes=0, out_axes=0)(bp_arrays)
 
 # %%
 # Visualize decodings
-img = map_states["visible"].reshape((28, 28))
-plt.imshow(img)
+fig, ax = plt.subplots(4, 4, figsize=(10, 10))
+for ii in range(16):
+    ax[np.unravel_index(ii, (4, 4))].imshow(
+        map_states["visible"][ii].copy().reshape((28, 28))
+    )
+    ax[np.unravel_index(ii, (4, 4))].axis("off")
+
+fig.tight_layout()

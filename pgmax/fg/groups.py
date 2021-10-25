@@ -618,17 +618,27 @@ class EnumerationFactorGroup(FactorGroup):
 
     def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
         num_factors = len(self.factors)
-        if data.shape != (num_factors, self.factor_configs.shape[0]) and data.shape != (
-            num_factors,
-            np.sum(self.factors[0].edges_num_states),
+        if (
+            data.shape != (num_factors, self.factor_configs.shape[0])
+            and data.shape
+            != (
+                num_factors,
+                np.sum(self.factors[0].edges_num_states),
+            )
+            and data.shape != (self.factor_configs.shape[0],)
         ):
             raise ValueError(
                 f"data should be of shape {(num_factors, self.factor_configs.shape[0])} or "
-                f"{( num_factors, np.sum(self.factors[0].edges_num_states))}. "
-                f"Got {data.shape}."
+                f"{( num_factors, np.sum(self.factors[0].edges_num_states))} or "
+                f"(self.factor_configs.shape[0],) . Got {data.shape}."
             )
 
-        return jax.device_put(data).flatten()
+        if data.shape == (self.factor_configs.shape[0],):
+            flat_data = jnp.tile(data, num_factors)
+        else:
+            flat_data = jax.device_put(data).flatten()
+
+        return flat_data
 
     def unflatten(
         self, flat_data: Union[np.ndarray, jnp.ndarray]
@@ -760,16 +770,24 @@ class PairwiseFactorGroup(FactorGroup):
 
     def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
         num_factors = len(self.factors)
-        if data.shape != (num_factors,) + self.log_potential_matrix.shape[
-            -2:
-        ] and data.shape != (num_factors, np.sum(self.log_potential_matrix.shape[-2:])):
+        if (
+            data.shape != (num_factors,) + self.log_potential_matrix.shape[-2:]
+            and data.shape
+            != (num_factors, np.sum(self.log_potential_matrix.shape[-2:]))
+            and data.shape != self.log_potential_matrix.shape[-2:]
+        ):
             raise ValueError(
                 f"data should be of shape {(num_factors,) + self.log_potential_matrix.shape[-2:]} or "
-                f"{(num_factors, np.sum(self.log_potential_matrix.shape[-2:]))}. "
-                f"Got {data.shape}."
+                f"{(num_factors, np.sum(self.log_potential_matrix.shape[-2:]))} or "
+                f"{self.log_potential_matrix.shape[-2:]}. Got {data.shape}."
             )
 
-        return jax.device_put(data).flatten()
+        if data.shape == self.log_potential_matrix.shape[-2:]:
+            flat_data = jnp.tile(jax.device_put(data).flatten(), num_factors)
+        else:
+            flat_data = jax.device_put(data).flatten()
+
+        return flat_data
 
     def unflatten(
         self, flat_data: Union[np.ndarray, jnp.ndarray]

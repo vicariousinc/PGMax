@@ -16,6 +16,7 @@
 # %%
 # %matplotlib inline
 import jax
+import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -47,7 +48,7 @@ fg.add_factor(
 
 # %%
 bp_state = fg.bp_state
-run_bp, _, _, decode_map_states = graph.BP(bp_state, 3000)
+run_bp, _, get_beliefs, decode_map_states = graph.BP(bp_state, 3000)
 
 # %%
 bp_arrays = run_bp(
@@ -58,6 +59,31 @@ bp_arrays = run_bp(
 img = decode_map_states(bp_arrays)
 fig, ax = plt.subplots(1, 1, figsize=(10, 10))
 ax.imshow(img)
+
+
+# %% [markdown]
+# ### Gradients and batching
+
+# %%
+def loss(log_potentials_updates, evidence_updates):
+    bp_arrays = run_bp(
+        log_potentials_updates=log_potentials_updates, evidence_updates=evidence_updates
+    )
+    beliefs = get_beliefs(bp_arrays)
+    loss = -jnp.sum(beliefs)
+    return loss
+
+
+batch_loss = jax.jit(jax.vmap(loss, in_axes=(None, {None: 0}), out_axes=0))
+log_potentials_grads = jax.jit(jax.grad(loss, argnums=0))
+
+# %%
+batch_loss(None, {None: jax.device_put(np.random.gumbel(size=(10, 50, 50, 2)))})
+
+# %%
+grads = log_potentials_grads(
+    {"factors": jnp.eye(2)}, {None: jax.device_put(np.random.gumbel(size=(50, 50, 2)))}
+)
 
 # %% [markdown]
 # ### Message and evidence manipulation
