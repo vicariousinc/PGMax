@@ -19,7 +19,7 @@ import jax
 import matplotlib.pyplot as plt
 import numpy as np
 
-from pgmax.fg import graph, groups, transforms
+from pgmax.fg import graph, groups
 
 # %% [markdown]
 # ### Construct variable grid, initialize factor graph, and add factors
@@ -46,7 +46,7 @@ fg.add_factor(
 # ### Run inference and visualize results
 
 # %%
-run_bp, get_bp_state = transforms.BP(fg.bp_state, 3000)
+run_bp, get_bp_state = graph.BP(fg.bp_state, 3000)
 
 # %%
 ftov_msgs = run_bp(
@@ -55,12 +55,7 @@ ftov_msgs = run_bp(
 bp_state = get_bp_state(ftov_msgs)
 
 # %%
-decode_map_states = transforms.DecodeMAPStates(bp_state)
-map_states = decode_map_states()
-img = np.zeros((50, 50))
-for key in map_states:
-    img[key] = map_states[key]
-
+img = graph.decode_map_states(bp_state)
 fig, ax = plt.subplots(1, 1, figsize=(10, 10))
 ax.imshow(img)
 

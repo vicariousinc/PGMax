@@ -20,7 +20,7 @@ import itertools
 import matplotlib.pyplot as plt
 import numpy as np
 
-from pgmax.fg import graph, groups, transforms
+from pgmax.fg import graph, groups
 
 # %%
 # Load parameters
@@ -47,7 +47,7 @@ for ii in range(nh):
         )
 
 # %%
-run_bp, get_bp_state = transforms.BP(fg.bp_state, 100)
+run_bp, get_bp_state = graph.BP(fg.bp_state, 100)
 
 # %%
 # Run inference and decode
@@ -63,14 +63,9 @@ bp_state = get_bp_state(
         }
     )
 )
-decode_map_states = transforms.DecodeMAPStates(bp_state)
-map_states = decode_map_states()
+map_states = graph.decode_map_states(bp_state)
 
 # %%
 # Visualize decodings
-img = np.zeros(bv.shape)
-for ii in range(nv):
-    img[ii] = map_states[("visible", ii)]
-
-img = img.reshape((28, 28))
+img = map_states["visible"].reshape((28, 28))
 plt.imshow(img)
