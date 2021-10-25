@@ -330,17 +330,18 @@ fg.add_factor(
 # %%
 # Run BP
 # Set the evidence
-init_msgs = fg.get_init_msgs()
-init_msgs.evidence["grid_vars"] = grid_evidence_arr
-init_msgs.evidence["additional_vars"] = additional_vars_evidence_dict
+bp_state = fg.bp_state
+bp_state.evidence["grid_vars"] = grid_evidence_arr
+bp_state.evidence["additional_vars"] = additional_vars_evidence_dict
+run_bp, _, _, decode_map_states = graph.BP(bp_state, 1000)
 bp_start_time = timer()
-final_msgs = fg.run_bp(1000, 0.5, init_msgs=init_msgs)
+bp_arrays = run_bp()
 bp_end_time = timer()
 print(f"time taken for bp {bp_end_time - bp_start_time}")
 
 # Run inference and convert result to human-readable data structure
 data_writeback_start_time = timer()
-map_message_dict = fg.decode_map_states(final_msgs)
+map_states = decode_map_states(bp_arrays)
 data_writeback_end_time = timer()
 print(
     f"time taken for data conversion of inference result {data_writeback_end_time - data_writeback_start_time}"
@@ -358,13 +359,11 @@ for i in range(2):
     for row in range(M):
         for col in range(N):
             try:
-                bp_values[i, row, col] = map_message_dict["grid_vars", i, row, col]
+                bp_values[i, row, col] = map_states["grid_vars"][i, row, col]
                 bu_evidence[i, row, col, :] = grid_evidence_arr[i, row, col]
-            except KeyError:
+            except IndexError:
                 try:
-                    bp_values[i, row, col] = map_message_dict[
-                        "additional_vars", i, row, col
-                    ]
+                    bp_values[i, row, col] = map_states["additional_vars"][i, row, col]
                     bu_evidence[i, row, col, :] = additional_vars_evidence_dict[
                         (i, row, col)
                     ]

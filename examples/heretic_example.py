@@ -14,15 +14,14 @@
 # ---
 
 # %%
+# %matplotlib inline
+# Standard Package Imports
+from dataclasses import replace
 from timeit import default_timer as timer
 from typing import Any, List, Tuple
 
 import jax
 import jax.numpy as jnp
-
-# %%
-# %matplotlib inline
-# Standard Package Imports
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -122,12 +121,11 @@ for k_row in range(3):
             log_potential_matrix=W_pot[:, :, k_row, k_col],
         )
 
+
 # %% [markdown]
 # # Construct Initial Messages
 
 # %%
-
-
 def custom_flatten_ordering(Mdown, Mup):
     flat_idx = 0
     flat_Mdown = Mdown.flatten()
@@ -177,30 +175,27 @@ reshaped_Mup = Mup.reshape(17, 3, 3, 28, 28)
 
 # %% tags=[]
 # Run BP
-init_msgs = fg.get_init_msgs()
-init_msgs.ftov = graph.FToVMessages(
-    factor_graph=fg,
-    init_value=jax.device_put(
-        custom_flatten_ordering(np.array(reshaped_Mdown), np.array(reshaped_Mup))
+bp_state = replace(
+    fg.bp_state,
+    ftov_msgs=graph.FToVMessages(
+        fg_state=fg.fg_state,
+        value=jax.device_put(
+            custom_flatten_ordering(np.array(reshaped_Mdown), np.array(reshaped_Mup))
+        ),
     ),
 )
-init_msgs.evidence[0] = np.array(bXn_evidence)
-init_msgs.evidence[1] = np.array(bHn_evidence)
+bp_state.evidence[0] = np.array(bXn_evidence)
+bp_state.evidence[1] = np.array(bHn_evidence)
+run_bp, _, _, decode_map_states = graph.BP(bp_state, 500)
 bp_start_time = timer()
 # Assign evidence to pixel vars
-final_msgs = fg.run_bp(
-    500,
-    0.5,
-    init_msgs=init_msgs,
-)
+bp_arrays = run_bp()
 bp_end_time = timer()
 print(f"time taken for bp {bp_end_time - bp_start_time}")
 
 # Run inference and convert result to human-readable data structure
 data_writeback_start_time = timer()
-map_message_dict = fg.decode_map_states(
-    final_msgs,
-)
+map_states = decode_map_states(bp_arrays)
 data_writeback_end_time = timer()
 print(
     f"time taken for data conversion of inference result {data_writeback_end_time - data_writeback_start_time}"
@@ -236,13 +231,6 @@ def plot_images(images):
 
 
 # %%
-img_arr = np.zeros((1, im_size[0], im_size[1]))
-
-for row in range(im_size[0]):
-    for col in range(im_size[1]):
-        img_val = float(map_message_dict[0, row, col])
-        if img_val == 2.0:
-            img_val = 0.4
-        img_arr[0, row, col] = img_val * 1.0
-
+img_arr = map_states[0][None].copy().astype(float)
+img_arr[img_arr == 2.0] = 0.4
 plot_images(img_arr)

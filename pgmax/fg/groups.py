@@ -18,6 +18,7 @@ from typing import (
     Union,
 )
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 
@@ -121,7 +122,7 @@ class VariableGroup:
         """
         return (None,)
 
-    def flatten(self, data: Any) -> np.ndarray:
+    def flatten(self, data: Any) -> jnp.ndarray:
         raise NotImplementedError(
             "Please subclass the VariableGroup class and override this method"
         )
@@ -222,8 +223,8 @@ class CompositeVariableGroup(VariableGroup):
 
         return keys_to_vars
 
-    def flatten(self, data: Union[Mapping, Sequence]) -> np.ndarray:
-        flat_data = np.concatenate(
+    def flatten(self, data: Union[Mapping, Sequence]) -> jnp.ndarray:
+        flat_data = jnp.concatenate(
             [
                 self.variable_group_container[key].flatten(data[key])
                 for key in self.container_keys
@@ -323,7 +324,7 @@ class NDVariableArray(VariableGroup):
 
         return keys_to_vars
 
-    def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> np.ndarray:
+    def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
         if data.shape != self.shape and data.shape != self.shape + (
             self.variable_size,
         ):
@@ -332,9 +333,11 @@ class NDVariableArray(VariableGroup):
                 f"Got {data.shape}."
             )
 
-        return data.flatten()
+        return jax.device_put(data).flatten()
 
-    def unflatten(self, flat_data: Union[np.ndarray, jnp.ndarray]) -> np.ndarray:
+    def unflatten(
+        self, flat_data: Union[np.ndarray, jnp.ndarray]
+    ) -> Union[np.ndarray, jnp.ndarray]:
         if flat_data.ndim != 1:
             raise ValueError(
                 f"Can only unflatten 1D array. Got an {flat_data.ndim}D array."
@@ -380,7 +383,9 @@ class VariableDict(VariableGroup):
 
         return keys_to_vars
 
-    def flatten(self, data: Mapping[Hashable, np.ndarray]) -> np.ndarray:
+    def flatten(
+        self, data: Mapping[Hashable, Union[np.ndarray, jnp.ndarray]]
+    ) -> jnp.ndarray:
         for key in data:
             if key not in self._keys_to_vars:
                 raise ValueError(f"data is referring to a non-existent variable {key}.")
@@ -392,12 +397,12 @@ class VariableDict(VariableGroup):
                     f"Got {data[key].shape}."
                 )
 
-        flat_data = np.concatenate([data[key].flatten() for key in self.keys])
+        flat_data = jnp.concatenate([data[key].flatten() for key in self.keys])
         return flat_data
 
     def unflatten(
         self, flat_data: Union[np.ndarray, jnp.ndarray]
-    ) -> Dict[Hashable, np.ndarray]:
+    ) -> Dict[Hashable, Union[np.ndarray, jnp.ndarray]]:
         if flat_data.ndim != 1:
             raise ValueError(
                 f"Can only unflatten 1D array. Got an {flat_data.ndim}D array."
@@ -531,12 +536,14 @@ class FactorGroup:
         )
         return factor_num_states
 
-    def flatten(self, data: np.ndarray) -> np.ndarray:
+    def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
         raise NotImplementedError(
             "Please subclass the FactorGroup class and override this method"
         )
 
-    def unflatten(self, flat_data: Union[np.ndarray, jnp.ndarray]) -> np.ndarray:
+    def unflatten(
+        self, flat_data: Union[np.ndarray, jnp.ndarray]
+    ) -> Union[np.ndarray, jnp.ndarray]:
         raise NotImplementedError(
             "Please subclass the FactorGroup class and override this method"
         )
@@ -609,7 +616,7 @@ class EnumerationFactorGroup(FactorGroup):
         )
         return variables_to_factors
 
-    def flatten(self, data: np.ndarray) -> np.ndarray:
+    def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
         num_factors = len(self.factors)
         if data.shape != (num_factors, self.factor_configs.shape[0]) and data.shape != (
             num_factors,
@@ -621,9 +628,11 @@ class EnumerationFactorGroup(FactorGroup):
                 f"Got {data.shape}."
             )
 
-        return data.flatten()
+        return jax.device_put(data).flatten()
 
-    def unflatten(self, flat_data: np.ndarray) -> np.ndarray:
+    def unflatten(
+        self, flat_data: Union[np.ndarray, jnp.ndarray]
+    ) -> Union[np.ndarray, jnp.ndarray]:
         if flat_data.ndim != 1:
             raise ValueError(
                 f"Can only unflatten 1D array. Got an {flat_data.ndim}D array."
@@ -749,7 +758,7 @@ class PairwiseFactorGroup(FactorGroup):
         )
         return variables_to_factors
 
-    def flatten(self, data: np.ndarray) -> np.ndarray:
+    def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
         num_factors = len(self.factors)
         if data.shape != (num_factors,) + self.log_potential_matrix.shape[
             -2:
@@ -760,9 +769,11 @@ class PairwiseFactorGroup(FactorGroup):
                 f"Got {data.shape}."
             )
 
-        return data.flatten()
+        return jax.device_put(data).flatten()
 
-    def unflatten(self, flat_data: np.ndarray) -> np.ndarray:
+    def unflatten(
+        self, flat_data: Union[np.ndarray, jnp.ndarray]
+    ) -> Union[np.ndarray, jnp.ndarray]:
         if flat_data.ndim != 1:
             raise ValueError(
                 f"Can only unflatten 1D array. Got an {flat_data.ndim}D array."
