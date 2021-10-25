@@ -328,16 +328,17 @@ def update_log_potentials(
         data = updates[key]
         if key in fg_state.named_factor_groups:
             factor_group = fg_state.named_factor_groups[key]
-            if data.shape != factor_group.factor_group_log_potentials.shape:
+            flat_data = factor_group.flatten(data)
+            if flat_data.shape != factor_group.factor_group_log_potentials.shape:
                 raise ValueError(
                     f"Expected log potentials shape {factor_group.factor_group_log_potentials.shape} "
-                    f"for factor group {key}. Got {data.shape}."
+                    f"for factor group {key}. Got incompatible data shape {data.shape}."
                 )
 
             start = fg_state.factor_group_to_potentials_starts[factor_group]
-            log_potentials = log_potentials.at[
-                start : start + factor_group.factor_group_log_potentials.shape[0]
-            ].set(data)
+            log_potentials = log_potentials.at[start : start + flat_data.shape[0]].set(
+                flat_data
+            )
         elif frozenset(key) in fg_state.variables_to_factors:
             factor = fg_state.variables_to_factors[frozenset(key)]
             if data.shape != factor.log_potentials.shape:
