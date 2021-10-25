@@ -18,6 +18,7 @@ from typing import (
     Union,
 )
 
+import jax.numpy as jnp
 import numpy as np
 
 import pgmax.fg.nodes as nodes
@@ -95,16 +96,6 @@ class VariableGroup:
             "Please subclass the VariableGroup class and override this method"
         )
 
-    def get_vars_to_evidence(self, evidence: Any) -> Dict[nodes.Variable, np.ndarray]:
-        """Function that turns input evidence into a dictionary mapping variables to evidence.
-
-        Returns:
-            a dictionary mapping all possible variables to the corresponding evidence
-        """
-        raise NotImplementedError(
-            "Please subclass the VariableGroup class and override this method"
-        )
-
     @cached_property
     def keys(self) -> Tuple[Any, ...]:
         """Function to return a tuple of all keys in the group.
@@ -129,6 +120,16 @@ class VariableGroup:
         other than a composite variable group
         """
         return (None,)
+
+    def flatten(self, data: Any) -> np.ndarray:
+        raise NotImplementedError(
+            "Please subclass the VariableGroup class and override this method"
+        )
+
+    def unflatten(self, flat_data: Union[np.ndarray, jnp.ndarray]) -> Any:
+        raise NotImplementedError(
+            "Please subclass the VariableGroup class and override this method"
+        )
 
 
 @dataclass(frozen=True, eq=False)
@@ -221,25 +222,57 @@ class CompositeVariableGroup(VariableGroup):
 
         return keys_to_vars
 
-    def get_vars_to_evidence(
-        self, evidence: Union[Mapping, Sequence]
-    ) -> Dict[nodes.Variable, np.ndarray]:
-        """Function that turns input evidence into a dictionary mapping variables to evidence.
+    def flatten(self, data: Union[Mapping, Sequence]) -> np.ndarray:
+        flat_data = np.concatenate(
+            [
+                self.variable_group_container[key].flatten(data[key])
+                for key in self.container_keys
+            ]
+        )
+        return flat_data
 
-        Args:
-            evidence: A mapping or a sequence of evidences.
-                The type of evidence should match that of self.variable_group_container.
-
-        Returns:
-            a dictionary mapping all possible variables to the corresponding evidence
-        """
-        vars_to_evidence: Dict[nodes.Variable, np.ndarray] = {}
-        for key in self.container_keys:
-            vars_to_evidence.update(
-                self.variable_group_container[key].get_vars_to_evidence(evidence[key])
+    def unflatten(
+        self, flat_data: Union[np.ndarray, jnp.ndarray]
+    ) -> Union[Mapping, Sequence]:
+        if flat_data.ndim != 1:
+            raise ValueError(
+                f"Can only unflatten 1D array. Got an {flat_data.ndim}D array."
             )
 
-        return vars_to_evidence
+        num_variables = 0
+        num_variable_states = 0
+        for key in self.container_keys:
+            variable_group = self.variable_group_container[key]
+            num_variables += len(variable_group.variables)
+            num_variable_states += (
+                len(variable_group.variables) * variable_group.variables[0].num_states
+            )
+
+        if flat_data.shape[0] == num_variables:
+            use_num_states = False
+        elif flat_data.shape[0] == num_variable_states:
+            use_num_states = True
+        else:
+            raise ValueError(
+                f"flat_data should either be of shape (num_variables={len(self.variables)},), "
+                f"or (num_variable_states={num_variable_states},). "
+                f"Got {flat_data.shape}"
+            )
+
+        data: List[np.ndarray] = []
+        start = 0
+        for key in self.container_keys:
+            variable_group = self.variable_group_container[key]
+            length = len(variable_group.variables)
+            if use_num_states:
+                length *= variable_group.variables[0].num_states
+
+            data.append(variable_group.unflatten(flat_data[start : start + length]))
+            start += length
+        if isinstance(self.variable_group_container, Mapping):
+            return dict([(key, data[kk]) for kk, key in enumerate(self.container_keys)])
+        else:
+            return data
 
     @cached_property
     def container_keys(self) -> Tuple:
@@ -290,30 +323,29 @@ class NDVariableArray(VariableGroup):
 
         return keys_to_vars
 
-    def get_vars_to_evidence(
-        self, evidence: np.ndarray
-    ) -> Dict[nodes.Variable, np.ndarray]:
-        """Function that turns input evidence into a dictionary mapping variables to evidence.
-
-        Args:
-            evidence: An array of shape self.shape + (variable_size,)
-                An array containing evidence for all the variables
-
-        Returns:
-            a dictionary mapping all possible variables to the corresponding evidence
-
-        Raises:
-            ValueError: if input evidence array is of the wrong shape
-        """
-        expected_shape = self.shape + (self.variable_size,)
-        if not evidence.shape == expected_shape:
+    def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> np.ndarray:
+        if data.shape != self.shape and data.shape != self.shape + (
+            self.variable_size,
+        ):
             raise ValueError(
-                f"Input evidence should be an array of shape {expected_shape}. "
-                f"Got {evidence.shape}."
+                f"data should be of shape {self.shape} or {self.shape + (self.variable_size,)}. "
+                f"Got {data.shape}."
             )
 
-        vars_to_evidence = {self._keys_to_vars[self.keys[0]]: evidence.ravel()}
-        return vars_to_evidence
+        return data.flatten()
+
+    def unflatten(self, flat_data: Union[np.ndarray, jnp.ndarray]) -> np.ndarray:
+        if flat_data.size == np.product(self.shape):
+            data = flat_data.reshape(self.shape).copy()
+        elif flat_data.size == np.product(self.shape) * self.variable_size:
+            data = flat_data.reshape(self.shape + (self.variable_size,)).copy()
+        else:
+            raise ValueError(
+                f"flat_data should be compatible with shape {self.shape} or {self.shape + (self.variable_size,)}. "
+                f"Got {flat_data.shape}."
+            )
+
+        return data
 
 
 @dataclass(frozen=True, eq=False)
@@ -343,39 +375,48 @@ class VariableDict(VariableGroup):
 
         return keys_to_vars
 
-    def get_vars_to_evidence(
-        self, evidence: Mapping[Hashable, np.ndarray]
-    ) -> Dict[nodes.Variable, np.ndarray]:
-        """Function that turns input evidence into a dictionary mapping variables to evidence.
-
-        Args:
-            evidence: A mapping from keys to np.ndarrays of evidence for that particular
-                key
-
-        Returns:
-            a dictionary mapping all possible variables to the corresponding evidence
-
-        Raises:
-            ValueError: if a key has not previously been added to this VariableGroup, or
-                if any evidence array is of the wrong shape.
-        """
-        vars_to_evidence = {}
-        for key in evidence:
+    def flatten(self, data: Mapping[Hashable, np.ndarray]) -> np.ndarray:
+        for key in data:
             if key not in self._keys_to_vars:
-                raise ValueError(
-                    f"The evidence is referring to a non-existent variable {key}."
-                )
+                raise ValueError(f"data is referring to a non-existent variable {key}.")
 
-            if evidence[key].shape != (self.variable_size,):
+            if data[key].shape != (self.variable_size,):
                 raise ValueError(
-                    f"Variable {key} expects an evidence array of shape "
+                    f"Variable {key} expects an data array of shape "
                     f"({(self.variable_size,)})."
-                    f"Got {evidence[key].shape}."
+                    f"Got {data[key].shape}."
                 )
 
-            vars_to_evidence[self._keys_to_vars[key]] = evidence[key]
+        flat_data = np.concatenate([data[key].flatten() for key in self.keys])
+        return flat_data
 
-        return vars_to_evidence
+    def unflatten(
+        self, flat_data: Union[np.ndarray, jnp.ndarray]
+    ) -> Dict[Hashable, np.ndarray]:
+        num_variables = len(self.variable_names)
+        num_variable_states = len(self.variable_names) * self.variable_size
+        if flat_data.shape[0] == num_variables:
+            use_num_states = False
+        elif flat_data.shape[0] == num_variable_states:
+            use_num_states = True
+        else:
+            raise ValueError(
+                f"flat_data should either be of shape (num_variables={len(self.variables)},), "
+                f"or (num_variable_states={num_variable_states},). "
+                f"Got {flat_data.shape}"
+            )
+
+        start = 0
+        data = {}
+        for key in self.variable_names:
+            if use_num_states:
+                data[key] = flat_data[start : start + self.variable_size]
+                start += self.variable_size
+            else:
+                data[key] = flat_data[start]
+                start += 1
+
+        return data
 
 
 @dataclass(frozen=True, eq=False)
