@@ -5,7 +5,7 @@ from __future__ import annotations
 import collections
 import copy
 import typing
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from types import MappingProxyType
 from typing import (
     Any,
@@ -69,8 +69,6 @@ class FactorGraph:
         Sequence[groups.VariableGroup],
         groups.VariableGroup,
     ]
-    messages_default_mode: str = "zeros"
-    evidence_default_mode: str = "zeros"
 
     def __post_init__(self):
         if isinstance(self.variables, groups.VariableGroup):
@@ -248,28 +246,29 @@ class FactorGraph:
         """Tuple of factor groups in the factor graph"""
         return tuple(self._factor_group_to_msgs_starts.keys())
 
-    def get_init_msgs(self) -> BPState:
-        """Function to initialize messages.
-
-        Returns:
-            Initialized messages
-        """
-        return BPState(
+    @cached_property
+    def fg_state(self) -> FactorGraphState:
+        return FactorGraphState(
+            variable_group=self._variable_group,
+            vars_to_starts=self._vars_to_starts,
+            num_var_states=self.num_var_states,
+            total_factor_num_states=self._total_factor_num_states,
+            variables_to_factors=copy.copy(self._variables_to_factors),
+            named_factor_groups=copy.copy(self._named_factor_groups),
+            factor_group_to_potentials_starts=copy.copy(
+                self._factor_group_to_potentials_starts
+            ),
+            factor_to_potentials_starts=copy.copy(self._factor_to_potentials_starts),
+            factor_to_msgs_starts=copy.copy(self._factor_to_msgs_starts),
+            log_potentials=self.log_potentials,
             wiring=self.wiring,
-            log_potentials=LogPotentials(factor_graph=self),
-            ftov=FToVMessages(
-                factor_graph=self, default_mode=self.messages_default_mode
-            ),
-            evidence=Evidence(
-                factor_graph=self, default_mode=self.evidence_default_mode
-            ),
         )
 
     def run_bp(
         self,
         num_iters: int,
         damping_factor: float,
-        init_msgs: Optional[BPState] = None,
+        bp_state: BPState,
     ) -> BPState:
         """Function to perform belief propagation.
 
@@ -279,21 +278,17 @@ class FactorGraph:
         Args:
             num_iters: The number of iterations for which to perform message passing
             damping_factor: The damping factor to use for message updates between one timestep and the next
-            init_msgs: Initial messages to start the belief propagation.
-                If None, construct init_msgs by calling self.get_init_msgs()
+            bp_state: Initial messages to start the belief propagation.
 
         Returns:
             ftov messages after running BP for num_iters iterations
         """
         # Retrieve the necessary data structures from the compiled self.wiring and
         # convert these to jax arrays.
-        if init_msgs is None:
-            init_msgs = self.get_init_msgs()
-
-        msgs = jax.device_put(init_msgs.ftov.value)
-        evidence = jax.device_put(init_msgs.evidence.value)
-        wiring = jax.device_put(self.wiring)
-        log_potentials = jax.device_put(self.log_potentials)
+        msgs = jax.device_put(bp_state.ftov.value)
+        evidence = jax.device_put(bp_state.evidence.value)
+        wiring = jax.device_put(bp_state.fg_state.wiring)
+        log_potentials = jax.device_put(bp_state.log_potentials.value)
         max_msg_size = int(jnp.max(wiring.edges_num_states))
 
         # Normalize the messages to ensure the maximum value is 0.
@@ -331,74 +326,121 @@ class FactorGraph:
             return msgs, None
 
         msgs_after_bp, _ = jax.lax.scan(message_passing_step, msgs, None, num_iters)
-        return BPState(
-            wiring=self.wiring,
-            log_potentials=LogPotentials(factor_graph=self),
-            ftov=FToVMessages(factor_graph=self, value=msgs_after_bp),
-            evidence=init_msgs.evidence,
+        return replace(
+            bp_state,
+            ftov=FToVMessages(fg_state=bp_state.ftov.fg_state, value=msgs_after_bp),
         )
 
-    def decode_map_states(self, msgs: BPState) -> Dict[Tuple[Any, ...], int]:
+    def decode_map_states(self, bp_state: BPState) -> Dict[Tuple[Any, ...], int]:
         """Function to computes the output of MAP inference on input messages.
 
         The final states are computed based on evidence obtained from the self.get_evidence
         method as well as the internal wiring.
 
         Args:
-            msgs: ftov messages for deciding MAP states
+            bp_state: ftov messages for deciding MAP states
 
         Returns:
             a dictionary mapping each variable key to the MAP states of the corresponding variable
         """
-        var_states_for_edges = jax.device_put(self.wiring.var_states_for_edges)
-        evidence = jax.device_put(msgs.evidence.value)
-        final_var_states = evidence.at[var_states_for_edges].add(msgs.ftov.value)
+        var_states_for_edges = jax.device_put(
+            bp_state.fg_state.wiring.var_states_for_edges
+        )
+        evidence = jax.device_put(bp_state.evidence.value)
+        final_var_states = evidence.at[var_states_for_edges].add(bp_state.ftov.value)
         var_key_to_map_dict: Dict[Tuple[Any, ...], int] = {}
-        for var_key in self._variable_group.keys:
-            var = self._variable_group[var_key]
-            start_index = self._vars_to_starts[var]
+        for var_key in bp_state.ftov.fg_state.variable_group.keys:
+            var = bp_state.ftov.fg_state.variable_group[var_key]
+            start_index = bp_state.ftov.fg_state.vars_to_starts[var]
             var_key_to_map_dict[var_key] = int(
                 jnp.argmax(final_var_states[start_index : start_index + var.num_states])
             )
+
         return var_key_to_map_dict
 
 
+@dataclass(frozen=True, eq=False)
+class FactorGraphState:
+    variable_group: groups.VariableGroup
+    vars_to_starts: Mapping[nodes.Variable, int]
+    num_var_states: int
+    total_factor_num_states: int
+    variables_to_factors: Mapping[FrozenSet, nodes.EnumerationFactor]
+    named_factor_groups: Mapping[Hashable, groups.FactorGroup]
+    factor_group_to_potentials_starts: Mapping[groups.FactorGroup, int]
+    factor_to_potentials_starts: Mapping[nodes.EnumerationFactor, int]
+    factor_to_msgs_starts: Mapping[nodes.EnumerationFactor, int]
+    log_potentials: np.ndarray
+    wiring: nodes.EnumerationWiring
+
+    def __post_init__(self):
+        for field in self.__dataclass_fields__:
+            if isinstance(getattr(self, field), np.ndarray):
+                getattr(self, field).flags.writeable = False
+
+            if isinstance(getattr(self, field), Mapping):
+                object.__setattr__(self, field, MappingProxyType(self.field))
+
+
+@dataclass(frozen=True, eq=False)
+class BPState:
+    """Container class for belief propagation states, including log potentials,
+    ftov messages and evidence (unary log potentials).
+
+    Args:
+        log_potentials: log potentials of the model
+        ftov: factor to variable messages
+        evidence: evidence
+    """
+
+    log_potentials: LogPotentials
+    ftov: FToVMessages
+    evidence: Evidence
+
+    def __post_init__(self):
+        if (self.log_potentials.fg_state != self.ftov.fg_state) or (
+            self.ftov.fg_state != self.evidence.fg_state
+        ):
+            raise ValueError(
+                "log_potentials, ftov and evidence should be derived from the same fg_state."
+            )
+
+    @property
+    def fg_state(self) -> FactorGraphState:
+        return self.log_potentials.fg_state
+
+
+@dataclass(frozen=True, eq=False)
 class LogPotentials:
-    def __init__(
-        self,
-        factor_graph: FactorGraph,
-        value: Optional[Union[np.ndarray, jnp.ndarray]] = None,
-    ):
-        if value is None:
-            self.value = jax.device_put(factor_graph.log_potentials)
+
+    fg_state: FactorGraphState
+    default_mode: Optional[str] = None
+    value: Optional[np.ndarray] = None
+
+    def __post_init__(self):
+        if self.value is None:
+            object.__setattr__(
+                self, "value", jax.device_put(self.fg_state.log_potentials)
+            )
         else:
-            if not value.shape == factor_graph.log_potentials.shape:
+            if not self.value.shape == self.fg_state.log_potentials.shape:
                 raise ValueError(
-                    f"Expected log potentials shape {factor_graph.log_potentials.shape}. "
+                    f"Expected log potentials shape {self.fg_state.log_potentials.shape}. "
                     f"Got {self.value.shape}."
                 )
 
-            self.value = jax.device_put(value)
-
-        self._named_factor_groups = copy.copy(factor_graph._named_factor_groups)
-        self._factor_group_to_potentials_starts = copy.copy(
-            factor_graph._factor_group_to_potentials_starts
-        )
-        self._factor_to_potentials_starts = copy.copy(
-            factor_graph._factor_to_potentials_starts
-        )
-        self._variables_to_factors = copy.copy(factor_graph._variables_to_factors)
+            object.__setattr__(self, "value", jax.device_put(self.value))
 
     def __getitem__(self, key: Any):
-        if key in self._named_factor_groups:
-            factor_group = self._named_factor_groups[key]
-            start = self._factor_group_to_potentials_starts[factor_group]
+        if key in self.fg_state.named_factor_groups:
+            factor_group = self.fg_state.named_factor_groups[key]
+            start = self.fg_state.factor_group_to_potentials_starts[factor_group]
             log_potentials = jax.device_put(self.value)[
                 start : start + factor_group.factor_group_log_potentials.shape[0]
             ]
-        elif frozenset(key) in self._variables_to_factors:
-            factor = self._variables_to_factors[frozenset(key)]
-            start = self._factor_to_potentials_starts[factor]
+        elif frozenset(key) in self.fg_state.variables_to_factors:
+            factor = self.fg_state.variables_to_factors[frozenset(key)]
+            start = self.fg_state.factor_to_potentials_starts[factor]
             log_potentials = jax.device_put(self.value)[
                 start : start + factor.log_potentials.shape[0]
             ]
@@ -412,38 +454,43 @@ class LogPotentials:
         key: Any,
         data: Union[np.ndarray, jnp.ndarray],
     ):
-        if key in self._named_factor_groups:
-            factor_group = self._named_factor_groups[key]
+        if key in self.fg_state.named_factor_groups:
+            factor_group = self.fg_state.named_factor_groups[key]
             if data.shape != factor_group.factor_group_log_potentials.shape:
                 raise ValueError(
                     f"Expected log potentials shape {factor_group.factor_group_log_potentials.shape} "
                     f"for factor group {key}. Got {data.shape}."
                 )
 
-            start = self._factor_group_to_potentials_starts[factor_group]
-            self.value = (
+            start = self.fg_state.factor_group_to_potentials_starts[factor_group]
+            object.__setattr__(
+                self,
+                "value",
                 jax.device_put(self.value)
                 .at[start : start + factor_group.factor_group_log_potentials.shape[0]]
-                .set(data)
+                .set(data),
             )
-        elif frozenset(key) in self._variables_to_factors:
-            factor = self._variables_to_factors[frozenset(key)]
+        elif frozenset(key) in self.fg_state.variables_to_factors:
+            factor = self.fg_state.variables_to_factors[frozenset(key)]
             if data.shape != factor.log_potentials.shape:
                 raise ValueError(
                     f"Expected log potentials shape {factor.log_potentials.shape} "
                     f"for factor {key}. Got {data.shape}."
                 )
 
-            start = self._factor_to_potentials_starts[factor]
-            self.value = (
+            start = self.fg_state.factor_to_potentials_starts[factor]
+            object.__setattr__(
+                self,
+                "value",
                 jax.device_put(self.value)
                 .at[start : start + factor.log_potentials.shape[0]]
-                .set(data)
+                .set(data),
             )
         else:
             raise ValueError("")
 
 
+@dataclass(frozen=True, eq=False)
 class FToVMessages:
     """Class for storing and manipulating factor to variable messages.
 
@@ -460,44 +507,43 @@ class FToVMessages:
             Maps starting indices to the message values to update with.
     """
 
-    def __init__(
-        self,
-        factor_graph: FactorGraph,
-        default_mode: Optional[str] = None,
-        value: Optional[Union[np.ndarray, jnp.ndarray]] = None,
-    ):
-        if default_mode is not None and value is not None:
+    fg_state: FactorGraphState
+    default_mode: Optional[str] = None
+    value: Optional[Union[np.ndarray, jnp.ndarray]] = None
+
+    def __post_init__(self):
+        if self.default_mode is not None and self.value is not None:
             raise ValueError("Should specify only one of default_mode and value.")
 
-        if default_mode is None and value is None:
-            default_mode = "zeros"
+        if self.default_mode is None and self.value is None:
+            object.__setattr__(self, "default_mode", "zeros")
 
-        if value is None:
-            if default_mode == "zeros":
-                self.value = jnp.zeros(factor_graph._total_factor_num_states)
-            elif default_mode == "random":
-                self.value = jax.device_put(
-                    np.random.gumbel(size=(factor_graph._total_factor_num_states,))
+        if self.value is None:
+            if self.default_mode == "zeros":
+                object.__setattr__(
+                    self, "value", jnp.zeros(self.fg_state.total_factor_num_states)
+                )
+            elif self.default_mode == "random":
+                object.__setattr__(
+                    self,
+                    "value",
+                    jax.device_put(
+                        np.random.gumbel(size=(self.fg_state.total_factor_num_states,))
+                    ),
                 )
             else:
                 raise ValueError(
-                    f"Unsupported default message mode {default_mode}. "
+                    f"Unsupported default message mode {self.default_mode}. "
                     "Supported default modes are zeros or random"
                 )
         else:
-            if not value.shape == (factor_graph._total_factor_num_states,):
+            if not self.value.shape == (self.fg_state.total_factor_num_states,):
                 raise ValueError(
-                    f"Expected messages shape {(factor_graph._total_factor_num_states,)}. "
-                    f"Got {value.shape}."
+                    f"Expected messages shape {(self.fg_state.total_factor_num_states,)}. "
+                    f"Got {self.value.shape}."
                 )
 
-            self.value = jax.device_put(value)
-
-        self._variable_group = factor_graph._variable_group
-        self._vars_to_starts = factor_graph._vars_to_starts
-        self._variables_to_factors = copy.copy(factor_graph._variables_to_factors)
-        self._factor_to_msgs_starts = copy.copy(factor_graph._factor_to_msgs_starts)
-        self._var_states_for_edges = factor_graph.wiring.var_states_for_edges
+            object.__setattr__(self, "value", jax.device_put(self.value))
 
     def __getitem__(self, keys: Tuple[Any, Any]) -> jnp.ndarray:
         """Function to query messages from a factor to a variable
@@ -513,16 +559,16 @@ class FToVMessages:
         if not (
             isinstance(keys, tuple)
             and len(keys) == 2
-            and keys[1] in self._variable_group.keys
+            and keys[1] in self.fg_state.variable_group.keys
         ):
             raise ValueError(
                 f"Invalid keys {keys}. Please specify a tuple of factor, variable "
                 "keys to get the messages from a named factor to a variable"
             )
 
-        factor = self._variables_to_factors[frozenset(keys[0])]
-        variable = self._variable_group[keys[1]]
-        start = self._factor_to_msgs_starts[factor] + np.sum(
+        factor = self.fg_state.variables_to_factors[frozenset(keys[0])]
+        variable = self.fg_state.variable_group[keys[1]]
+        start = self.fg_state.factor_to_msgs_starts[factor] + np.sum(
             factor.edges_num_states[: factor.variables.index(variable)]
         )
         msgs = jax.device_put(self.value)[start : start + variable.num_states]
@@ -563,11 +609,11 @@ class FToVMessages:
         if (
             isinstance(keys, tuple)
             and len(keys) == 2
-            and keys[1] in self._variable_group.keys
+            and keys[1] in self.fg_state.variable_group.keys
         ):
-            factor = self._variables_to_factors[frozenset(keys[0])]
-            variable = self._variable_group[keys[1]]
-            start = self._factor_to_msgs_starts[factor] + np.sum(
+            factor = self.fg_state.variables_to_factors[frozenset(keys[0])]
+            variable = self.fg_state.variable_group[keys[1]]
+            start = self.fg_state.factor_to_msgs_starts[factor] + np.sum(
                 factor.edges_num_states[: factor.variables.index(variable)]
             )
             if data.shape != (variable.num_states,):
@@ -577,13 +623,15 @@ class FToVMessages:
                     f"to variable {keys[1]}."
                 )
 
-            self.value = (
+            object.__setattr__(
+                self,
+                "value",
                 jax.device_put(self.value)
                 .at[start : start + variable.num_states]
-                .set(data)
+                .set(data),
             )
-        elif keys in self._variable_group.keys:
-            variable = self._variable_group[keys]
+        elif keys in self.fg_state.variable_group.keys:
+            variable = self.fg_state.variable_group[keys]
             if data.shape != (variable.num_states,):
                 raise ValueError(
                     f"Given belief shape {data.shape} does not match expected "
@@ -591,13 +639,16 @@ class FToVMessages:
                 )
 
             starts = np.nonzero(
-                self._var_states_for_edges == self._vars_to_starts[variable]
+                self.fg_state.wiring.var_states_for_edges
+                == self.fg_state.vars_to_starts[variable]
             )[0]
             for start in starts:
-                self.value = (
+                object.__setattr__(
+                    self,
+                    "value",
                     jax.device_put(self.value)
                     .at[start : start + variable.num_states]
-                    .st(data / starts.shape[0])
+                    .st(data / starts.shape[0]),
                 )
         else:
             raise ValueError(
@@ -609,6 +660,7 @@ class FToVMessages:
             )
 
 
+@dataclass(frozen=True, eq=False)
 class Evidence:
     """Class for storing and manipulating evidence
 
@@ -624,36 +676,38 @@ class Evidence:
             representing the evidence for that variable
     """
 
-    def __init__(
-        self,
-        factor_graph: FactorGraph,
-        default_mode: Optional[str] = None,
-        value: Optional[Union[np.ndarray, jnp.ndarray]] = None,
-    ):
-        if default_mode is not None and value is not None:
+    fg_state: FactorGraphState
+    default_mode: Optional[str] = None
+    value: Optional[Union[np.ndarray, jnp.ndarray]] = None
+
+    def __post_init__(self):
+        if self.default_mode is not None and self.value is not None:
             raise ValueError("Should specify only one of default_mode and value.")
 
-        if default_mode is None and value is None:
-            default_mode = "zeros"
+        if self.default_mode is None and self.value is None:
+            object.__setattr__(self, "default_mode", "zeros")
 
-        if value is None and default_mode not in ("zeros", "random"):
+        if self.value is None and self.default_mode not in ("zeros", "random"):
             raise ValueError(
-                f"Unsupported default evidence mode {default_mode}. "
+                f"Unsupported default evidence mode {self.default_mode}. "
                 "Supported default modes are zeros or random"
             )
 
-        if value is None:
-            if default_mode == "zeros":
-                self.value = jnp.zeros(factor_graph.num_var_states)
+        if self.value is None:
+            if self.default_mode == "zeros":
+                object.__setattr__(
+                    self, "value", jnp.zeros(self.fg_state.num_var_states)
+                )
             else:
-                self.value = jax.device_put(
-                    np.random.gumbel(size=(factor_graph.num_var_states,))
+                object.__setattr__(
+                    self,
+                    "value",
+                    jax.device_put(
+                        np.random.gumbel(size=(self.fg_state.num_var_states,))
+                    ),
                 )
         else:
-            self.value = jax.device_put(value)
-
-        self._variable_group = factor_graph._variable_group
-        self._vars_to_starts = factor_graph._vars_to_starts
+            object.__setattr__(self, "value", jax.device_put(self.value))
 
     def __getitem__(self, key: Any) -> jnp.ndarray:
         """Function to query evidence for a variable
@@ -664,8 +718,8 @@ class Evidence:
         Returns:
             evidence for the queried variable
         """
-        variable = self._variable_group[key]
-        start = self._vars_to_starts[variable]
+        variable = self.fg_state.variable_group[key]
+        start = self.fg_state.vars_to_starts[variable]
         evidence = jax.device_put(self.value)[start : start + variable.num_states]
         return evidence
 
@@ -678,7 +732,7 @@ class Evidence:
 
         Args:
             key: tuple that represents the index into the VariableGroup
-                (self._variable_group) that is created when the FactorGraph is instantiated. Note that
+                (self.fg_state.variable_group) that is created when the FactorGraph is instantiated. Note that
                 this can be an index referring to an entire VariableGroup (in which case, the evidence
                 is set for the entire VariableGroup at once), or to an individual Variable within the
                 VariableGroup.
@@ -696,43 +750,33 @@ class Evidence:
                 Note that each np.ndarray in the dictionary values must have the same size as
                 variable_group.variable_size.
         """
-        if key in self._variable_group.container_keys:
+        if key in self.fg_state.variable_group.container_keys:
             if key == slice(None):
-                variable_group = self._variable_group
+                variable_group = self.fg_state.variable_group
             else:
-                variable_group = self._variable_group.variable_group_container[key]
+                assert isinstance(
+                    self.fg_state.variable_group, groups.CompositeVariableGroup
+                )
+                variable_group = self.fg_state.variable_group[key]
 
             for var, evidence_val in variable_group.get_vars_to_evidence(
                 evidence
             ).items():
-                start_index = self._vars_to_starts[var]
-                self.value = (
+                start_index = self.fg_state.vars_to_starts[var]
+                object.__setattr__(
+                    self,
+                    "value",
                     jax.device_put(self.value)
                     .at[start_index : start_index + evidence_val.shape[0]]
-                    .set(evidence_val)
+                    .set(evidence_val),
                 )
         else:
-            var = self._variable_group[key]
-            start_index = self._vars_to_starts[var]
-            self.value = (
+            var = self.fg_state.variable_group[key]
+            start_index = self.fg_state.vars_to_starts[var]
+            object.__setattr__(
+                self,
+                "value",
                 jax.device_put(self.value)
                 .at[start_index : start_index + var.num_states]
-                .set(evidence)
+                .set(evidence),
             )
-
-
-@dataclass
-class BPState:
-    """Container class for belief propagation states, including log potentials,
-    ftov messages and evidence (unary log potentials).
-
-    Args:
-        log_potentials: log potentials of the model
-        ftov: factor to variable messages
-        evidence: evidence
-    """
-
-    wiring: nodes.EnumerationWiring
-    log_potentials: LogPotentials
-    ftov: FToVMessages
-    evidence: Evidence
