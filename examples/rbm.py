@@ -47,23 +47,21 @@ for ii in range(nh):
         )
 
 # %%
-run_bp, get_bp_state = graph.BP(fg.bp_state, 100)
+run_bp, _, _, decode_map_states = graph.BP(fg.bp_state, 100)
 
 # %%
 # Run inference and decode
-bp_state = get_bp_state(
-    run_bp(
-        evidence_updates={
-            "hidden": np.stack(
-                [np.zeros_like(bh), bh + np.random.logistic(size=bh.shape)], axis=1
-            ),
-            "visible": np.stack(
-                [np.zeros_like(bv), bv + np.random.logistic(size=bv.shape)], axis=1
-            ),
-        }
-    )
+bp_arrays = run_bp(
+    evidence_updates={
+        "hidden": np.stack(
+            [np.zeros_like(bh), bh + np.random.logistic(size=bh.shape)], axis=1
+        ),
+        "visible": np.stack(
+            [np.zeros_like(bv), bv + np.random.logistic(size=bv.shape)], axis=1
+        ),
+    }
 )
-map_states = graph.decode_map_states(bp_state)
+map_states = decode_map_states(bp_arrays)
 
 # %%
 # Visualize decodings

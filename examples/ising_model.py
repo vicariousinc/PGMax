@@ -46,16 +46,16 @@ fg.add_factor(
 # ### Run inference and visualize results
 
 # %%
-run_bp, get_bp_state = graph.BP(fg.bp_state, 3000)
+bp_state = fg.bp_state
+run_bp, _, _, decode_map_states = graph.BP(bp_state, 3000)
 
 # %%
-ftov_msgs = run_bp(
+bp_arrays = run_bp(
     evidence_updates={None: jax.device_put(np.random.gumbel(size=(50, 50, 2)))}
 )
-bp_state = get_bp_state(ftov_msgs)
 
 # %%
-img = graph.decode_map_states(bp_state)
+img = decode_map_states(bp_arrays)
 fig, ax = plt.subplots(1, 1, figsize=(10, 10))
 ax.imshow(img)
 
