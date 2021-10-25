@@ -4,7 +4,7 @@ from __future__ import annotations
 import collections
 import copy
 import typing
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass
 from types import MappingProxyType
 from typing import (
     Any,
@@ -24,7 +24,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from pgmax.bp import infer
-from pgmax.fg import fg_utils, graph, groups, nodes
+from pgmax.fg import fg_utils, groups, nodes
 from pgmax.utils import cached_property
 
 
@@ -669,11 +669,31 @@ class Evidence:
         )
 
 
-def BP(bp_state: graph.BPState, num_iters: int):
-    max_msg_size = int(jnp.max(bp_state.fg_state.wiring.edges_num_states))
-    num_val_configs = (
-        int(bp_state.fg_state.wiring.factor_configs_edge_states[-1, 0]) + 1
-    )
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True, eq=False)
+class BPArrays:
+
+    log_potentials: Union[np.ndarray, jnp.ndarray]
+    ftov_msgs: Union[np.ndarray, jnp.ndarray]
+    evidence: Union[np.ndarray, jnp.ndarray]
+
+    def __post_init__(self):
+        for field in self.__dataclass_fields__:
+            if isinstance(getattr(self, field), np.ndarray):
+                getattr(self, field).flags.writeable = False
+
+    def tree_flatten(self):
+        return jax.tree_util.tree_flatten(asdict(self))
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        return cls(**aux_data.unflatten(children))
+
+
+def BP(bp_state: BPState, num_iters: int):
+    wiring = jax.device_put(bp_state.fg_state.wiring)
+    max_msg_size = int(jnp.max(wiring.edges_num_states))
+    num_val_configs = int(wiring.factor_configs_edge_states[-1, 0]) + 1
 
     @jax.jit
     def run_bp(
@@ -681,7 +701,7 @@ def BP(bp_state: graph.BPState, num_iters: int):
         ftov_msgs_updates: Optional[Dict[Any, jnp.ndarray]] = None,
         evidence_updates: Optional[Dict[Any, jnp.ndarray]] = None,
         damping: float = 0.5,
-    ):
+    ) -> BPArrays:
         """Function to perform belief propagation.
 
         Specifically, belief propagation is run for num_iters iterations and
@@ -699,23 +719,20 @@ def BP(bp_state: graph.BPState, num_iters: int):
         # convert these to jax arrays.
         log_potentials = jax.device_put(bp_state.log_potentials.value)
         if log_potentials_updates is not None:
-            log_potentials = graph.update_log_potentials(
+            log_potentials = update_log_potentials(
                 log_potentials, log_potentials_updates, bp_state.fg_state
             )
 
         ftov_msgs = jax.device_put(bp_state.ftov_msgs.value)
         if ftov_msgs_updates is not None:
-            ftov_msgs = graph.update_ftov_msgs(
+            ftov_msgs = update_ftov_msgs(
                 ftov_msgs, ftov_msgs_updates, bp_state.fg_state
             )
 
         evidence = jax.device_put(bp_state.evidence.value)
         if evidence_updates is not None:
-            evidence = graph.update_evidence(
-                evidence, evidence_updates, bp_state.fg_state
-            )
+            evidence = update_evidence(evidence, evidence_updates, bp_state.fg_state)
 
-        wiring = jax.device_put(bp_state.fg_state.wiring)
         # Normalize the messages to ensure the maximum value is 0.
         ftov_msgs = infer.normalize_and_clip_msgs(
             ftov_msgs, wiring.edges_num_states, max_msg_size
@@ -749,22 +766,45 @@ def BP(bp_state: graph.BPState, num_iters: int):
             return msgs, None
 
         ftov_msgs, _ = jax.lax.scan(update, ftov_msgs, None, num_iters)
-        return ftov_msgs
-
-    def get_bp_state(ftov_msgs):
-        return replace(
-            bp_state,
-            ftov_msgs=graph.FToVMessages(
-                fg_state=bp_state.ftov_msgs.fg_state, value=ftov_msgs
-            ),
+        return BPArrays(
+            log_potentials=log_potentials, ftov_msgs=ftov_msgs, evidence=evidence
         )
 
-    return run_bp, get_bp_state
+    def get_bp_state(bp_arrays: BPArrays) -> BPState:
+        return BPState(
+            log_potentials=LogPotentials(
+                fg_state=bp_state.fg_state, value=bp_arrays.log_potentials
+            ),
+            ftov_msgs=FToVMessages(
+                fg_state=bp_state.fg_state,
+                value=bp_arrays.ftov_msgs,
+            ),
+            evidence=Evidence(fg_state=bp_state.fg_state, value=bp_arrays.evidence),
+        )
+
+    @jax.jit
+    def get_beliefs(bp_arrays: BPArrays):
+        evidence = jax.device_put(bp_arrays.evidence)
+        beliefs = bp_state.fg_state.variable_group.unflatten(
+            evidence.at[wiring.var_states_for_edges].add(bp_arrays.ftov_msgs)
+        )
+        return beliefs
+
+    @jax.jit
+    def decode_map_states(bp_arrays: BPArrays):
+        evidence = jax.device_put(bp_arrays.evidence)
+        map_states = jax.tree_util.tree_map(
+            lambda x: jnp.argmax(x, axis=-1),
+            bp_state.fg_state.variable_group.unflatten(
+                evidence.at[wiring.var_states_for_edges].add(bp_arrays.ftov_msgs)
+            ),
+        )
+        return map_states
+
+    return run_bp, get_bp_state, get_beliefs, decode_map_states
 
 
-def decode_map_states(
-    bp_state: graph.BPState,
-):
+def decode_map_states(bp_state: BPState):
     var_states_for_edges = jax.device_put(bp_state.fg_state.wiring.var_states_for_edges)
     evidence = jax.device_put(bp_state.evidence.value)
     map_states = jax.tree_util.tree_map(

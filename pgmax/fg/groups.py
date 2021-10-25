@@ -341,9 +341,11 @@ class NDVariableArray(VariableGroup):
             )
 
         if flat_data.size == np.product(self.shape):
-            data = flat_data.reshape(self.shape).copy()
+            data = np.array(flat_data.reshape(self.shape), copy=True)
         elif flat_data.size == np.product(self.shape) * self.variable_size:
-            data = flat_data.reshape(self.shape + (self.variable_size,)).copy()
+            data = np.array(
+                flat_data.reshape(self.shape + (self.variable_size,)), copy=True
+            )
         else:
             raise ValueError(
                 f"flat_data should be compatible with shape {self.shape} or {self.shape + (self.variable_size,)}. "
@@ -420,10 +422,12 @@ class VariableDict(VariableGroup):
         data = {}
         for key in self.variable_names:
             if use_num_states:
-                data[key] = flat_data[start : start + self.variable_size]
+                data[key] = np.array(
+                    flat_data[start : start + self.variable_size], copy=True
+                )
                 start += self.variable_size
             else:
-                data[key] = flat_data[start]
+                data[key] = np.array(flat_data[start], copy=True)
                 start += 1
 
         return data
@@ -610,10 +614,47 @@ class EnumerationFactorGroup(FactorGroup):
         return variables_to_factors
 
     def flatten(self, data: np.ndarray) -> np.ndarray:
-        pass
+        num_factors = len(self.factors)
+        if data.shape != (num_factors, self.factor_configs.shape[0]) and data.shape != (
+            num_factors,
+            np.sum(self.factors[0].edges_num_states),
+        ):
+            raise ValueError(
+                f"data should be of shape {(num_factors, self.factor_configs.shape[0])} or "
+                f"{( num_factors, np.sum(self.factors[0].edges_num_states))}. "
+                f"Got {data.shape}."
+            )
+
+        return data.flatten()
 
     def unflatten(self, flat_data: np.ndarray) -> np.ndarray:
-        pass
+        if flat_data.ndim != 1:
+            raise ValueError(
+                f"Can only unflatten 1D array. Got an {flat_data.ndim}D array."
+            )
+
+        num_factors = len(self.factors)
+        if flat_data.size == num_factors * self.factor_configs.shape[0]:
+            data = np.array(
+                flat_data.reshape(
+                    (num_factors, self.factor_configs.shape[0]),
+                    copy=True,
+                )
+            )
+        elif flat_data.size == num_factors * np.sum(self.factors[0].edges_num_states):
+            data = np.array(
+                flat_data.reshape(
+                    (num_factors, np.sum(self.factors[0].edges_num_states))
+                ),
+                copy=True,
+            )
+        else:
+            raise ValueError(
+                f"flat_data should be compatible with shape {(num_factors, self.factor_configs.shape[0])} "
+                f"or (num_factors, np.sum(self.factors[0].edges_num_states)). Got {flat_data.shape}."
+            )
+
+        return data
 
 
 @dataclass(frozen=True, eq=False)
@@ -724,7 +765,7 @@ class PairwiseFactorGroup(FactorGroup):
             -2:
         ] and data.shape != (num_factors, np.sum(self.log_potential_matrix.shape[-2:])):
             raise ValueError(
-                f"data should be of shape {(num_factors,)} or "
+                f"data should be of shape {(num_factors,) + self.log_potential_matrix.shape[-2:]} or "
                 f"{(num_factors, np.sum(self.log_potential_matrix.shape[-2:]))}. "
                 f"Got {data.shape}."
             )
@@ -741,15 +782,21 @@ class PairwiseFactorGroup(FactorGroup):
         if flat_data.size == num_factors * np.product(
             self.log_potential_matrix.shape[-2:]
         ):
-            data = flat_data.reshape(
-                (num_factors,) + self.log_potential_matrix.shape[-2:]
-            ).copy()
+            data = np.array(
+                flat_data.reshape(
+                    (num_factors,) + self.log_potential_matrix.shape[-2:]
+                ),
+                copy=True,
+            )
         elif flat_data.size == num_factors * np.sum(
             self.log_potential_matrix.shape[-2:]
         ):
-            data = flat_data.reshape(
-                (num_factors, np.sum(self.log_potential_matrix.shape[-2:]))
-            ).copy()
+            data = np.array(
+                flat_data.reshape(
+                    (num_factors, np.sum(self.log_potential_matrix.shape[-2:]))
+                ),
+                copy=True,
+            )
         else:
             raise ValueError(
                 f"flat_data should be compatible with shape {(num_factors,) + self.log_potential_matrix.shape[-2:]} "
