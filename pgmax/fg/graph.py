@@ -263,7 +263,7 @@ class FactorGraph:
     def bp_state(self) -> BPState:
         return BPState(
             log_potentials=LogPotentials(fg_state=self.fg_state),
-            ftov=FToVMessages(fg_state=self.fg_state),
+            ftov_msgs=FToVMessages(fg_state=self.fg_state),
             evidence=Evidence(fg_state=self.fg_state),
         )
 
@@ -288,7 +288,7 @@ class FactorGraph:
         """
         # Retrieve the necessary data structures from the compiled self.wiring and
         # convert these to jax arrays.
-        msgs = jax.device_put(bp_state.ftov.value)
+        msgs = jax.device_put(bp_state.ftov_msgs.value)
         evidence = jax.device_put(bp_state.evidence.value)
         wiring = jax.device_put(bp_state.fg_state.wiring)
         log_potentials = jax.device_put(bp_state.log_potentials.value)
@@ -331,7 +331,9 @@ class FactorGraph:
         msgs_after_bp, _ = jax.lax.scan(message_passing_step, msgs, None, num_iters)
         return replace(
             bp_state,
-            ftov=FToVMessages(fg_state=bp_state.ftov.fg_state, value=msgs_after_bp),
+            ftov_msgs=FToVMessages(
+                fg_state=bp_state.ftov_msgs.fg_state, value=msgs_after_bp
+            ),
         )
 
     def decode_map_states(self, bp_state: BPState) -> Dict[Tuple[Any, ...], int]:
@@ -350,11 +352,13 @@ class FactorGraph:
             bp_state.fg_state.wiring.var_states_for_edges
         )
         evidence = jax.device_put(bp_state.evidence.value)
-        final_var_states = evidence.at[var_states_for_edges].add(bp_state.ftov.value)
+        final_var_states = evidence.at[var_states_for_edges].add(
+            bp_state.ftov_msgs.value
+        )
         var_key_to_map_dict: Dict[Tuple[Any, ...], int] = {}
-        for var_key in bp_state.ftov.fg_state.variable_group.keys:
-            var = bp_state.ftov.fg_state.variable_group[var_key]
-            start_index = bp_state.ftov.fg_state.vars_to_starts[var]
+        for var_key in bp_state.ftov_msgs.fg_state.variable_group.keys:
+            var = bp_state.ftov_msgs.fg_state.variable_group[var_key]
+            start_index = bp_state.ftov_msgs.fg_state.vars_to_starts[var]
             var_key_to_map_dict[var_key] = int(
                 jnp.argmax(final_var_states[start_index : start_index + var.num_states])
             )
@@ -392,20 +396,20 @@ class BPState:
 
     Args:
         log_potentials: log potentials of the model
-        ftov: factor to variable messages
+        ftov_msgs: factor to variable messages
         evidence: evidence
     """
 
     log_potentials: LogPotentials
-    ftov: FToVMessages
+    ftov_msgs: FToVMessages
     evidence: Evidence
 
     def __post_init__(self):
-        if (self.log_potentials.fg_state != self.ftov.fg_state) or (
-            self.ftov.fg_state != self.evidence.fg_state
+        if (self.log_potentials.fg_state != self.ftov_msgs.fg_state) or (
+            self.ftov_msgs.fg_state != self.evidence.fg_state
         ):
             raise ValueError(
-                "log_potentials, ftov and evidence should be derived from the same fg_state."
+                "log_potentials, ftov_msgs and evidence should be derived from the same fg_state."
             )
 
     @property
