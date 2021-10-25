@@ -5,7 +5,7 @@ from __future__ import annotations
 import collections
 import copy
 import typing
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from types import MappingProxyType
 from typing import (
     Any,
@@ -24,7 +24,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from pgmax.bp import infer
 from pgmax.fg import fg_utils, groups, nodes
 from pgmax.utils import cached_property
 
@@ -265,75 +264,6 @@ class FactorGraph:
             log_potentials=LogPotentials(fg_state=self.fg_state),
             ftov_msgs=FToVMessages(fg_state=self.fg_state),
             evidence=Evidence(fg_state=self.fg_state),
-        )
-
-    def run_bp(
-        self,
-        num_iters: int,
-        damping_factor: float,
-        bp_state: BPState,
-    ) -> BPState:
-        """Function to perform belief propagation.
-
-        Specifically, belief propagation is run for num_iters iterations and
-        returns the resulting messages.
-
-        Args:
-            num_iters: The number of iterations for which to perform message passing
-            damping_factor: The damping factor to use for message updates between one timestep and the next
-            bp_state: Initial messages to start the belief propagation.
-
-        Returns:
-            ftov messages after running BP for num_iters iterations
-        """
-        # Retrieve the necessary data structures from the compiled self.wiring and
-        # convert these to jax arrays.
-        msgs = jax.device_put(bp_state.ftov_msgs.value)
-        evidence = jax.device_put(bp_state.evidence.value)
-        wiring = jax.device_put(bp_state.fg_state.wiring)
-        log_potentials = jax.device_put(bp_state.log_potentials.value)
-        max_msg_size = int(jnp.max(wiring.edges_num_states))
-
-        # Normalize the messages to ensure the maximum value is 0.
-        msgs = infer.normalize_and_clip_msgs(
-            msgs, wiring.edges_num_states, max_msg_size
-        )
-        num_val_configs = int(wiring.factor_configs_edge_states[-1, 0]) + 1
-
-        @jax.jit
-        def message_passing_step(msgs, _):
-            # Compute new variable to factor messages by message passing
-            vtof_msgs = infer.pass_var_to_fac_messages(
-                msgs,
-                evidence,
-                wiring.var_states_for_edges,
-            )
-            # Compute new factor to variable messages by message passing
-            ftov_msgs = infer.pass_fac_to_var_messages(
-                vtof_msgs,
-                wiring.factor_configs_edge_states,
-                log_potentials,
-                num_val_configs,
-            )
-            # Use the results of message passing to perform damping and
-            # update the factor to variable messages
-            delta_msgs = ftov_msgs - msgs
-            msgs = msgs + (1 - damping_factor) * delta_msgs
-            # Normalize and clip these damped, updated messages before returning
-            # them.
-            msgs = infer.normalize_and_clip_msgs(
-                msgs,
-                wiring.edges_num_states,
-                max_msg_size,
-            )
-            return msgs, None
-
-        msgs_after_bp, _ = jax.lax.scan(message_passing_step, msgs, None, num_iters)
-        return replace(
-            bp_state,
-            ftov_msgs=FToVMessages(
-                fg_state=bp_state.ftov_msgs.fg_state, value=msgs_after_bp
-            ),
         )
 
     def decode_map_states(self, bp_state: BPState) -> Dict[Tuple[Any, ...], int]:
