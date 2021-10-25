@@ -266,35 +266,6 @@ class FactorGraph:
             evidence=Evidence(fg_state=self.fg_state),
         )
 
-    def decode_map_states(self, bp_state: BPState) -> Dict[Tuple[Any, ...], int]:
-        """Function to computes the output of MAP inference on input messages.
-
-        The final states are computed based on evidence obtained from the self.get_evidence
-        method as well as the internal wiring.
-
-        Args:
-            bp_state: ftov messages for deciding MAP states
-
-        Returns:
-            a dictionary mapping each variable key to the MAP states of the corresponding variable
-        """
-        var_states_for_edges = jax.device_put(
-            bp_state.fg_state.wiring.var_states_for_edges
-        )
-        evidence = jax.device_put(bp_state.evidence.value)
-        final_var_states = evidence.at[var_states_for_edges].add(
-            bp_state.ftov_msgs.value
-        )
-        var_key_to_map_dict: Dict[Tuple[Any, ...], int] = {}
-        for var_key in bp_state.ftov_msgs.fg_state.variable_group.keys:
-            var = bp_state.ftov_msgs.fg_state.variable_group[var_key]
-            start_index = bp_state.ftov_msgs.fg_state.vars_to_starts[var]
-            var_key_to_map_dict[var_key] = int(
-                jnp.argmax(final_var_states[start_index : start_index + var.num_states])
-            )
-
-        return var_key_to_map_dict
-
 
 @dataclass(frozen=True, eq=False)
 class FactorGraphState:

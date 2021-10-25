@@ -1,5 +1,5 @@
 from dataclasses import replace
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -91,3 +91,31 @@ def BP(bp_state: graph.BPState, num_iters: int):
                 fg_state=bp_state.ftov_msgs.fg_state, value=ftov_msgs
             ),
         )
+
+
+def DecodeMAPState(bp_state: graph.BPState):
+    @jax.jit
+    def decode_map_state(
+        variable_name: Any = None,
+    ) -> Union[int, Dict[Tuple[Any, ...], int]]:
+        var_states_for_edges = jax.device_put(
+            bp_state.fg_state.wiring.var_states_for_edges
+        )
+        evidence = jax.device_put(bp_state.evidence.value)
+        beliefs = evidence.at[var_states_for_edges].add(bp_state.ftov_msgs.value)
+        if variable_name is None:
+            variables_to_map_states: Dict[Tuple[Any, ...], int] = {}
+            for variable_name in bp_state.ftov_msgs.fg_state.variable_group.keys:
+                variable = bp_state.ftov_msgs.fg_state.variable_group[variable_name]
+                start_index = bp_state.ftov_msgs.fg_state.vars_to_starts[variable]
+                variables_to_map_states[variable_name] = int(
+                    jnp.argmax(beliefs[start_index : start_index + variable.num_states])
+                )
+
+            return variables_to_map_states
+        else:
+            variable = bp_state.ftov_msgs.fg_state.variable_group[variable_name]
+            start_index = bp_state.ftov_msgs.fg_state.vars_to_starts[variable]
+            return int(
+                jnp.argmax(beliefs[start_index : start_index + variable.num_states])
+            )
