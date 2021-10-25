@@ -335,6 +335,11 @@ class NDVariableArray(VariableGroup):
         return data.flatten()
 
     def unflatten(self, flat_data: Union[np.ndarray, jnp.ndarray]) -> np.ndarray:
+        if flat_data.ndim != 1:
+            raise ValueError(
+                f"Can only unflatten 1D array. Got an {flat_data.ndim}D array."
+            )
+
         if flat_data.size == np.product(self.shape):
             data = flat_data.reshape(self.shape).copy()
         elif flat_data.size == np.product(self.shape) * self.variable_size:
@@ -393,6 +398,11 @@ class VariableDict(VariableGroup):
     def unflatten(
         self, flat_data: Union[np.ndarray, jnp.ndarray]
     ) -> Dict[Hashable, np.ndarray]:
+        if flat_data.ndim != 1:
+            raise ValueError(
+                f"Can only unflatten 1D array. Got an {flat_data.ndim}D array."
+            )
+
         num_variables = len(self.variable_names)
         num_variable_states = len(self.variable_names) * self.variable_size
         if flat_data.shape[0] == num_variables:
@@ -521,6 +531,16 @@ class FactorGroup:
         )
         return factor_num_states
 
+    def flatten(self, data: np.ndarray) -> np.ndarray:
+        raise NotImplementedError(
+            "Please subclass the FactorGroup class and override this method"
+        )
+
+    def unflatten(self, flat_data: Union[np.ndarray, jnp.ndarray]) -> np.ndarray:
+        raise NotImplementedError(
+            "Please subclass the FactorGroup class and override this method"
+        )
+
 
 @dataclass(frozen=True, eq=False)
 class EnumerationFactorGroup(FactorGroup):
@@ -588,6 +608,12 @@ class EnumerationFactorGroup(FactorGroup):
             ]
         )
         return variables_to_factors
+
+    def flatten(self, data: np.ndarray) -> np.ndarray:
+        pass
+
+    def unflatten(self, flat_data: np.ndarray) -> np.ndarray:
+        pass
 
 
 @dataclass(frozen=True, eq=False)
@@ -663,9 +689,14 @@ class PairwiseFactorGroup(FactorGroup):
                     "(with {self.log_potential_matrix.shape[-2:]} configurations)."
                 )
 
-        factor_configs = np.mgrid[
-            : self.log_potential_matrix.shape[0], : self.log_potential_matrix.shape[1]
-        ].T.reshape((-1, 2))
+        factor_configs = (
+            np.mgrid[
+                : self.log_potential_matrix.shape[0],
+                : self.log_potential_matrix.shape[1],
+            ]
+            .transpose((1, 2, 0))
+            .reshape((-1, 2))
+        )
         log_potential_matrix = np.broadcast_to(
             self.log_potential_matrix,
             (len(self.connected_var_keys),) + self.log_potential_matrix.shape[-2:],
@@ -686,3 +717,43 @@ class PairwiseFactorGroup(FactorGroup):
             ]
         )
         return variables_to_factors
+
+    def flatten(self, data: np.ndarray) -> np.ndarray:
+        num_factors = len(self.factors)
+        if data.shape != (num_factors,) + self.log_potential_matrix.shape[
+            -2:
+        ] and data.shape != (num_factors, np.sum(self.log_potential_matrix.shape[-2:])):
+            raise ValueError(
+                f"data should be of shape {(num_factors,)} or "
+                f"{(num_factors, np.sum(self.log_potential_matrix.shape[-2:]))}. "
+                f"Got {data.shape}."
+            )
+
+        return data.flatten()
+
+    def unflatten(self, flat_data: np.ndarray) -> np.ndarray:
+        if flat_data.ndim != 1:
+            raise ValueError(
+                f"Can only unflatten 1D array. Got an {flat_data.ndim}D array."
+            )
+
+        num_factors = len(self.factors)
+        if flat_data.size == num_factors * np.product(
+            self.log_potential_matrix.shape[-2:]
+        ):
+            data = flat_data.reshape(
+                (num_factors,) + self.log_potential_matrix.shape[-2:]
+            ).copy()
+        elif flat_data.size == num_factors * np.sum(
+            self.log_potential_matrix.shape[-2:]
+        ):
+            data = flat_data.reshape(
+                (num_factors, np.sum(self.log_potential_matrix.shape[-2:]))
+            ).copy()
+        else:
+            raise ValueError(
+                f"flat_data should be compatible with shape {(num_factors,) + self.log_potential_matrix.shape[-2:]} "
+                f"or (num_factors, np.sum(self.log_potential_matrix.shape[-2:])). Got {flat_data.shape}."
+            )
+
+        return data
