@@ -413,6 +413,44 @@ class BPState:
         return self.log_potentials.fg_state
 
 
+@jax.partial(jax.jit, static_argnames="fg_state")
+def update_log_potentials(
+    log_potentials: jnp.ndarray,
+    updates: Dict[Any, jnp.ndarray],
+    fg_state: FactorGraphState,
+) -> jnp.ndarray:
+    for key in updates:
+        data = updates[key]
+        if key in fg_state.named_factor_groups:
+            factor_group = fg_state.named_factor_groups[key]
+            if data.shape != factor_group.factor_group_log_potentials.shape:
+                raise ValueError(
+                    f"Expected log potentials shape {factor_group.factor_group_log_potentials.shape} "
+                    f"for factor group {key}. Got {data.shape}."
+                )
+
+            start = fg_state.factor_group_to_potentials_starts[factor_group]
+            log_potentials = log_potentials.at[
+                start : start + factor_group.factor_group_log_potentials.shape[0]
+            ].set(data)
+        elif frozenset(key) in fg_state.variables_to_factors:
+            factor = fg_state.variables_to_factors[frozenset(key)]
+            if data.shape != factor.log_potentials.shape:
+                raise ValueError(
+                    f"Expected log potentials shape {factor.log_potentials.shape} "
+                    f"for factor {key}. Got {data.shape}."
+                )
+
+            start = fg_state.factor_to_potentials_starts[factor]
+            log_potentials = log_potentials.at[
+                start : start + factor.log_potentials.shape[0]
+            ].set(data)
+        else:
+            raise ValueError(f"Invalid key {key} for log potentials updates.")
+
+    return log_potentials
+
+
 @dataclass(frozen=True, eq=False)
 class LogPotentials:
 
@@ -490,6 +528,58 @@ class LogPotentials:
             )
         else:
             raise ValueError("")
+
+
+@jax.partial(jax.jit, static_argnames="fg_state")
+def update_ftov_msgs(
+    ftov_msgs: jnp.ndarray, updates: Dict[Any, jnp.ndarray], fg_state: FactorGraphState
+) -> jnp.ndarray:
+    for keys in updates:
+        data = updates[keys]
+        if (
+            isinstance(keys, tuple)
+            and len(keys) == 2
+            and keys[1] in fg_state.variable_group.keys
+        ):
+            factor = fg_state.variables_to_factors[frozenset(keys[0])]
+            variable = fg_state.variable_group[keys[1]]
+            start = fg_state.factor_to_msgs_starts[factor] + np.sum(
+                factor.edges_num_states[: factor.variables.index(variable)]
+            )
+            if data.shape != (variable.num_states,):
+                raise ValueError(
+                    f"Given message shape {data.shape} does not match expected "
+                    f"shape f{(variable.num_states,)} from factor {keys[0]} "
+                    f"to variable {keys[1]}."
+                )
+
+            ftov_msgs = ftov_msgs.at[start : start + variable.num_states].set(data)
+        elif keys in fg_state.variable_group.keys:
+            variable = fg_state.variable_group[keys]
+            if data.shape != (variable.num_states,):
+                raise ValueError(
+                    f"Given belief shape {data.shape} does not match expected "
+                    f"shape f{(variable.num_states,)} for variable {keys}."
+                )
+
+            starts = np.nonzero(
+                fg_state.wiring.var_states_for_edges
+                == fg_state.vars_to_starts[variable]
+            )[0]
+            for start in starts:
+                ftov_msgs = ftov_msgs.at[start : start + variable.num_states].st(
+                    data / starts.shape[0]
+                )
+        else:
+            raise ValueError(
+                "Invalid keys for setting messages. "
+                "Supported keys include a tuple of length 2 with factor "
+                "and variable keys for directly setting factor to variable "
+                "messages, or a valid variable key for spreading expected "
+                "beliefs at a variable"
+            )
+
+    return ftov_msgs
 
 
 @dataclass(frozen=True, eq=False)
@@ -638,6 +728,34 @@ class FToVMessages:
             )
 
 
+@jax.partial(jax.jit, static_argnames="fg_state")
+def update_evidence(
+    evidence: jnp.ndarray, updates: Dict[Any, jnp.ndarray], fg_state: FactorGraphState
+) -> jnp.ndarray:
+    for key in updates:
+        data = updates[key]
+        if key in fg_state.variable_group.container_keys:
+            if key == slice(None):
+                variable_group = fg_state.variable_group
+            else:
+                assert isinstance(
+                    fg_state.variable_group, groups.CompositeVariableGroup
+                )
+                variable_group = fg_state.variable_group[key]
+
+            for var, evidence_val in variable_group.get_vars_to_evidence(data).items():
+                start_index = fg_state.vars_to_starts[var]
+                evidence = evidence.at[
+                    start_index : start_index + evidence_val.shape[0]
+                ].set(evidence_val)
+        else:
+            var = fg_state.variable_group[key]
+            start_index = fg_state.vars_to_starts[var]
+            evidence = evidence.at[start_index : start_index + var.num_states].set(data)
+
+    return evidence
+
+
 @dataclass(frozen=True, eq=False)
 class Evidence:
     """Class for storing and manipulating evidence
@@ -677,7 +795,7 @@ class Evidence:
     def __setitem__(
         self,
         key: Any,
-        evidence: Union[Dict[Hashable, np.ndarray], np.ndarray],
+        data: Union[Dict[Hashable, np.ndarray], np.ndarray],
     ) -> None:
         """Function to update the evidence for variables
 
@@ -687,16 +805,16 @@ class Evidence:
                 this can be an index referring to an entire VariableGroup (in which case, the evidence
                 is set for the entire VariableGroup at once), or to an individual Variable within the
                 VariableGroup.
-            evidence: a container for np.ndarrays representing the evidence
+            data: a container for np.ndarrays representing the evidence
                 Currently supported containers are:
-                - an np.ndarray: if key indexes an NDVariableArray, then evidence_values
+                - an np.ndarray: if key indexes an NDVariableArray, then data
                 can simply be an np.ndarray with num_var_array_dims + 1 dimensions where
                 num_var_array_dims is the number of dimensions of the NDVariableArray, and the
                 +1 represents a dimension (that should be the final dimension) for the evidence.
                 Note that the size of the final dimension should be the same as
                 variable_group.variable_size. if key indexes a particular variable, then this array
                 must be of the same size as variable.num_states
-                - a dictionary: if key indexes a VariableDict, then evidence_values
+                - a dictionary: if key indexes a VariableDict, then data
                 must be a dictionary mapping keys of variable_group to np.ndarrays of evidence values.
                 Note that each np.ndarray in the dictionary values must have the same size as
                 variable_group.variable_size.
@@ -710,9 +828,7 @@ class Evidence:
                 )
                 variable_group = self.fg_state.variable_group[key]
 
-            for var, evidence_val in variable_group.get_vars_to_evidence(
-                evidence
-            ).items():
+            for var, evidence_val in variable_group.get_vars_to_evidence(data).items():
                 start_index = self.fg_state.vars_to_starts[var]
                 object.__setattr__(
                     self,
@@ -729,5 +845,5 @@ class Evidence:
                 "value",
                 jax.device_put(self.value)
                 .at[start_index : start_index + var.num_states]
-                .set(evidence),
+                .set(data),
             )
