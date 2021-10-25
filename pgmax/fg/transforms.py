@@ -9,6 +9,11 @@ from pgmax.fg import graph
 
 
 def BP(bp_state: graph.BPState, num_iters: int):
+    max_msg_size = int(jnp.max(bp_state.fg_state.wiring.edges_num_states))
+    num_val_configs = (
+        int(bp_state.fg_state.wiring.factor_configs_edge_states[-1, 0]) + 1
+    )
+
     @jax.jit
     def run_bp(
         log_potentials_updates: Optional[Dict[Any, jnp.ndarray]] = None,
@@ -50,12 +55,10 @@ def BP(bp_state: graph.BPState, num_iters: int):
             )
 
         wiring = jax.device_put(bp_state.fg_state.wiring)
-        max_msg_size = int(jnp.max(wiring.edges_num_states))
         # Normalize the messages to ensure the maximum value is 0.
         ftov_msgs = infer.normalize_and_clip_msgs(
             ftov_msgs, wiring.edges_num_states, max_msg_size
         )
-        num_val_configs = int(wiring.factor_configs_edge_states[-1, 0]) + 1
 
         def update(msgs, _):
             # Compute new variable to factor messages by message passing
@@ -85,6 +88,9 @@ def BP(bp_state: graph.BPState, num_iters: int):
             return msgs, None
 
         ftov_msgs, _ = jax.lax.scan(update, ftov_msgs, None, num_iters)
+        return ftov_msgs
+
+    def get_bp_state(ftov_msgs):
         return replace(
             bp_state,
             ftov_msgs=graph.FToVMessages(
@@ -92,10 +98,11 @@ def BP(bp_state: graph.BPState, num_iters: int):
             ),
         )
 
+    return run_bp, get_bp_state
 
-def DecodeMAPState(bp_state: graph.BPState):
-    @jax.jit
-    def decode_map_state(
+
+def DecodeMAPStates(bp_state: graph.BPState):
+    def decode_map_states(
         variable_name: Any = None,
     ) -> Union[int, Dict[Tuple[Any, ...], int]]:
         var_states_for_edges = jax.device_put(
@@ -119,3 +126,5 @@ def DecodeMAPState(bp_state: graph.BPState):
             return int(
                 jnp.argmax(beliefs[start_index : start_index + variable.num_states])
             )
+
+    return decode_map_states

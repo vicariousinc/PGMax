@@ -102,7 +102,7 @@ class FactorGraph:
         self._factor_group_to_potentials_starts: OrderedDict[
             groups.FactorGroup, int
         ] = collections.OrderedDict()
-        self._factor_to_potentials_starts = OrderedDict[
+        self._factor_to_potentials_starts: OrderedDict[
             nodes.EnumerationFactor, int
         ] = collections.OrderedDict()
 
@@ -287,7 +287,7 @@ class FactorGraphState:
                 getattr(self, field).flags.writeable = False
 
             if isinstance(getattr(self, field), Mapping):
-                object.__setattr__(self, field, MappingProxyType(self.field))
+                object.__setattr__(self, field, MappingProxyType(getattr(self, field)))
 
 
 @dataclass(frozen=True, eq=False)
@@ -568,7 +568,7 @@ def update_evidence(
     for key in updates:
         data = updates[key]
         if key in fg_state.variable_group.container_keys:
-            if key == slice(None):
+            if key is None:
                 variable_group = fg_state.variable_group
             else:
                 assert isinstance(
