@@ -428,40 +428,13 @@ class LogPotentials:
         key: Any,
         data: Union[np.ndarray, jnp.ndarray],
     ):
-        if key in self.fg_state.named_factor_groups:
-            factor_group = self.fg_state.named_factor_groups[key]
-            if data.shape != factor_group.factor_group_log_potentials.shape:
-                raise ValueError(
-                    f"Expected log potentials shape {factor_group.factor_group_log_potentials.shape} "
-                    f"for factor group {key}. Got {data.shape}."
-                )
-
-            start = self.fg_state.factor_group_to_potentials_starts[factor_group]
-            object.__setattr__(
-                self,
-                "value",
-                jax.device_put(self.value)
-                .at[start : start + factor_group.factor_group_log_potentials.shape[0]]
-                .set(data),
-            )
-        elif frozenset(key) in self.fg_state.variables_to_factors:
-            factor = self.fg_state.variables_to_factors[frozenset(key)]
-            if data.shape != factor.log_potentials.shape:
-                raise ValueError(
-                    f"Expected log potentials shape {factor.log_potentials.shape} "
-                    f"for factor {key}. Got {data.shape}."
-                )
-
-            start = self.fg_state.factor_to_potentials_starts[factor]
-            object.__setattr__(
-                self,
-                "value",
-                jax.device_put(self.value)
-                .at[start : start + factor.log_potentials.shape[0]]
-                .set(data),
-            )
-        else:
-            raise ValueError("")
+        object.__setattr__(
+            self,
+            "value",
+            update_log_potentials(
+                jax.device_put(self.value), {key: jax.device_put(data)}, self.fg_state
+            ),
+        )
 
 
 @jax.partial(jax.jit, static_argnames="fg_state")
@@ -608,58 +581,13 @@ class FToVMessages:
         """
 
     def __setitem__(self, keys, data) -> None:
-        if (
-            isinstance(keys, tuple)
-            and len(keys) == 2
-            and keys[1] in self.fg_state.variable_group.keys
-        ):
-            factor = self.fg_state.variables_to_factors[frozenset(keys[0])]
-            variable = self.fg_state.variable_group[keys[1]]
-            start = self.fg_state.factor_to_msgs_starts[factor] + np.sum(
-                factor.edges_num_states[: factor.variables.index(variable)]
-            )
-            if data.shape != (variable.num_states,):
-                raise ValueError(
-                    f"Given message shape {data.shape} does not match expected "
-                    f"shape f{(variable.num_states,)} from factor {keys[0]} "
-                    f"to variable {keys[1]}."
-                )
-
-            object.__setattr__(
-                self,
-                "value",
-                jax.device_put(self.value)
-                .at[start : start + variable.num_states]
-                .set(data),
-            )
-        elif keys in self.fg_state.variable_group.keys:
-            variable = self.fg_state.variable_group[keys]
-            if data.shape != (variable.num_states,):
-                raise ValueError(
-                    f"Given belief shape {data.shape} does not match expected "
-                    f"shape f{(variable.num_states,)} for variable {keys}."
-                )
-
-            starts = np.nonzero(
-                self.fg_state.wiring.var_states_for_edges
-                == self.fg_state.vars_to_starts[variable]
-            )[0]
-            for start in starts:
-                object.__setattr__(
-                    self,
-                    "value",
-                    jax.device_put(self.value)
-                    .at[start : start + variable.num_states]
-                    .st(data / starts.shape[0]),
-                )
-        else:
-            raise ValueError(
-                "Invalid keys for setting messages. "
-                "Supported keys include a tuple of length 2 with factor "
-                "and variable keys for directly setting factor to variable "
-                "messages, or a valid variable key for spreading expected "
-                "beliefs at a variable"
-            )
+        object.__setattr__(
+            self,
+            "value",
+            update_ftov_msgs(
+                jax.device_put(self.value), {keys: jax.device_put(data)}, self.fg_state
+            ),
+        )
 
 
 @jax.partial(jax.jit, static_argnames="fg_state")
@@ -753,31 +681,10 @@ class Evidence:
                 Note that each np.ndarray in the dictionary values must have the same size as
                 variable_group.variable_size.
         """
-        if key in self.fg_state.variable_group.container_keys:
-            if key == slice(None):
-                variable_group = self.fg_state.variable_group
-            else:
-                assert isinstance(
-                    self.fg_state.variable_group, groups.CompositeVariableGroup
-                )
-                variable_group = self.fg_state.variable_group[key]
-
-            for var, evidence_val in variable_group.get_vars_to_evidence(data).items():
-                start_index = self.fg_state.vars_to_starts[var]
-                object.__setattr__(
-                    self,
-                    "value",
-                    jax.device_put(self.value)
-                    .at[start_index : start_index + evidence_val.shape[0]]
-                    .set(evidence_val),
-                )
-        else:
-            var = self.fg_state.variable_group[key]
-            start_index = self.fg_state.vars_to_starts[var]
-            object.__setattr__(
-                self,
-                "value",
-                jax.device_put(self.value)
-                .at[start_index : start_index + var.num_states]
-                .set(data),
-            )
+        object.__setattr__(
+            self,
+            "value",
+            update_evidence(
+                jax.device_put(self.value), {key: jax.device_put(data)}, self.fg_state
+            ),
+        )
