@@ -581,7 +581,7 @@ def update_evidence(
                 assert isinstance(
                     fg_state.variable_group, groups.CompositeVariableGroup
                 )
-                variable_group = fg_state.variable_group[key]
+                variable_group = fg_state.variable_group.variable_group_container[key]
 
             for var, evidence_val in variable_group.get_vars_to_evidence(data).items():
                 start_index = fg_state.vars_to_starts[var]

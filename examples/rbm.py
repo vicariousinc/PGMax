@@ -20,7 +20,7 @@ import itertools
 import matplotlib.pyplot as plt
 import numpy as np
 
-from pgmax.fg import graph, groups
+from pgmax.fg import graph, groups, transforms
 
 # %%
 # Load parameters
@@ -47,19 +47,24 @@ for ii in range(nh):
         )
 
 # %%
-# Set evidence
-init_msgs = fg.get_init_msgs()
-init_msgs.evidence["hidden"] = np.stack(
-    [np.zeros_like(bh), bh + np.random.logistic(size=bh.shape)], axis=1
-)
-init_msgs.evidence["visible"] = np.stack(
-    [np.zeros_like(bv), bv + np.random.logistic(size=bv.shape)], axis=1
-)
+run_bp, get_bp_state = transforms.BP(fg.bp_state, 100)
 
 # %%
 # Run inference and decode
-msgs = fg.run_bp(100, 0.5, init_msgs)
-map_states = fg.decode_map_states(msgs)
+bp_state = get_bp_state(
+    run_bp(
+        evidence_updates={
+            "hidden": np.stack(
+                [np.zeros_like(bh), bh + np.random.logistic(size=bh.shape)], axis=1
+            ),
+            "visible": np.stack(
+                [np.zeros_like(bv), bv + np.random.logistic(size=bv.shape)], axis=1
+            ),
+        }
+    )
+)
+decode_map_states = transforms.DecodeMAPStates(bp_state)
+map_states = decode_map_states()
 
 # %%
 # Visualize decodings

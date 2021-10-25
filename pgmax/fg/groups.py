@@ -519,10 +519,10 @@ class EnumerationFactorGroup(FactorGroup):
             log_potentials = np.zeros((num_factors, num_val_configs), dtype=float)
         else:
             if self.log_potentials.shape != (
-                self.factor_configs.shape[0],
-            ) or self.log_potentials.shape != (
+                num_val_configs,
+            ) and self.log_potentials.shape != (
                 num_factors,
-                self.factor_configs.shape[0],
+                num_val_configs,
             ):
                 raise ValueError(
                     f"Expected log potentials shape: {(num_val_configs,)} or {(num_factors, num_val_configs)}. "
