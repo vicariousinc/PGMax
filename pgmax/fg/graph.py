@@ -445,7 +445,7 @@ def update_ftov_msgs(
                 == fg_state.vars_to_starts[variable]
             )[0]
             for start in starts:
-                ftov_msgs = ftov_msgs.at[start : start + variable.num_states].st(
+                ftov_msgs = ftov_msgs.at[start : start + variable.num_states].set(
                     data / starts.shape[0]
                 )
         else:
@@ -552,6 +552,13 @@ class FToVMessages:
         """
 
     def __setitem__(self, keys, data) -> None:
+        if (
+            isinstance(keys, tuple)
+            and len(keys) == 2
+            and keys[1] in self.fg_state.variable_group.keys
+        ):
+            keys = (frozenset(keys[0]), keys[1])
+
         object.__setattr__(
             self,
             "value",

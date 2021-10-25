@@ -15,17 +15,18 @@
 
 # %%
 # %matplotlib inline
+import jax
 import matplotlib.pyplot as plt
 import numpy as np
 
-from pgmax.fg import graph, groups
+from pgmax.fg import graph, groups, transforms
 
 # %% [markdown]
 # ### Construct variable grid, initialize factor graph, and add factors
 
 # %%
 variables = groups.NDVariableArray(variable_size=2, shape=(50, 50))
-fg = graph.FactorGraph(variables=variables, evidence_default_mode="random")
+fg = graph.FactorGraph(variables=variables)
 connected_var_keys = []
 for ii in range(50):
     for jj in range(50):
@@ -45,8 +46,17 @@ fg.add_factor(
 # ### Run inference and visualize results
 
 # %%
-msgs = fg.run_bp(3000, 0.5)
-map_states = fg.decode_map_states(msgs)
+run_bp, get_bp_state = transforms.BP(fg.bp_state, 3000)
+
+# %%
+ftov_msgs = run_bp(
+    evidence_updates={None: jax.device_put(np.random.gumbel(size=(50, 50, 2)))}
+)
+bp_state = get_bp_state(ftov_msgs)
+
+# %%
+decode_map_states = transforms.DecodeMAPStates(bp_state)
+map_states = decode_map_states()
 img = np.zeros((50, 50))
 for key in map_states:
     img[key] = map_states[key]
@@ -59,29 +69,29 @@ ax.imshow(img)
 
 # %%
 # Query evidence for variable (0, 0)
-msgs.evidence[0, 0]
+bp_state.evidence[0, 0]
 
 # %%
 # Set evidence for variable (0, 0)
-msgs.evidence[0, 0] = np.array([1.0, 1.0])
-msgs.evidence[0, 0]
+bp_state.evidence[0, 0] = np.array([1.0, 1.0])
+bp_state.evidence[0, 0]
 
 # %%
 # Set evidence for all variables using an array
 evidence = np.random.randn(50, 50, 2)
-msgs.evidence[:] = evidence
-msgs.evidence[10, 10] == evidence[10, 10]
+bp_state.evidence[None] = evidence
+bp_state.evidence[10, 10] == evidence[10, 10]
 
 # %%
 # Query messages from the factor involving (0, 0), (0, 1) in factor group "factors" to variable (0, 0)
-msgs.ftov[("factors", frozenset([(0, 0), (0, 1)])), (0, 0)]
+bp_state.ftov_msgs[[(0, 0), (0, 1)], (0, 0)]
 
 # %%
 # Set messages from the factor involving (0, 0), (0, 1) in factor group "factors" to variable (0, 0)
-msgs.ftov[("factors", frozenset([(0, 0), (0, 1)])), (0, 0)] = np.array([1.0, 1.0])
-msgs.ftov[("factors", frozenset([(0, 0), (0, 1)])), (0, 0)]
+bp_state.ftov_msgs[[(0, 0), (0, 1)], (0, 0)] = np.array([1.0, 1.0])
+bp_state.ftov_msgs[[(0, 0), (0, 1)], (0, 0)]
 
 # %%
 # Uniformly spread expected belief at a variable to all connected factors
-msgs.ftov[0, 0] = np.array([1.0, 1.0])
-msgs.ftov[("factors", frozenset([(0, 0), (0, 1)])), (0, 0)]
+bp_state.ftov_msgs[0, 0] = np.array([1.0, 1.0])
+bp_state.ftov_msgs[[(0, 0), (0, 1)], (0, 0)]
