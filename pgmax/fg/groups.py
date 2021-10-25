@@ -341,11 +341,9 @@ class NDVariableArray(VariableGroup):
             )
 
         if flat_data.size == np.product(self.shape):
-            data = np.array(flat_data.reshape(self.shape), copy=True)
+            data = flat_data.reshape(self.shape)
         elif flat_data.size == np.product(self.shape) * self.variable_size:
-            data = np.array(
-                flat_data.reshape(self.shape + (self.variable_size,)), copy=True
-            )
+            data = flat_data.reshape(self.shape + (self.variable_size,))
         else:
             raise ValueError(
                 f"flat_data should be compatible with shape {self.shape} or {self.shape + (self.variable_size,)}. "
@@ -422,12 +420,10 @@ class VariableDict(VariableGroup):
         data = {}
         for key in self.variable_names:
             if use_num_states:
-                data[key] = np.array(
-                    flat_data[start : start + self.variable_size], copy=True
-                )
+                data[key] = flat_data[start : start + self.variable_size]
                 start += self.variable_size
             else:
-                data[key] = np.array(flat_data[start], copy=True)
+                data[key] = flat_data[start]
                 start += 1
 
         return data
@@ -635,18 +631,12 @@ class EnumerationFactorGroup(FactorGroup):
 
         num_factors = len(self.factors)
         if flat_data.size == num_factors * self.factor_configs.shape[0]:
-            data = np.array(
-                flat_data.reshape(
-                    (num_factors, self.factor_configs.shape[0]),
-                    copy=True,
-                )
+            data = flat_data.reshape(
+                (num_factors, self.factor_configs.shape[0]),
             )
         elif flat_data.size == num_factors * np.sum(self.factors[0].edges_num_states):
-            data = np.array(
-                flat_data.reshape(
-                    (num_factors, np.sum(self.factors[0].edges_num_states))
-                ),
-                copy=True,
+            data = flat_data.reshape(
+                (num_factors, np.sum(self.factors[0].edges_num_states))
             )
         else:
             raise ValueError(
@@ -782,20 +772,14 @@ class PairwiseFactorGroup(FactorGroup):
         if flat_data.size == num_factors * np.product(
             self.log_potential_matrix.shape[-2:]
         ):
-            data = np.array(
-                flat_data.reshape(
-                    (num_factors,) + self.log_potential_matrix.shape[-2:]
-                ),
-                copy=True,
+            data = flat_data.reshape(
+                (num_factors,) + self.log_potential_matrix.shape[-2:]
             )
         elif flat_data.size == num_factors * np.sum(
             self.log_potential_matrix.shape[-2:]
         ):
-            data = np.array(
-                flat_data.reshape(
-                    (num_factors, np.sum(self.log_potential_matrix.shape[-2:]))
-                ),
-                copy=True,
+            data = flat_data.reshape(
+                (num_factors, np.sum(self.log_potential_matrix.shape[-2:]))
             )
         else:
             raise ValueError(
