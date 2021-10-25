@@ -40,11 +40,6 @@ class FactorGraph:
             For a sequence, the indices of the sequence are used to index the variable groups.
             Note that if not a single VariableGroup, a CompositeVariableGroup will be created from
             this input, and the individual VariableGroups will need to be accessed by indexing.
-        messages_default_mode: default mode for initializing messages.
-            Allowed values are "zeros" and "random".
-        evidence_default_mode: default mode for initializing evidence.
-            Allowed values are "zeros" and "random".
-            Any variable whose evidence was not explicitly specified using 'set_evidence'
 
     Attributes:
         _variable_group: VariableGroup. contains all involved VariableGroups
@@ -264,6 +259,14 @@ class FactorGraph:
             wiring=self.wiring,
         )
 
+    @property
+    def bp_state(self) -> BPState:
+        return BPState(
+            log_potentials=LogPotentials(fg_state=self.fg_state),
+            ftov=FToVMessages(fg_state=self.fg_state),
+            evidence=Evidence(fg_state=self.fg_state),
+        )
+
     def run_bp(
         self,
         num_iters: int,
@@ -414,7 +417,6 @@ class BPState:
 class LogPotentials:
 
     fg_state: FactorGraphState
-    default_mode: Optional[str] = None
     value: Optional[np.ndarray] = None
 
     def __post_init__(self):
@@ -496,9 +498,6 @@ class FToVMessages:
 
     Args:
         factor_graph: associated factor graph
-        default_mode: default mode for initializing ftov messages.
-            Allowed values include "zeros" and "random"
-            If value is None, defaults to "zeros"
         value: Optionally specify initial value for ftov messages
 
     Attributes:
@@ -508,34 +507,13 @@ class FToVMessages:
     """
 
     fg_state: FactorGraphState
-    default_mode: Optional[str] = None
     value: Optional[Union[np.ndarray, jnp.ndarray]] = None
 
     def __post_init__(self):
-        if self.default_mode is not None and self.value is not None:
-            raise ValueError("Should specify only one of default_mode and value.")
-
-        if self.default_mode is None and self.value is None:
-            object.__setattr__(self, "default_mode", "zeros")
-
         if self.value is None:
-            if self.default_mode == "zeros":
-                object.__setattr__(
-                    self, "value", jnp.zeros(self.fg_state.total_factor_num_states)
-                )
-            elif self.default_mode == "random":
-                object.__setattr__(
-                    self,
-                    "value",
-                    jax.device_put(
-                        np.random.gumbel(size=(self.fg_state.total_factor_num_states,))
-                    ),
-                )
-            else:
-                raise ValueError(
-                    f"Unsupported default message mode {self.default_mode}. "
-                    "Supported default modes are zeros or random"
-                )
+            object.__setattr__(
+                self, "value", jnp.zeros(self.fg_state.total_factor_num_states)
+            )
         else:
             if not self.value.shape == (self.fg_state.total_factor_num_states,):
                 raise ValueError(
@@ -666,9 +644,6 @@ class Evidence:
 
     Args:
         factor_graph: associated factor graph
-        default_mode: default mode for initializing evidence.
-            Allowed values include "zeros" and "random"
-            If value is None, defaults to "zeros"
         value: Optionally specify initial value for evidence
 
     Attributes:
@@ -677,35 +652,11 @@ class Evidence:
     """
 
     fg_state: FactorGraphState
-    default_mode: Optional[str] = None
     value: Optional[Union[np.ndarray, jnp.ndarray]] = None
 
     def __post_init__(self):
-        if self.default_mode is not None and self.value is not None:
-            raise ValueError("Should specify only one of default_mode and value.")
-
-        if self.default_mode is None and self.value is None:
-            object.__setattr__(self, "default_mode", "zeros")
-
-        if self.value is None and self.default_mode not in ("zeros", "random"):
-            raise ValueError(
-                f"Unsupported default evidence mode {self.default_mode}. "
-                "Supported default modes are zeros or random"
-            )
-
         if self.value is None:
-            if self.default_mode == "zeros":
-                object.__setattr__(
-                    self, "value", jnp.zeros(self.fg_state.num_var_states)
-                )
-            else:
-                object.__setattr__(
-                    self,
-                    "value",
-                    jax.device_put(
-                        np.random.gumbel(size=(self.fg_state.num_var_states,))
-                    ),
-                )
+            object.__setattr__(self, "value", jnp.zeros(self.fg_state.num_var_states))
         else:
             object.__setattr__(self, "value", jax.device_put(self.value))
 
