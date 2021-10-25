@@ -583,11 +583,11 @@ def update_evidence(
                 )
                 variable_group = fg_state.variable_group.variable_group_container[key]
 
-            for var, evidence_val in variable_group.get_vars_to_evidence(data).items():
-                start_index = fg_state.vars_to_starts[var]
-                evidence = evidence.at[
-                    start_index : start_index + evidence_val.shape[0]
-                ].set(evidence_val)
+            start_index = fg_state.vars_to_starts[variable_group.variables[0]]
+            flat_data = variable_group.flatten(data)
+            evidence = evidence.at[start_index : start_index + flat_data.shape[0]].set(
+                flat_data
+            )
         else:
             var = fg_state.variable_group[key]
             start_index = fg_state.vars_to_starts[var]
