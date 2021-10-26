@@ -186,7 +186,7 @@ bp_state = replace(
 )
 bp_state.evidence[0] = np.array(bXn_evidence)
 bp_state.evidence[1] = np.array(bHn_evidence)
-run_bp, _, _, decode_map_states = graph.BP(bp_state, 500)
+run_bp, _, get_beliefs = graph.BP(bp_state, 500)
 bp_start_time = timer()
 # Assign evidence to pixel vars
 bp_arrays = run_bp()
@@ -195,7 +195,7 @@ print(f"time taken for bp {bp_end_time - bp_start_time}")
 
 # Run inference and convert result to human-readable data structure
 data_writeback_start_time = timer()
-map_states = decode_map_states(bp_arrays)
+map_states = graph.decode_map_states(get_beliefs(bp_arrays))
 data_writeback_end_time = timer()
 print(
     f"time taken for data conversion of inference result {data_writeback_end_time - data_writeback_start_time}"

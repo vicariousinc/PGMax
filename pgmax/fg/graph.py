@@ -790,15 +790,13 @@ def BP(bp_state: BPState, num_iters: int):
         )
         return beliefs
 
-    @jax.jit
-    def decode_map_states(bp_arrays: BPArrays):
-        evidence = jax.device_put(bp_arrays.evidence)
-        map_states = jax.tree_util.tree_map(
-            lambda x: jnp.argmax(x, axis=-1),
-            bp_state.fg_state.variable_group.unflatten(
-                evidence.at[wiring.var_states_for_edges].add(bp_arrays.ftov_msgs)
-            ),
-        )
-        return map_states
+    return run_bp, get_bp_state, get_beliefs
 
-    return run_bp, get_bp_state, get_beliefs, decode_map_states
+
+@jax.jit
+def decode_map_states(beliefs: Any):
+    map_states = jax.tree_util.tree_map(
+        lambda x: jnp.argmax(x, axis=-1),
+        beliefs,
+    )
+    return map_states

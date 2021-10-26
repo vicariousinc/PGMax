@@ -48,7 +48,7 @@ fg.add_factor(
 
 # %%
 bp_state = fg.bp_state
-run_bp, _, get_beliefs, decode_map_states = graph.BP(bp_state, 3000)
+run_bp, _, get_beliefs = graph.BP(bp_state, 3000)
 
 # %%
 bp_arrays = run_bp(
@@ -56,7 +56,7 @@ bp_arrays = run_bp(
 )
 
 # %%
-img = decode_map_states(bp_arrays)
+img = graph.decode_map_states(get_beliefs(bp_arrays))
 fig, ax = plt.subplots(1, 1, figsize=(10, 10))
 ax.imshow(img)
 

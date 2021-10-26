@@ -48,7 +48,7 @@ for ii in range(nh):
         )
 
 # %%
-run_bp, _, _, decode_map_states = graph.BP(fg.bp_state, 100)
+run_bp, _, get_beliefs = graph.BP(fg.bp_state, 100)
 
 # %%
 # Run inference and decode using vmap
@@ -71,7 +71,9 @@ bp_arrays = jax.vmap(run_bp, in_axes=0, out_axes=0)(
         ),
     }
 )
-map_states = jax.vmap(decode_map_states, in_axes=0, out_axes=0)(bp_arrays)
+map_states = graph.decode_map_states(
+    jax.vmap(get_beliefs, in_axes=0, out_axes=0)(bp_arrays)
+)
 
 # %%
 # Visualize decodings
