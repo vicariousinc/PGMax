@@ -628,7 +628,7 @@ class EnumerationFactorGroup(FactorGroup):
             raise ValueError(
                 f"data should be of shape {(num_factors, self.factor_configs.shape[0])} or "
                 f"{(num_factors, np.sum(self.factors[0].edges_num_states))} or "
-                f"(self.factor_configs.shape[0],). Got {data.shape}."
+                f"{(self.factor_configs.shape[0],)}. Got {data.shape}."
             )
 
         if data.shape == (self.factor_configs.shape[0],):
@@ -658,7 +658,7 @@ class EnumerationFactorGroup(FactorGroup):
         else:
             raise ValueError(
                 f"flat_data should be compatible with shape {(num_factors, self.factor_configs.shape[0])} "
-                f"or (num_factors, np.sum(self.factors[0].edges_num_states)). Got {flat_data.shape}."
+                f"or {(num_factors, np.sum(self.factors[0].edges_num_states))}. Got {flat_data.shape}."
             )
 
         return data
@@ -733,8 +733,8 @@ class PairwiseFactorGroup(FactorGroup):
                 raise ValueError(
                     f"The specified pairwise factor {fac_list} (with "
                     f"{(self.variable_group[fac_list[0]].num_states, self.variable_group[fac_list[1]].num_states)} "
-                    "configurations) does not match the specified log_potential_matrix "
-                    "(with {self.log_potential_matrix.shape[-2:]} configurations)."
+                    f"configurations) does not match the specified log_potential_matrix "
+                    f"(with {self.log_potential_matrix.shape[-2:]} configurations)."
                 )
 
         factor_configs = (
