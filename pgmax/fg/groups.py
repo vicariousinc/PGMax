@@ -237,7 +237,7 @@ class CompositeVariableGroup(VariableGroup):
     ) -> Union[Mapping, Sequence]:
         if flat_data.ndim != 1:
             raise ValueError(
-                f"Can only unflatten 1D array. Got an {flat_data.ndim}D array."
+                f"Can only unflatten 1D array. Got a {flat_data.ndim}D array."
             )
 
         num_variables = 0
@@ -340,7 +340,7 @@ class NDVariableArray(VariableGroup):
     ) -> Union[np.ndarray, jnp.ndarray]:
         if flat_data.ndim != 1:
             raise ValueError(
-                f"Can only unflatten 1D array. Got an {flat_data.ndim}D array."
+                f"Can only unflatten 1D array. Got a {flat_data.ndim}D array."
             )
 
         if flat_data.size == np.product(self.shape):
@@ -405,7 +405,7 @@ class VariableDict(VariableGroup):
     ) -> Dict[Hashable, Union[np.ndarray, jnp.ndarray]]:
         if flat_data.ndim != 1:
             raise ValueError(
-                f"Can only unflatten 1D array. Got an {flat_data.ndim}D array."
+                f"Can only unflatten 1D array. Got a {flat_data.ndim}D array."
             )
 
         num_variables = len(self.variable_names)
@@ -479,7 +479,7 @@ class FactorGroup:
         variables = frozenset(variables)
         if variables not in self._variables_to_factors:
             raise ValueError(
-                f"The queried factor {variables} is not present in the factor group"
+                f"The queried factor {variables} is not present in the factor group."
             )
 
         return self._variables_to_factors[variables]
@@ -541,9 +541,7 @@ class FactorGroup:
             "Please subclass the FactorGroup class and override this method"
         )
 
-    def unflatten(
-        self, flat_data: Union[np.ndarray, jnp.ndarray]
-    ) -> Union[np.ndarray, jnp.ndarray]:
+    def unflatten(self, flat_data: Union[np.ndarray, jnp.ndarray]) -> Any:
         raise NotImplementedError(
             "Please subclass the FactorGroup class and override this method"
         )
@@ -629,8 +627,8 @@ class EnumerationFactorGroup(FactorGroup):
         ):
             raise ValueError(
                 f"data should be of shape {(num_factors, self.factor_configs.shape[0])} or "
-                f"{( num_factors, np.sum(self.factors[0].edges_num_states))} or "
-                f"(self.factor_configs.shape[0],) . Got {data.shape}."
+                f"{(num_factors, np.sum(self.factors[0].edges_num_states))} or "
+                f"(self.factor_configs.shape[0],). Got {data.shape}."
             )
 
         if data.shape == (self.factor_configs.shape[0],):
@@ -645,7 +643,7 @@ class EnumerationFactorGroup(FactorGroup):
     ) -> Union[np.ndarray, jnp.ndarray]:
         if flat_data.ndim != 1:
             raise ValueError(
-                f"Can only unflatten 1D array. Got an {flat_data.ndim}D array."
+                f"Can only unflatten 1D array. Got a {flat_data.ndim}D array."
             )
 
         num_factors = len(self.factors)
@@ -722,7 +720,7 @@ class PairwiseFactorGroup(FactorGroup):
             if len(fac_list) != 2:
                 raise ValueError(
                     "All pairwise factors should connect to exactly 2 variables. Got a factor connecting to"
-                    f" more or less than 2 variables ({fac_list})."
+                    f" {len(fac_list)} variables ({fac_list})."
                 )
 
             if not (
@@ -794,7 +792,7 @@ class PairwiseFactorGroup(FactorGroup):
     ) -> Union[np.ndarray, jnp.ndarray]:
         if flat_data.ndim != 1:
             raise ValueError(
-                f"Can only unflatten 1D array. Got an {flat_data.ndim}D array."
+                f"Can only unflatten 1D array. Got a {flat_data.ndim}D array."
             )
 
         num_factors = len(self.factors)
