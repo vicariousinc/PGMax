@@ -3,7 +3,6 @@ from typing import Any, Dict, List, Tuple
 import jax
 import jax.numpy as jnp
 import numpy as np
-import pytest
 from numpy.random import default_rng
 from scipy.ndimage import gaussian_filter
 
@@ -309,8 +308,6 @@ def test_e2e_sanity_check():
                     name=(row, col),
                 )
 
-    assert fg.get_factor((0, 0))[1] == 0
-
     # Create an EnumerationFactorGroup for vertical suppression factors
     vert_suppression_keys: List[List[Tuple[Any, ...]]] = []
     for col in range(N):
@@ -365,16 +362,16 @@ def test_e2e_sanity_check():
 
     # Run BP
     # Set the evidence
-    init_msgs = fg.get_init_msgs()
-    init_msgs.evidence["grid_vars"] = grid_evidence_arr
-    init_msgs.evidence["additional_vars"] = additional_vars_evidence_dict
-    fg.run_bp(1, 0.5)
-    one_step_msgs = fg.run_bp(1, 0.5, init_msgs=init_msgs)
-    final_msgs = fg.run_bp(99, 0.5, one_step_msgs)
-
+    bp_state = fg.bp_state
+    bp_state.evidence["grid_vars"] = grid_evidence_arr
+    bp_state.evidence["additional_vars"] = additional_vars_evidence_dict
+    run_bp, _, get_beliefs = graph.BP(bp_state, 100)
+    bp_arrays = run_bp()
     # Test that the output messages are close to the true messages
-    assert jnp.allclose(final_msgs.ftov.value, true_final_msgs_output, atol=1e-06)
-    assert fg.decode_map_states(final_msgs) == true_map_state_output
+    assert jnp.allclose(bp_arrays.ftov_msgs, true_final_msgs_output, atol=1e-06)
+    decoded_map_states = graph.decode_map_states(get_beliefs(bp_arrays))
+    for key in true_map_state_output:
+        assert true_map_state_output[key] == decoded_map_states[key[0]][key[1:]]
 
 
 def test_e2e_heretic():
@@ -389,7 +386,7 @@ def test_e2e_heretic():
     bXn = np.zeros((30, 30, 3))
 
     # Create the factor graph
-    fg = graph.FactorGraph((pixel_vars, hidden_vars), evidence_default_mode="random")
+    fg = graph.FactorGraph((pixel_vars, hidden_vars))
 
     def binary_connected_variables(
         num_hidden_rows, num_hidden_cols, kernel_row, kernel_col
@@ -416,39 +413,10 @@ def test_e2e_heretic():
             )
 
     # Assign evidence to pixel vars
-    init_msgs = fg.get_init_msgs()
-    init_msgs.evidence[0] = np.array(bXn)
-    init_msgs.evidence[0, 0, 0] = np.array([0.0, 0.0, 0.0])
-    init_msgs.evidence[0, 0, 0]
-    init_msgs.evidence[1, 0, 0]
-    with pytest.raises(ValueError) as verror:
-        fg.get_factor((0, 0))
-
-    assert "Invalid factor key" in str(verror.value)
-    with pytest.raises(ValueError) as verror:
-        fg.get_factor((((0, 0), 0), (10, 20, 30)))
-
-    assert "Invalid factor key" in str(verror.value)
-    assert isinstance(init_msgs.evidence.value, jnp.ndarray)
+    bp_state = fg.bp_state
+    bp_state.evidence[0] = np.array(bXn)
+    bp_state.evidence[0, 0, 0] = np.array([0.0, 0.0, 0.0])
+    bp_state.evidence[0, 0, 0]
+    bp_state.evidence[1, 0, 0]
+    assert isinstance(bp_state.evidence.value, jnp.ndarray)
     assert len(fg.factors) == 7056
-    evidence = graph.Evidence(factor_graph=fg)
-    for ftov_msgs in [
-        graph.FToVMessages(factor_graph=fg),
-        graph.FToVMessages(factor_graph=fg, default_mode="random"),
-    ]:
-        ftov_msgs[((0, 0), frozenset([(1, 0, 0), (0, 0, 0)])), (0, 0, 0)]
-        ftov_msgs[((1, 1), frozenset([(1, 0, 0), (0, 1, 1)])), (1, 0, 0)] = np.ones(17)
-        assert np.all(
-            ftov_msgs[((1, 1), frozenset([(1, 0, 0), (0, 1, 1)])), (1, 0, 0)] == 1.0
-        )
-        ftov_msgs[1, 0, 0] = np.ones(17)
-        assert np.all(
-            ftov_msgs[((0, 0), frozenset([(1, 0, 0), (0, 0, 0)])), (1, 0, 0)] == 1.0 / 9
-        )
-        assert np.all(
-            ftov_msgs[((1, 1), frozenset([(1, 0, 0), (0, 1, 1)])), (1, 0, 0)] == 1.0 / 9
-        )
-        msgs = fg.run_bp(
-            1, 0.5, init_msgs=graph.Messages(ftov=ftov_msgs, evidence=evidence)
-        )
-        msgs.ftov[((0, 0), frozenset([(1, 0, 0), (0, 0, 0)])), (0, 0, 0)]
