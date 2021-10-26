@@ -1,4 +1,5 @@
 import re
+from dataclasses import replace
 
 import jax.numpy as jnp
 import numpy as np
@@ -73,8 +74,9 @@ def test_log_potentials():
     ):
         graph.LogPotentials(fg_state=fg.fg_state, value=np.zeros(15))
 
-    assert jnp.all(fg.bp_state.log_potentials["test"] == jnp.zeros(10))
-    assert jnp.all(fg.bp_state.log_potentials[[0]] == jnp.zeros(10))
+    log_potentials = graph.LogPotentials(fg_state=fg.fg_state, value=np.zeros(10))
+    assert jnp.all(log_potentials["test"] == jnp.zeros(10))
+    assert jnp.all(log_potentials[[0]] == jnp.zeros(10))
     with pytest.raises(
         ValueError,
         match=re.escape(f"Invalid key {frozenset([1])} for log potentials updates."),
@@ -129,3 +131,16 @@ def test_evidence():
 
     evidence = graph.Evidence(fg_state=fg.fg_state, value=np.zeros(15))
     assert jnp.all(evidence.value == jnp.zeros(15))
+
+
+def test_bp():
+    variable_group = groups.VariableDict(15, (0,))
+    fg = graph.FactorGraph(variable_group)
+    fg.add_factor([0], np.arange(10)[:, None], name="test")
+    run_bp, get_bp_state, get_beliefs = graph.BP(fg.bp_state, 1)
+    bp_arrays = replace(
+        run_bp(ftov_msgs_updates={(frozenset([0]), 0): np.zeros(15)}),
+        log_potentials=np.zeros(10),
+    )
+    bp_state = get_bp_state(bp_arrays)
+    assert bp_state.fg_state == fg.fg_state
