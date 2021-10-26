@@ -179,19 +179,11 @@ class FactorGraph:
                 self._factor_group_to_msgs_starts[factor_group]
                 + factor_num_states_cumsum[vv]
             )
-            self._factor_group_to_potentials_starts[factor] = (
+            self._factor_to_potentials_starts[factor] = (
                 self._factor_group_to_potentials_starts[factor_group]
                 + vv * factor.log_potentials.shape[0]
             )
             factor_group_num_configs += factor.log_potentials.shape[0]
-
-        if (
-            factor_group_num_configs
-            != factor_group.factor_group_log_potentials.shape[0]
-        ):
-            raise ValueError(
-                "Factors in a factor group should have the same number of valid configurations."
-            )
 
         self._total_factor_num_states += factor_num_states_cumsum[-1]
         self._total_factor_num_configs += factor_group_num_configs
@@ -378,6 +370,9 @@ class LogPotentials:
             object.__setattr__(self, "value", jax.device_put(self.value))
 
     def __getitem__(self, key: Any):
+        if not isinstance(key, Hashable):
+            key = frozenset(key)
+
         if key in self.fg_state.named_factor_groups:
             factor_group = self.fg_state.named_factor_groups[key]
             start = self.fg_state.factor_group_to_potentials_starts[factor_group]
@@ -391,7 +386,7 @@ class LogPotentials:
                 start : start + factor.log_potentials.shape[0]
             ]
         else:
-            raise ValueError("")
+            raise ValueError(f"Invalid key {key} for log potentials updates.")
 
         return log_potentials
 
@@ -400,6 +395,9 @@ class LogPotentials:
         key: Any,
         data: Union[np.ndarray, jnp.ndarray],
     ):
+        if not isinstance(key, Hashable):
+            key = frozenset(key)
+
         object.__setattr__(
             self,
             "value",
@@ -428,7 +426,7 @@ def update_ftov_msgs(
             if data.shape != (variable.num_states,):
                 raise ValueError(
                     f"Given message shape {data.shape} does not match expected "
-                    f"shape f{(variable.num_states,)} from factor {keys[0]} "
+                    f"shape {(variable.num_states,)} from factor {keys[0]} "
                     f"to variable {keys[1]}."
                 )
 
@@ -438,7 +436,7 @@ def update_ftov_msgs(
             if data.shape != (variable.num_states,):
                 raise ValueError(
                     f"Given belief shape {data.shape} does not match expected "
-                    f"shape f{(variable.num_states,)} for variable {keys}."
+                    f"shape {(variable.num_states,)} for variable {keys}."
                 )
 
             starts = np.nonzero(
@@ -617,6 +615,12 @@ class Evidence:
         if self.value is None:
             object.__setattr__(self, "value", jnp.zeros(self.fg_state.num_var_states))
         else:
+            if self.value.shape != (self.fg_state.num_var_states,):
+                raise ValueError(
+                    f"Expected evidence shape {(self.fg_state.num_var_states,)}. "
+                    f"Got {self.value.shape}."
+                )
+
             object.__setattr__(self, "value", jax.device_put(self.value))
 
     def __getitem__(self, key: Any) -> jnp.ndarray:
