@@ -23,7 +23,6 @@ import jax.numpy as jnp
 import numpy as np
 
 import pgmax.fg.nodes as nodes
-from pgmax.fg import fg_utils
 from pgmax.utils import cached_property
 
 
@@ -255,8 +254,8 @@ class CompositeVariableGroup(VariableGroup):
             use_num_states = True
         else:
             raise ValueError(
-                f"flat_data should either be of shape (num_variables={len(self.variables)},), "
-                f"or (num_variable_states={num_variable_states},). "
+                f"flat_data should be either of shape (num_variables(={len(self.variables)}),), "
+                f"or (num_variable_states(={num_variable_states}),). "
                 f"Got {flat_data.shape}"
             )
 
@@ -392,9 +391,8 @@ class VariableDict(VariableGroup):
 
             if data[key].shape != (self.variable_size,):
                 raise ValueError(
-                    f"Variable {key} expects an data array of shape "
-                    f"({(self.variable_size,)})."
-                    f"Got {data[key].shape}."
+                    f"Variable {key} expects a data array of shape "
+                    f"{(self.variable_size,)}. Got {data[key].shape}."
                 )
 
         flat_data = jnp.concatenate([data[key].flatten() for key in self.keys])
@@ -416,8 +414,8 @@ class VariableDict(VariableGroup):
             use_num_states = True
         else:
             raise ValueError(
-                f"flat_data should either be of shape (num_variables={len(self.variables)},), "
-                f"or (num_variable_states={num_variable_states},). "
+                f"flat_data should be either of shape (num_variables(={len(self.variables)}),), "
+                f"or (num_variable_states(={num_variable_states}),). "
                 f"Got {flat_data.shape}"
             )
 
@@ -483,23 +481,6 @@ class FactorGroup:
             )
 
         return self._variables_to_factors[variables]
-
-    def compile_wiring(
-        self, vars_to_starts: Mapping[nodes.Variable, int]
-    ) -> nodes.EnumerationWiring:
-        """Function to compile wiring for the factor group.
-
-        Args:
-            vars_to_starts: A dictionary that maps variables to their global starting indices
-                For an n-state variable, a global start index of m means the global indices
-                of its n variable states are m, m + 1, ..., m + n - 1
-
-        Returns:
-            compiled wiring for the factor group
-        """
-        wirings = [factor.compile_wiring(vars_to_starts) for factor in self.factors]
-        wiring = fg_utils.concatenate_enumeration_wirings(wirings)
-        return wiring
 
     @cached_property
     def factor_group_log_potentials(self) -> np.ndarray:
@@ -822,7 +803,7 @@ class PairwiseFactorGroup(FactorGroup):
         else:
             raise ValueError(
                 f"flat_data should be compatible with shape {(num_factors,) + self.log_potential_matrix.shape[-2:]} "
-                f"or (num_factors, np.sum(self.log_potential_matrix.shape[-2:])). Got {flat_data.shape}."
+                f"or {(num_factors, np.sum(self.log_potential_matrix.shape[-2:]))}. Got {flat_data.shape}."
             )
 
         return data

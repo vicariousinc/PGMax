@@ -57,15 +57,65 @@ def test_composite_variable_group():
             jax.tree_util.tree_leaves(
                 jax.tree_util.tree_multimap(
                     lambda x, y: jnp.all(x == y),
-                    composite_variable_dict.unflatten(jnp.zeros(15 * 3 * 2)),
+                    composite_variable_dict.unflatten(jnp.zeros(3 * 2)),
                     {
-                        (0, 1): {key: np.zeros(15) for key in range(3)},
-                        (2, 3): {key: np.zeros(15) for key in range(3)},
+                        (0, 1): {key: np.zeros(1) for key in range(3)},
+                        (2, 3): {key: np.zeros(1) for key in range(3)},
                     },
                 )
             )
         )
     )
+    with pytest.raises(
+        ValueError, match="Can only unflatten 1D array. Got a 2D array."
+    ):
+        composite_variable_dict.unflatten(jnp.zeros((10, 20)))
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "flat_data should be either of shape (num_variables(=6),), or (num_variable_states(=90),)"
+        ),
+    ):
+        composite_variable_dict.unflatten(jnp.zeros((100)))
+
+
+def test_variable_dict():
+    variable_dict = groups.VariableDict(15, tuple([0, 1, 2]))
+    with pytest.raises(
+        ValueError, match="data is referring to a non-existent variable 3"
+    ):
+        variable_dict.flatten({3: np.zeros(10)})
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape("Variable 2 expects a data array of shape (15,). Got (10,)"),
+    ):
+        variable_dict.flatten({2: np.zeros(10)})
+
+    with pytest.raises(
+        ValueError, match="Can only unflatten 1D array. Got a 2D array."
+    ):
+        variable_dict.unflatten(jnp.zeros((10, 20)))
+
+    assert jnp.all(
+        jnp.array(
+            jax.tree_util.tree_leaves(
+                jax.tree_util.tree_multimap(
+                    lambda x, y: jnp.all(x == y),
+                    variable_dict.unflatten(jnp.zeros(3)),
+                    {key: np.zeros(1) for key in range(3)},
+                )
+            )
+        )
+    )
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "flat_data should be either of shape (num_variables(=3),), or (num_variable_states(=45),)"
+        ),
+    ):
+        variable_dict.unflatten(jnp.zeros((100)))
 
 
 def test_nd_variable_array():
@@ -198,7 +248,6 @@ def test_pairwise_factor_group():
     pairwise_factor_group = groups.PairwiseFactorGroup(
         variable_group,
         [[(0, 0), (1, 1)], [(1, 0), (0, 1)]],
-        np.zeros((3, 3), dtype=float),
     )
     with pytest.raises(
         ValueError,
@@ -212,3 +261,19 @@ def test_pairwise_factor_group():
         pairwise_factor_group.flatten(np.zeros((3, 3))) == jnp.zeros(2 * 3 * 3)
     )
     assert jnp.all(pairwise_factor_group.flatten(np.zeros((2, 6))) == jnp.zeros(12))
+    with pytest.raises(ValueError, match="Can only unflatten 1D array. Got a 2D array"):
+        pairwise_factor_group.unflatten(np.zeros((10, 20)))
+
+    assert jnp.all(
+        pairwise_factor_group.unflatten(np.zeros(2 * 3 * 3)) == jnp.zeros((2, 3, 3))
+    )
+    assert jnp.all(
+        pairwise_factor_group.unflatten(np.zeros(2 * 6)) == jnp.zeros((2, 6))
+    )
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "flat_data should be compatible with shape (2, 3, 3) or (2, 6). Got (10,)."
+        ),
+    ):
+        pairwise_factor_group.unflatten(np.zeros(10))
