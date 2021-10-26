@@ -684,7 +684,7 @@ class PairwiseFactorGroup(FactorGroup):
     """
 
     connected_var_keys: Sequence[List[Tuple[Hashable, ...]]]
-    log_potential_matrix: np.ndarray
+    log_potential_matrix: Optional[np.ndarray] = None
 
     def _get_variables_to_factors(
         self,
@@ -699,21 +699,29 @@ class PairwiseFactorGroup(FactorGroup):
                 log_potential_matrix is not the same as the variable sizes for each variable referenced in
                 each sub-list of self.connected_var_keys
         """
-        if not (
-            self.log_potential_matrix.ndim == 2 or self.log_potential_matrix.ndim == 3
-        ):
+        if self.log_potential_matrix is None:
+            log_potential_matrix = np.zeros(
+                (
+                    self.variable_group[self.connected_var_keys[0][0]].num_states,
+                    self.variable_group[self.connected_var_keys[0][1]].num_states,
+                )
+            )
+        else:
+            log_potential_matrix = self.log_potential_matrix
+
+        if not (log_potential_matrix.ndim == 2 or log_potential_matrix.ndim == 3):
             raise ValueError(
                 "log_potential_matrix should be either a 2D array, specifying shared parameters for all "
                 "pairwise factors, or 3D array, specifying parameters for individual pairwise factors. "
-                f"Got a {self.log_potential_matrix.ndim}D log_potential_matrix array."
+                f"Got a {log_potential_matrix.ndim}D log_potential_matrix array."
             )
 
-        if self.log_potential_matrix.ndim == 3 and self.log_potential_matrix.shape[
-            0
-        ] != len(self.connected_var_keys):
+        if log_potential_matrix.ndim == 3 and log_potential_matrix.shape[0] != len(
+            self.connected_var_keys
+        ):
             raise ValueError(
                 f"Expected log_potential_matrix for {len(self.connected_var_keys)} factors. "
-                f"Got log_potential_matrix for {self.log_potential_matrix.shape[0]} factors."
+                f"Got log_potential_matrix for {log_potential_matrix.shape[0]} factors."
             )
 
         for fac_list in self.connected_var_keys:
@@ -724,7 +732,7 @@ class PairwiseFactorGroup(FactorGroup):
                 )
 
             if not (
-                self.log_potential_matrix.shape[-2:]
+                log_potential_matrix.shape[-2:]
                 == (
                     self.variable_group[fac_list[0]].num_states,
                     self.variable_group[fac_list[1]].num_states,
@@ -734,20 +742,21 @@ class PairwiseFactorGroup(FactorGroup):
                     f"The specified pairwise factor {fac_list} (with "
                     f"{(self.variable_group[fac_list[0]].num_states, self.variable_group[fac_list[1]].num_states)} "
                     f"configurations) does not match the specified log_potential_matrix "
-                    f"(with {self.log_potential_matrix.shape[-2:]} configurations)."
+                    f"(with {log_potential_matrix.shape[-2:]} configurations)."
                 )
 
         factor_configs = (
             np.mgrid[
-                : self.log_potential_matrix.shape[0],
-                : self.log_potential_matrix.shape[1],
+                : log_potential_matrix.shape[0],
+                : log_potential_matrix.shape[1],
             ]
             .transpose((1, 2, 0))
             .reshape((-1, 2))
         )
+        object.__setattr__(self, "log_potential_matrix", log_potential_matrix)
         log_potential_matrix = np.broadcast_to(
-            self.log_potential_matrix,
-            (len(self.connected_var_keys),) + self.log_potential_matrix.shape[-2:],
+            log_potential_matrix,
+            (len(self.connected_var_keys),) + log_potential_matrix.shape[-2:],
         )
         variables_to_factors = collections.OrderedDict(
             [
@@ -767,6 +776,7 @@ class PairwiseFactorGroup(FactorGroup):
         return variables_to_factors
 
     def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
+        assert isinstance(self.log_potential_matrix, np.ndarray)
         num_factors = len(self.factors)
         if (
             data.shape != (num_factors,) + self.log_potential_matrix.shape[-2:]
@@ -795,6 +805,7 @@ class PairwiseFactorGroup(FactorGroup):
                 f"Can only unflatten 1D array. Got a {flat_data.ndim}D array."
             )
 
+        assert isinstance(self.log_potential_matrix, np.ndarray)
         num_factors = len(self.factors)
         if flat_data.size == num_factors * np.product(
             self.log_potential_matrix.shape[-2:]
