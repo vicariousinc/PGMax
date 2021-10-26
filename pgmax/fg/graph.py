@@ -39,23 +39,6 @@ class FactorGraph:
             For a sequence, the indices of the sequence are used to index the variable groups.
             Note that if not a single VariableGroup, a CompositeVariableGroup will be created from
             this input, and the individual VariableGroups will need to be accessed by indexing.
-
-    Attributes:
-        _variable_group: VariableGroup. contains all involved VariableGroups
-        num_var_states: int. represents the sum of all variable states of all variables in the
-            FactorGraph
-        _vars_to_starts: MappingProxyType[nodes.Variable, int]. maps every variable to an int
-            representing an index in the evidence array at which the first entry of the evidence
-            for that particular variable should be placed.
-        _vargroups_set: Set[groups.VariableGroup]. keeps track of all the VariableGroup's that have
-            been added to this FactorGraph
-        _named_factor_groups: Dict[Hashable, groups.FactorGroup]. A dictionary mapping the names of
-            named factor groups to the corresponding factor groups.
-            We only support setting messages from factors within explicitly named factor groups
-            to connected variables.
-        _total_factor_num_states: int. Current total number of edge states for the added factors.
-        _factor_group_to_msgs_starts: Dict[groups.FactorGroup, int]. Maps a factor group to its
-            corresponding starting index in the flat message array.
     """
 
     variables: Union[
@@ -78,7 +61,7 @@ class FactorGraph:
             0,
             0,
         )
-        self.num_var_states = vars_num_states_cumsum[-1]
+        self._num_var_states = vars_num_states_cumsum[-1]
         self._vars_to_starts = MappingProxyType(
             {
                 variable: vars_num_states_cumsum[vv]
@@ -197,7 +180,7 @@ class FactorGraph:
         If wiring has already beeen compiled, do nothing.
 
         Returns:
-            compiled wiring from each individual factor
+            Compiled wiring from individual factors.
         """
         wirings = [
             factor.compile_wiring(self._vars_to_starts) for factor in self.factors
@@ -212,7 +195,7 @@ class FactorGraph:
         If potential array has already beeen compiled, do nothing.
 
         Returns:
-            a jnp array representing the log of the potential function for each
+            A jnp array representing the log of the potential function for each
                 valid configuration
         """
         return np.concatenate(
@@ -234,10 +217,11 @@ class FactorGraph:
 
     @cached_property
     def fg_state(self) -> FactorGraphState:
+        """Current factor graph state given the added factors."""
         return FactorGraphState(
             variable_group=self._variable_group,
             vars_to_starts=self._vars_to_starts,
-            num_var_states=self.num_var_states,
+            num_var_states=self._num_var_states,
             total_factor_num_states=self._total_factor_num_states,
             variables_to_factors=copy.copy(self._variables_to_factors),
             named_factor_groups=copy.copy(self._named_factor_groups),
@@ -252,6 +236,7 @@ class FactorGraph:
 
     @property
     def bp_state(self) -> BPState:
+        """Relevant information for doing belief propagation."""
         return BPState(
             log_potentials=LogPotentials(fg_state=self.fg_state),
             ftov_msgs=FToVMessages(fg_state=self.fg_state),
@@ -261,6 +246,32 @@ class FactorGraph:
 
 @dataclass(frozen=True, eq=False)
 class FactorGraphState:
+    """FactorGraphState.
+
+    Args:
+        variable_group: VariableGroup. contains all involved VariableGroups
+        vars_to_starts: MappingProxyType[nodes.Variable, int]. maps every variable to an int
+            representing an index in the evidence array at which the first entry of the evidence
+            for that particular variable should be placed.
+        num_var_states: int. represents the sum of all variable states of all variables in the
+            FactorGraph
+        total_factor_num_states:
+        variables_to_factors:
+        named_factor_groups: Dict[Hashable, groups.FactorGroup]. A dictionary mapping the names of
+            named factor groups to the corresponding factor groups.
+            We only support setting messages from factors within explicitly named factor groups
+            to connected variables.
+        factor_group_to_potentials_starts:
+        factor_to_potentials_starts:
+        factor_group_to_msgs_starts:
+        factor_to_msgs_starts:
+        total_factor_num_states: int. Current total number of edge states for the added factors.
+        factor_group_to_msgs_starts: Dict[groups.FactorGroup, int]. Maps a factor group to its
+            corresponding starting index in the flat message array.
+        log_potentials:
+        wiring:
+    """
+
     variable_group: groups.VariableGroup
     vars_to_starts: Mapping[nodes.Variable, int]
     num_var_states: int
@@ -290,7 +301,7 @@ class BPState:
     Args:
         log_potentials: log potentials of the model
         ftov_msgs: factor to variable messages
-        evidence: evidence
+        evidence: evidence (unary log potentials) for variables.
     """
 
     log_potentials: LogPotentials
@@ -351,6 +362,12 @@ def update_log_potentials(
 
 @dataclass(frozen=True, eq=False)
 class LogPotentials:
+    """Class for storing and manipulating log potentials.
+
+    Args:
+        fg_state: Factor graph state
+        value: Optionally specify an initial value
+    """
 
     fg_state: FactorGraphState
     value: Optional[np.ndarray] = None
@@ -464,13 +481,9 @@ class FToVMessages:
     """Class for storing and manipulating factor to variable messages.
 
     Args:
-        factor_graph: associated factor graph
+        fg_state: Factor graph state
         value: Optionally specify initial value for ftov messages
 
-    Attributes:
-        _message_updates: Dict[int, jnp.ndarray]. A dictionary containing
-            the message updates to make on top of initial message values.
-            Maps starting indices to the message values to update with.
     """
 
     fg_state: FactorGraphState
@@ -600,12 +613,8 @@ class Evidence:
     """Class for storing and manipulating evidence
 
     Args:
-        factor_graph: associated factor graph
+        fg_state: Factor graph state
         value: Optionally specify initial value for evidence
-
-    Attributes:
-        _evidence_updates: Dict[nodes.Variable, np.ndarray]. maps every variable to an np.ndarray
-            representing the evidence for that variable
     """
 
     fg_state: FactorGraphState
@@ -676,6 +685,13 @@ class Evidence:
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True, eq=False)
 class BPArrays:
+    """Container for the relevant flat arrays used in belief propagation.
+
+    Args:
+        log_potentials: Flat log potentials array.
+        ftov_msgs: Flat factor to variable messages array.
+        evidence: Flat evidence array.
+    """
 
     log_potentials: Union[np.ndarray, jnp.ndarray]
     ftov_msgs: Union[np.ndarray, jnp.ndarray]
@@ -695,6 +711,19 @@ class BPArrays:
 
 
 def BP(bp_state: BPState, num_iters: int):
+    """Function for generating belief propagation functions.
+
+    Args:
+        bp_state: Belief propagation state.
+        num_iters: Number of belief propagation iterations.
+
+    Returns:
+        run_bp: Function for running belief propagation for num_iters.
+            Optionally takes as input log_potentials updates, ftov_msgs updates,
+            evidence updates, and damping factor, and outputs a BPArrays.
+        get_bp_state: Function to reconstruct the BPState from BPArrays.
+        get_beliefs: Function to calculate beliefs from BPArrays.
+    """
     wiring = jax.device_put(bp_state.fg_state.wiring)
     max_msg_size = int(jnp.max(wiring.edges_num_states))
     num_val_configs = int(wiring.factor_configs_edge_states[-1, 0]) + 1
@@ -709,18 +738,17 @@ def BP(bp_state: BPState, num_iters: int):
         """Function to perform belief propagation.
 
         Specifically, belief propagation is run for num_iters iterations and
-        returns the resulting messages.
+        returns a BPArrays containing the updated log_potentials, ftov_msgs and evidence.
 
         Args:
-            num_iters: The number of iterations for which to perform message passing
+            log_potentials_updates: Dictionary containing optional log_potentials updates.
+            ftov_msgs_updates: Dictionary containing optional ftov_msgs updates.
+            evidence_updates: Dictionary containing optional evidence updates.
             damping: The damping factor to use for message updates between one timestep and the next
-            bp_state: Initial messages to start the belief propagation.
 
         Returns:
-            ftov messages after running BP for num_iters iterations
+            A BPArrays containing the updated log_potentials, ftov_msgs and evidence.
         """
-        # Retrieve the necessary data structures from the compiled self.wiring and
-        # convert these to jax arrays.
         log_potentials = jax.device_put(bp_state.log_potentials.value)
         if log_potentials_updates is not None:
             log_potentials = update_log_potentials(
@@ -760,8 +788,8 @@ def BP(bp_state: BPState, num_iters: int):
             # update the factor to variable messages
             delta_msgs = ftov_msgs - msgs
             msgs = msgs + (1 - damping) * delta_msgs
-            # Normalize and clip these damped, updated messages before returning
-            # them.
+            # Normalize and clip these damped, updated messages before
+            # returning them.
             msgs = infer.normalize_and_clip_msgs(
                 msgs,
                 wiring.edges_num_states,
@@ -775,6 +803,14 @@ def BP(bp_state: BPState, num_iters: int):
         )
 
     def get_bp_state(bp_arrays: BPArrays) -> BPState:
+        """Reconstruct the BPState from a BPArrays
+
+        Args:
+            bp_arrays: A BPArrays containing arrays for belief propagation.
+
+        Returns:
+            The corresponding BPState
+        """
         return BPState(
             log_potentials=LogPotentials(
                 fg_state=bp_state.fg_state, value=bp_arrays.log_potentials
@@ -788,6 +824,14 @@ def BP(bp_state: BPState, num_iters: int):
 
     @jax.jit
     def get_beliefs(bp_arrays: BPArrays):
+        """Calculate beliefs from a given BPArrays
+
+        Args:
+            bp_arrays: A BPArrays containing arrays for belief propagation.
+
+        Returns:
+            beliefs: An array or a PyTree container containing the beliefs for the variables.
+        """
         evidence = jax.device_put(bp_arrays.evidence)
         beliefs = bp_state.fg_state.variable_group.unflatten(
             evidence.at[wiring.var_states_for_edges].add(bp_arrays.ftov_msgs)
@@ -799,6 +843,14 @@ def BP(bp_state: BPState, num_iters: int):
 
 @jax.jit
 def decode_map_states(beliefs: Any):
+    """Function to decode MAP states given the calculated beliefs.
+
+    Args:
+        beliefs: An array or a PyTree container containing beliefs for different variables.
+
+    Returns:
+        An array or a PyTree container containing the MAP states for different variables.
+    """
     map_states = jax.tree_util.tree_map(
         lambda x: jnp.argmax(x, axis=-1),
         beliefs,
