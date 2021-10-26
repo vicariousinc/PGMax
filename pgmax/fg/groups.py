@@ -122,11 +122,27 @@ class VariableGroup:
         return (None,)
 
     def flatten(self, data: Any) -> jnp.ndarray:
+        """Function that turns meaningful structured data into a flat data array for internal use.
+
+        Args:
+            data: Meaningful structured data
+
+        Returns:
+            A flat jnp.array for internal use
+        """
         raise NotImplementedError(
             "Please subclass the VariableGroup class and override this method"
         )
 
     def unflatten(self, flat_data: Union[np.ndarray, jnp.ndarray]) -> Any:
+        """Function that recovers meaningful structured data from internal flat data array
+
+        Args:
+            flat_data: Internal flat data array.
+
+        Returns:
+            Meaningful structured data
+        """
         raise NotImplementedError(
             "Please subclass the VariableGroup class and override this method"
         )
@@ -223,6 +239,16 @@ class CompositeVariableGroup(VariableGroup):
         return keys_to_vars
 
     def flatten(self, data: Union[Mapping, Sequence]) -> jnp.ndarray:
+        """Function that turns meaningful structured data into a flat data array for internal use.
+
+        Args:
+            data: Meaningful structured data.
+                The structure of data should match self.variable_group_container.
+
+
+        Returns:
+            A flat jnp.array for internal use
+        """
         flat_data = jnp.concatenate(
             [
                 self.variable_group_container[key].flatten(data[key])
@@ -234,6 +260,14 @@ class CompositeVariableGroup(VariableGroup):
     def unflatten(
         self, flat_data: Union[np.ndarray, jnp.ndarray]
     ) -> Union[Mapping, Sequence]:
+        """Function that recovers meaningful structured data from internal flat data array
+
+        Args:
+            flat_data: Internal flat data array.
+
+        Returns:
+            Meaningful structured data, with structure matching that of self.variable_group_container.
+        """
         if flat_data.ndim != 1:
             raise ValueError(
                 f"Can only unflatten 1D array. Got a {flat_data.ndim}D array."
@@ -324,6 +358,15 @@ class NDVariableArray(VariableGroup):
         return keys_to_vars
 
     def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
+        """Function that turns meaningful structured data into a flat data array for internal use.
+
+        Args:
+            data: Meaningful structured data. Should be an array of shape self.shape (for e.g. MAP decodings)
+                or self.shape + (self.variable_size,) (for e.g. evidence, beliefs).
+
+        Returns:
+            A flat jnp.array for internal use
+        """
         if data.shape != self.shape and data.shape != self.shape + (
             self.variable_size,
         ):
@@ -337,6 +380,15 @@ class NDVariableArray(VariableGroup):
     def unflatten(
         self, flat_data: Union[np.ndarray, jnp.ndarray]
     ) -> Union[np.ndarray, jnp.ndarray]:
+        """Function that recovers meaningful structured data from internal flat data array
+
+        Args:
+            flat_data: Internal flat data array.
+
+        Returns:
+            Meaningful structured data. An array of shape self.shape (for e.g. MAP decodings)
+                or an array of shape self.shape + (self.variable_size,) (for e.g. evidence, beliefs).
+        """
         if flat_data.ndim != 1:
             raise ValueError(
                 f"Can only unflatten 1D array. Got a {flat_data.ndim}D array."
@@ -385,14 +437,24 @@ class VariableDict(VariableGroup):
     def flatten(
         self, data: Mapping[Hashable, Union[np.ndarray, jnp.ndarray]]
     ) -> jnp.ndarray:
+        """Function that turns meaningful structured data into a flat data array for internal use.
+
+        Args:
+            data: Meaningful structured data. Should be a mapping with keys from self.variable_names.
+                Each value should be an array of shape (1,) (for e.g. MAP decodings) or
+                (self.variable_size,) (for e.g. evidence, beliefs).
+
+        Returns:
+            A flat jnp.array for internal use
+        """
         for key in data:
             if key not in self._keys_to_vars:
                 raise ValueError(f"data is referring to a non-existent variable {key}.")
 
-            if data[key].shape != (self.variable_size,):
+            if data[key].shape != (self.variable_size,) and data[key].shape != (1,):
                 raise ValueError(
                     f"Variable {key} expects a data array of shape "
-                    f"{(self.variable_size,)}. Got {data[key].shape}."
+                    f"{(self.variable_size,)} or (1,). Got {data[key].shape}."
                 )
 
         flat_data = jnp.concatenate([data[key].flatten() for key in self.keys])
@@ -401,6 +463,17 @@ class VariableDict(VariableGroup):
     def unflatten(
         self, flat_data: Union[np.ndarray, jnp.ndarray]
     ) -> Dict[Hashable, Union[np.ndarray, jnp.ndarray]]:
+        """Function that recovers meaningful structured data from internal flat data array
+
+        Args:
+            flat_data: Internal flat data array.
+
+        Returns:
+            Meaningful structured data. Should be a mapping with keys from self.variable_names.
+                Each value should be an array of shape (1,) (for e.g. MAP decodings) or
+                (self.variable_size,) (for e.g. evidence, beliefs).
+
+        """
         if flat_data.ndim != 1:
             raise ValueError(
                 f"Can only unflatten 1D array. Got a {flat_data.ndim}D array."
@@ -426,7 +499,7 @@ class VariableDict(VariableGroup):
                 data[key] = flat_data[start : start + self.variable_size]
                 start += self.variable_size
             else:
-                data[key] = flat_data[start]
+                data[key] = flat_data[[start]]
                 start += 1
 
         return data
@@ -518,11 +591,27 @@ class FactorGroup:
         return factor_num_states
 
     def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
+        """Function that turns meaningful structured data into a flat data array for internal use.
+
+        Args:
+            data: Meaningful structured data.
+
+        Returns:
+            A flat jnp.array for internal use
+        """
         raise NotImplementedError(
             "Please subclass the FactorGroup class and override this method"
         )
 
     def unflatten(self, flat_data: Union[np.ndarray, jnp.ndarray]) -> Any:
+        """Function that recovers meaningful structured data from internal flat data array
+
+        Args:
+            flat_data: Internal flat data array.
+
+        Returns:
+            Meaningful structured data.
+        """
         raise NotImplementedError(
             "Please subclass the FactorGroup class and override this method"
         )
@@ -596,6 +685,16 @@ class EnumerationFactorGroup(FactorGroup):
         return variables_to_factors
 
     def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
+        """Function that turns meaningful structured data into a flat data array for internal use.
+
+        Args:
+            data: Meaningful structured data. Should be an array of shape (num_val_configs,)
+                (for shared log potentials) or (num_factors, num_val_configs) (for log potentials)
+                or (num_factors, num_edge_states) (for ftov messages).
+
+        Returns:
+            A flat jnp.array for internal use
+        """
         num_factors = len(self.factors)
         if (
             data.shape != (num_factors, self.factor_configs.shape[0])
@@ -622,6 +721,16 @@ class EnumerationFactorGroup(FactorGroup):
     def unflatten(
         self, flat_data: Union[np.ndarray, jnp.ndarray]
     ) -> Union[np.ndarray, jnp.ndarray]:
+        """Function that recovers meaningful structured data from internal flat data array
+
+        Args:
+            flat_data: Internal flat data array.
+
+        Returns:
+            Meaningful structured data. Should be an array of shape (num_val_configs,)
+                (for shared log potentials) or (num_factors, num_val_configs) (for log potentials)
+                or (num_factors, num_edge_states) (for ftov messages).
+        """
         if flat_data.ndim != 1:
             raise ValueError(
                 f"Can only unflatten 1D array. Got a {flat_data.ndim}D array."
@@ -757,6 +866,17 @@ class PairwiseFactorGroup(FactorGroup):
         return variables_to_factors
 
     def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
+        """Function that turns meaningful structured data into a flat data array for internal use.
+
+        Args:
+            data: Meaningful structured data. Should be an array of shape
+                (num_factors, var0_num_states, var1_num_states) (for log potential matrices)
+                or (num_factors, var0_num_states + var1_num_states) (for ftov messages)
+                or (var0_num_states, var1_num_states) (for shared log potential matrix).
+
+        Returns:
+            A flat jnp.array for internal use
+        """
         assert isinstance(self.log_potential_matrix, np.ndarray)
         num_factors = len(self.factors)
         if (
@@ -781,6 +901,17 @@ class PairwiseFactorGroup(FactorGroup):
     def unflatten(
         self, flat_data: Union[np.ndarray, jnp.ndarray]
     ) -> Union[np.ndarray, jnp.ndarray]:
+        """Function that recovers meaningful structured data from internal flat data array
+
+        Args:
+            flat_data: Internal flat data array.
+
+        Returns:
+            Meaningful structured data. Should be an array of shape
+                (num_factors, var0_num_states, var1_num_states) (for log potential matrices)
+                or (num_factors, var0_num_states + var1_num_states) (for ftov messages)
+                or (var0_num_states, var1_num_states) (for shared log potential matrix).
+        """
         if flat_data.ndim != 1:
             raise ValueError(
                 f"Can only unflatten 1D array. Got a {flat_data.ndim}D array."
