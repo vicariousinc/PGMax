@@ -213,14 +213,14 @@ def test_e2e_sanity_check():
     grid_vars_group = groups.NDVariableArray(3, (2, M - 1, N - 1))
 
     # Make a group of additional variables for the edges of the grid
-    extra_row_keys: List[Tuple[Any, ...]] = [(0, row, N - 1) for row in range(M - 1)]
-    extra_col_keys: List[Tuple[Any, ...]] = [(1, M - 1, col) for col in range(N - 1)]
-    additional_keys = tuple(extra_row_keys + extra_col_keys)
-    additional_keys_group = groups.VariableDict(3, additional_keys)
+    extra_row_names: List[Tuple[Any, ...]] = [(0, row, N - 1) for row in range(M - 1)]
+    extra_col_names: List[Tuple[Any, ...]] = [(1, M - 1, col) for col in range(N - 1)]
+    additional_names = tuple(extra_row_names + extra_col_names)
+    additional_names_group = groups.VariableDict(3, additional_names)
 
     # Combine these two VariableGroups into one CompositeVariableGroup
     composite_grid_group = groups.CompositeVariableGroup(
-        {"grid_vars": grid_vars_group, "additional_vars": additional_keys_group}
+        {"grid_vars": grid_vars_group, "additional_vars": additional_names_group}
     )
 
     gt_has_cuts = gt_has_cuts.astype(np.int32)
@@ -262,14 +262,14 @@ def test_e2e_sanity_check():
     for row in range(M - 1):
         for col in range(N - 1):
             if row != M - 2 and col != N - 2:
-                curr_keys = [
+                curr_names = [
                     ("grid_vars", 0, row, col),
                     ("grid_vars", 1, row, col),
                     ("grid_vars", 0, row, col + 1),
                     ("grid_vars", 1, row + 1, col),
                 ]
             elif row != M - 2:
-                curr_keys = [
+                curr_names = [
                     ("grid_vars", 0, row, col),
                     ("grid_vars", 1, row, col),
                     ("additional_vars", 0, row, col + 1),
@@ -277,7 +277,7 @@ def test_e2e_sanity_check():
                 ]
 
             elif col != N - 2:
-                curr_keys = [
+                curr_names = [
                     ("grid_vars", 0, row, col),
                     ("grid_vars", 1, row, col),
                     ("grid_vars", 0, row, col + 1),
@@ -285,7 +285,7 @@ def test_e2e_sanity_check():
                 ]
 
             else:
-                curr_keys = [
+                curr_names = [
                     ("grid_vars", 0, row, col),
                     ("grid_vars", 1, row, col),
                     ("additional_vars", 0, row, col + 1),
@@ -293,14 +293,14 @@ def test_e2e_sanity_check():
                 ]
             if row % 2 == 0:
                 fg.add_factor(
-                    curr_keys,
+                    curr_names,
                     valid_configs_non_supp,
                     np.zeros(valid_configs_non_supp.shape[0], dtype=float),
                     name=(row, col),
                 )
             else:
                 fg.add_factor(
-                    variable_names=curr_keys,
+                    variable_names=curr_names,
                     factor_configs=valid_configs_non_supp,
                     log_potentials=np.zeros(
                         valid_configs_non_supp.shape[0], dtype=float
@@ -309,36 +309,36 @@ def test_e2e_sanity_check():
                 )
 
     # Create an EnumerationFactorGroup for vertical suppression factors
-    vert_suppression_keys: List[List[Tuple[Any, ...]]] = []
+    vert_suppression_names: List[List[Tuple[Any, ...]]] = []
     for col in range(N):
         for start_row in range(M - SUPPRESSION_DIAMETER):
             if col != N - 1:
-                vert_suppression_keys.append(
+                vert_suppression_names.append(
                     [
                         ("grid_vars", 0, r, col)
                         for r in range(start_row, start_row + SUPPRESSION_DIAMETER)
                     ]
                 )
             else:
-                vert_suppression_keys.append(
+                vert_suppression_names.append(
                     [
                         ("additional_vars", 0, r, col)
                         for r in range(start_row, start_row + SUPPRESSION_DIAMETER)
                     ]
                 )
 
-    horz_suppression_keys: List[List[Tuple[Any, ...]]] = []
+    horz_suppression_names: List[List[Tuple[Any, ...]]] = []
     for row in range(M):
         for start_col in range(N - SUPPRESSION_DIAMETER):
             if row != M - 1:
-                horz_suppression_keys.append(
+                horz_suppression_names.append(
                     [
                         ("grid_vars", 1, row, c)
                         for c in range(start_col, start_col + SUPPRESSION_DIAMETER)
                     ]
                 )
             else:
-                horz_suppression_keys.append(
+                horz_suppression_names.append(
                     [
                         ("additional_vars", 1, row, c)
                         for c in range(start_col, start_col + SUPPRESSION_DIAMETER)
@@ -348,14 +348,14 @@ def test_e2e_sanity_check():
     # Add the suppression factors to the graph via kwargs
     fg.add_factor_group(
         factory=groups.EnumerationFactorGroup,
-        connected_var_keys={
-            idx: keys for idx, keys in enumerate(vert_suppression_keys)
+        connected_var_names={
+            idx: names for idx, names in enumerate(vert_suppression_names)
         },
         factor_configs=valid_configs_supp,
     )
     fg.add_factor_group(
         factory=groups.EnumerationFactorGroup,
-        connected_var_keys=horz_suppression_keys,
+        connected_var_names=horz_suppression_names,
         factor_configs=valid_configs_supp,
         log_potentials=np.zeros(valid_configs_supp.shape[0], dtype=float),
     )
@@ -370,8 +370,8 @@ def test_e2e_sanity_check():
     # Test that the output messages are close to the true messages
     assert jnp.allclose(bp_arrays.ftov_msgs, true_final_msgs_output, atol=1e-06)
     decoded_map_states = graph.decode_map_states(get_beliefs(bp_arrays))
-    for key in true_map_state_output:
-        assert true_map_state_output[key] == decoded_map_states[key[0]][key[1:]]
+    for name in true_map_state_output:
+        assert true_map_state_output[name] == decoded_map_states[name[0]][name[1:]]
 
 
 def test_e2e_heretic():
@@ -407,7 +407,7 @@ def test_e2e_heretic():
         for k_col in range(3):
             fg.add_factor_group(
                 factory=groups.PairwiseFactorGroup,
-                connected_var_keys=binary_connected_variables(28, 28, k_row, k_col),
+                connected_var_names=binary_connected_variables(28, 28, k_row, k_col),
                 log_potential_matrix=W_pot[:, :, k_row, k_col],
                 name=(k_row, k_col),
             )

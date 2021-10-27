@@ -17,7 +17,7 @@ def test_composite_variable_group():
     composite_variable_dict = groups.CompositeVariableGroup(
         {(0, 1): variable_dict1, (2, 3): variable_dict2}
     )
-    with pytest.raises(ValueError, match="The key needs to have at least 2 elements"):
+    with pytest.raises(ValueError, match="The name needs to have at least 2 elements"):
         composite_variable_sequence[(0,)]
 
     assert composite_variable_sequence[0, 1] == variable_dict1[1]
@@ -32,12 +32,12 @@ def test_composite_variable_group():
     ]
     assert jnp.all(
         composite_variable_sequence.flatten(
-            [{key: np.zeros(15) for key in range(3)} for _ in range(2)]
+            [{name: np.zeros(15) for name in range(3)} for _ in range(2)]
         )
         == composite_variable_dict.flatten(
             {
-                (0, 1): {key: np.zeros(15) for key in range(3)},
-                (2, 3): {key: np.zeros(15) for key in range(3)},
+                (0, 1): {name: np.zeros(15) for name in range(3)},
+                (2, 3): {name: np.zeros(15) for name in range(3)},
             }
         )
     )
@@ -47,7 +47,7 @@ def test_composite_variable_group():
                 jax.tree_util.tree_multimap(
                     lambda x, y: jnp.all(x == y),
                     composite_variable_sequence.unflatten(jnp.zeros(15 * 3 * 2)),
-                    [{key: jnp.zeros(15) for key in range(3)} for _ in range(2)],
+                    [{name: jnp.zeros(15) for name in range(3)} for _ in range(2)],
                 )
             )
         )
@@ -59,8 +59,8 @@ def test_composite_variable_group():
                     lambda x, y: jnp.all(x == y),
                     composite_variable_dict.unflatten(jnp.zeros(3 * 2)),
                     {
-                        (0, 1): {key: np.zeros(1) for key in range(3)},
-                        (2, 3): {key: np.zeros(1) for key in range(3)},
+                        (0, 1): {name: np.zeros(1) for name in range(3)},
+                        (2, 3): {name: np.zeros(1) for name in range(3)},
                     },
                 )
             )
@@ -106,7 +106,7 @@ def test_variable_dict():
                 jax.tree_util.tree_multimap(
                     lambda x, y: jnp.all(x == y),
                     variable_dict.unflatten(jnp.zeros(3)),
-                    {key: np.zeros(1) for key in range(3)},
+                    {name: np.zeros(1) for name in range(3)},
                 )
             )
         )
@@ -158,24 +158,24 @@ def test_enumeration_factor_group():
     ):
         enumeration_factor_group = groups.EnumerationFactorGroup(
             variable_group=variable_group,
-            connected_var_keys=[[(0, 0), (0, 1), (1, 1)], [(0, 1), (1, 0), (1, 1)]],
+            connected_var_names=[[(0, 0), (0, 1), (1, 1)], [(0, 1), (1, 0), (1, 1)]],
             factor_configs=np.zeros((1, 3), dtype=int),
             log_potentials=np.zeros((3, 2)),
         )
 
     enumeration_factor_group = groups.EnumerationFactorGroup(
         variable_group=variable_group,
-        connected_var_keys=[[(0, 0), (0, 1), (1, 1)], [(0, 1), (1, 0), (1, 1)]],
+        connected_var_names=[[(0, 0), (0, 1), (1, 1)], [(0, 1), (1, 0), (1, 1)]],
         factor_configs=np.zeros((1, 3), dtype=int),
     )
-    key = [(0, 0), (1, 1)]
+    name = [(0, 0), (1, 1)]
     with pytest.raises(
         ValueError,
         match=re.escape(
-            f"The queried factor {frozenset(key)} is not present in the factor group."
+            f"The queried factor {frozenset(name)} is not present in the factor group."
         ),
     ):
-        enumeration_factor_group[key]
+        enumeration_factor_group[name]
 
     assert (
         enumeration_factor_group[[(0, 1), (1, 0), (1, 1)]]

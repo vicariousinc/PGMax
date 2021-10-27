@@ -31,79 +31,80 @@ class VariableGroup:
     """Class to represent a group of variables.
 
     All variables in the group are assumed to have the same size. Additionally, the
-    variables are indexed by a "key", and can be retrieved by direct indexing (even indexing
-    a sequence of keys) of the VariableGroup.
+    variables are indexed by a variable name, and can be retrieved by direct indexing (even indexing
+    a sequence of variable names) of the VariableGroup.
 
     Attributes:
-        _keys_to_vars: A private, immutable mapping from keys to variables
+        _names_to_variables: A private, immutable mapping from variable names to variables
     """
 
-    _keys_to_vars: Mapping[Hashable, nodes.Variable] = field(init=False)
+    _names_to_variables: Mapping[Hashable, nodes.Variable] = field(init=False)
 
     def __post_init__(self) -> None:
-        """Initialize a private, immutable mapping from keys to variables."""
+        """Initialize a private, immutable mapping from variable names to variables."""
         object.__setattr__(
-            self, "_keys_to_vars", MappingProxyType(self._get_keys_to_vars())
+            self,
+            "_names_to_variables",
+            MappingProxyType(self._get_names_to_variables()),
         )
 
     @typing.overload
-    def __getitem__(self, key: Hashable) -> nodes.Variable:
+    def __getitem__(self, name: Hashable) -> nodes.Variable:
         """This function is a typing overload and is overwritten by the implemented __getitem__"""
 
     @typing.overload
-    def __getitem__(self, key: List) -> List[nodes.Variable]:
+    def __getitem__(self, name: List) -> List[nodes.Variable]:
         """This function is a typing overload and is overwritten by the implemented __getitem__"""
 
-    def __getitem__(self, key):
-        """Given a key, retrieve the associated Variable.
+    def __getitem__(self, name):
+        """Given a name, retrieve the associated Variable.
 
         Args:
-            key: a single key corresponding to a single variable, or a list of such keys
+            name: a single name corresponding to a single variable, or a list of such names
 
         Returns:
-            a single variable if the "key" argument is a single key. Otherwise, returns a list of
-                variables corresponding to each key in the "key" argument.
+            A single variable if the name is not a list. A list of variables if name is a list
         """
 
-        if isinstance(key, List):
-            keys_list = key
+        if isinstance(name, List):
+            names_list = name
         else:
-            keys_list = [key]
+            names_list = [name]
 
         vars_list = []
-        for curr_key in keys_list:
-            var = self._keys_to_vars.get(curr_key)
+        for curr_name in names_list:
+            var = self._names_to_variables.get(curr_name)
             if var is None:
                 raise ValueError(
-                    f"The key {curr_key} is not present in the VariableGroup {type(self)}; please ensure "
+                    f"The name {curr_name} is not present in the VariableGroup {type(self)}; please ensure "
                     "it's been added to the VariableGroup before trying to query it."
                 )
 
             vars_list.append(var)
 
-        if isinstance(key, List):
+        if isinstance(name, List):
             return vars_list
         else:
             return vars_list[0]
 
-    def _get_keys_to_vars(self) -> OrderedDict[Any, nodes.Variable]:
-        """Function that generates a dictionary mapping keys to variables.
+    def _get_names_to_variables(self) -> OrderedDict[Any, nodes.Variable]:
+        """Function that generates a dictionary mapping names to variables.
 
         Returns:
-            a dictionary mapping all possible keys to different variables.
+            a dictionary mapping all possible names to different variables.
         """
         raise NotImplementedError(
             "Please subclass the VariableGroup class and override this method"
         )
 
     @cached_property
-    def keys(self) -> Tuple[Any, ...]:
-        """Function to return a tuple of all keys in the group.
+    def names(self) -> Tuple[Any, ...]:
+        """Function to return a tuple of all names in the group.
 
         Returns:
-            tuple of all keys that are part of this VariableGroup
+            tuple of all names that are part of this VariableGroup
         """
-        return tuple(self._keys_to_vars.keys())
+        return tuple(self._names_to_variables.keys())
 
     @cached_property
     def variables(self) -> Tuple[nodes.Variable, ...]:
@@ -112,10 +113,10 @@ class VariableGroup:
         Returns:
             tuple of all variable that are part of this VariableGroup
         """
-        return tuple(self._keys_to_vars.values())
+        return tuple(self._names_to_variables.values())
 
     @cached_property
-    def container_keys(self) -> Tuple:
+    def container_names(self) -> Tuple:
         """Placeholder function. Returns a tuple containing None for all variable groups
         other than a composite variable group
         """
@@ -154,17 +155,17 @@ class CompositeVariableGroup(VariableGroup):
 
     This class enables users to wrap various different VariableGroups and then index
     them in a straightforward manner. To index into a CompositeVariableGroup, simply
-    provide the "key" of the VariableGroup within this CompositeVariableGroup followed
-    by the key to be indexed within the VariableGroup.
+    provide the name of the VariableGroup within this CompositeVariableGroup followed
+    by the name to be indexed within the VariableGroup.
 
     Args:
         variable_group_container: A container containing multiple variable groups.
             Supported containers include mapping and sequence.
-            For a mapping, the keys of the mapping are used to index the variable groups.
+            For a mapping, the names of the mapping are used to index the variable groups.
             For a sequence, the indices of the sequence are used to index the variable groups.
 
     Attributes:
-        _keys_to_vars: A private, immutable mapping from keys to variables
+        _names_to_variables: A private, immutable mapping from names to variables
     """
 
     variable_group_container: Union[
@@ -173,70 +174,79 @@ class CompositeVariableGroup(VariableGroup):
 
     def __post_init__(self):
         object.__setattr__(
-            self, "_keys_to_vars", MappingProxyType(self._get_keys_to_vars())
+            self,
+            "_names_to_variables",
+            MappingProxyType(self._get_names_to_variables()),
         )
 
     @typing.overload
-    def __getitem__(self, key: Hashable) -> nodes.Variable:
+    def __getitem__(self, name: Hashable) -> nodes.Variable:
         """This function is a typing overload and is overwritten by the implemented __getitem__"""
 
     @typing.overload
-    def __getitem__(self, key: List) -> List[nodes.Variable]:
+    def __getitem__(self, name: List) -> List[nodes.Variable]:
         """This function is a typing overload and is overwritten by the implemented __getitem__"""
 
-    def __getitem__(self, key):
-        """Given a key, retrieve the associated Variable from the associated VariableGroup.
+    def __getitem__(self, name):
+        """Given a name, retrieve the associated Variable from the associated VariableGroup.
 
         Args:
-            key: a single key corresponding to a single Variable within a VariableGroup, or a list
-                of such keys
+            name: a single name corresponding to a single Variable within a VariableGroup, or a list
+                of such names
 
         Returns:
-            a single variable if the "key" argument is a single key. Otherwise, returns a list of
-                variables corresponding to each key in the "key" argument.
+            A single variable if the name is not a list. A list of variables if name is a list
         """
-        if isinstance(key, List):
-            keys_list = key
+        if isinstance(name, List):
+            names_list = name
         else:
-            keys_list = [key]
+            names_list = [name]
 
         vars_list = []
-        for curr_key in keys_list:
-            if len(curr_key) < 2:
+        for curr_name in names_list:
+            if len(curr_name) < 2:
                 raise ValueError(
-                    "The key needs to have at least 2 elements to index from a composite variable group."
+                    "The name needs to have at least 2 elements to index from a composite variable group."
                 )
 
-            variable_group = self.variable_group_container[curr_key[0]]
-            if len(curr_key) == 2:
-                vars_list.append(variable_group[curr_key[1]])
+            variable_group = self.variable_group_container[curr_name[0]]
+            if len(curr_name) == 2:
+                vars_list.append(variable_group[curr_name[1]])
             else:
-                vars_list.append(variable_group[curr_key[1:]])
+                vars_list.append(variable_group[curr_name[1:]])
 
-        if isinstance(key, List):
+        if isinstance(name, List):
             return vars_list
         else:
             return vars_list[0]
 
-    def _get_keys_to_vars(self) -> OrderedDict[Hashable, nodes.Variable]:
-        """Function that generates a dictionary mapping keys to variables.
+    def _get_names_to_variables(self) -> OrderedDict[Hashable, nodes.Variable]:
+        """Function that generates a dictionary mapping names to variables.
 
         Returns:
-            a dictionary mapping all possible keys to different variables.
+            a dictionary mapping all possible names to different variables.
         """
-        keys_to_vars: OrderedDict[Hashable, nodes.Variable] = collections.OrderedDict()
-        for container_key in self.container_keys:
-            for variable_group_key in self.variable_group_container[container_key].keys:
-                if isinstance(variable_group_key, tuple):
-                    keys_to_vars[
-                        (container_key,) + variable_group_key
-                    ] = self.variable_group_container[container_key][variable_group_key]
+        names_to_variables: OrderedDict[
+            Hashable, nodes.Variable
+        ] = collections.OrderedDict()
+        for container_name in self.container_names:
+            for variable_group_name in self.variable_group_container[
+                container_name
+            ].names:
+                if isinstance(variable_group_name, tuple):
+                    names_to_variables[
+                        (container_name,) + variable_group_name
+                    ] = self.variable_group_container[container_name][
+                        variable_group_name
+                    ]
                 else:
-                    keys_to_vars[
-                        (container_key, variable_group_key)
-                    ] = self.variable_group_container[container_key][variable_group_key]
+                    names_to_variables[
+                        (container_name, variable_group_name)
+                    ] = self.variable_group_container[container_name][
+                        variable_group_name
+                    ]
 
-        return keys_to_vars
+        return names_to_variables
 
     def flatten(self, data: Union[Mapping, Sequence]) -> jnp.ndarray:
         """Function that turns meaningful structured data into a flat data array for internal use.
@@ -251,8 +261,8 @@ class CompositeVariableGroup(VariableGroup):
         """
         flat_data = jnp.concatenate(
             [
-                self.variable_group_container[key].flatten(data[key])
-                for key in self.container_keys
+                self.variable_group_container[name].flatten(data[name])
+                for name in self.container_names
             ]
         )
         return flat_data
@@ -275,8 +285,8 @@ class CompositeVariableGroup(VariableGroup):
 
         num_variables = 0
         num_variable_states = 0
-        for key in self.container_keys:
-            variable_group = self.variable_group_container[key]
+        for name in self.container_names:
+            variable_group = self.variable_group_container[name]
             num_variables += len(variable_group.variables)
             num_variable_states += (
                 len(variable_group.variables) * variable_group.variables[0].num_states
@@ -295,8 +305,8 @@ class CompositeVariableGroup(VariableGroup):
 
         data: List[np.ndarray] = []
         start = 0
-        for key in self.container_keys:
-            variable_group = self.variable_group_container[key]
+        for name in self.container_names:
+            variable_group = self.variable_group_container[name]
             length = len(variable_group.variables)
             if use_num_states:
                 length *= variable_group.variables[0].num_states
@@ -304,25 +314,27 @@ class CompositeVariableGroup(VariableGroup):
             data.append(variable_group.unflatten(flat_data[start : start + length]))
             start += length
         if isinstance(self.variable_group_container, Mapping):
-            return dict([(key, data[kk]) for kk, key in enumerate(self.container_keys)])
+            return dict(
+                [(name, data[kk]) for kk, name in enumerate(self.container_names)]
+            )
         else:
             return data
 
     @cached_property
-    def container_keys(self) -> Tuple:
-        """Function to get keys referring to the variable groups within this
+    def container_names(self) -> Tuple:
+        """Function to get names referring to the variable groups within this
         CompositeVariableGroup.
 
         Returns:
-            a tuple of the keys referring to the variable groups within this
+            a tuple of the names referring to the variable groups within this
             CompositeVariableGroup.
         """
         if isinstance(self.variable_group_container, Mapping):
-            container_keys = tuple(self.variable_group_container.keys())
+            container_names = tuple(self.variable_group_container.keys())
         else:
-            container_keys = tuple(range(len(self.variable_group_container)))
+            container_names = tuple(range(len(self.variable_group_container)))
 
-        return container_keys
+        return container_names
 
 
 @dataclass(frozen=True, eq=False)
@@ -338,24 +350,24 @@ class NDVariableArray(VariableGroup):
     variable_size: int
     shape: Tuple[int, ...]
 
-    def _get_keys_to_vars(
+    def _get_names_to_variables(
         self,
     ) -> OrderedDict[Union[int, Tuple[int, ...]], nodes.Variable]:
-        """Function that generates a dictionary mapping keys to variables.
+        """Function that generates a dictionary mapping names to variables.
 
         Returns:
-            a dictionary mapping all possible keys to different variables.
+            a dictionary mapping all possible names to different variables.
         """
-        keys_to_vars: OrderedDict[
+        names_to_variables: OrderedDict[
             Union[int, Tuple[int, ...]], nodes.Variable
         ] = collections.OrderedDict()
-        for key in itertools.product(*[list(range(k)) for k in self.shape]):
-            if len(key) == 1:
-                keys_to_vars[key[0]] = nodes.Variable(self.variable_size)
+        for name in itertools.product(*[list(range(k)) for k in self.shape]):
+            if len(name) == 1:
+                names_to_variables[name[0]] = nodes.Variable(self.variable_size)
             else:
-                keys_to_vars[key] = nodes.Variable(self.variable_size)
+                names_to_variables[name] = nodes.Variable(self.variable_size)
 
-        return keys_to_vars
+        return names_to_variables
 
     def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
         """Function that turns meaningful structured data into a flat data array for internal use.
@@ -420,19 +432,19 @@ class VariableDict(VariableGroup):
     variable_size: int
     variable_names: Tuple[Any, ...]
 
-    def _get_keys_to_vars(self) -> OrderedDict[Tuple[int, ...], nodes.Variable]:
-        """Function that generates a dictionary mapping keys to variables.
+    def _get_names_to_variables(self) -> OrderedDict[Tuple[int, ...], nodes.Variable]:
+        """Function that generates a dictionary mapping names to variables.
 
         Returns:
-            a dictionary mapping all possible keys to different variables.
+            a dictionary mapping all possible names to different variables.
         """
-        keys_to_vars: OrderedDict[
+        names_to_variables: OrderedDict[
             Tuple[Any, ...], nodes.Variable
         ] = collections.OrderedDict()
-        for key in self.variable_names:
-            keys_to_vars[key] = nodes.Variable(self.variable_size)
+        for name in self.variable_names:
+            names_to_variables[name] = nodes.Variable(self.variable_size)
 
-        return keys_to_vars
+        return names_to_variables
 
     def flatten(
         self, data: Mapping[Hashable, Union[np.ndarray, jnp.ndarray]]
@@ -440,24 +452,26 @@ class VariableDict(VariableGroup):
         """Function that turns meaningful structured data into a flat data array for internal use.
 
         Args:
-            data: Meaningful structured data. Should be a mapping with keys from self.variable_names.
+            data: Meaningful structured data. Should be a mapping with names from self.variable_names.
                 Each value should be an array of shape (1,) (for e.g. MAP decodings) or
                 (self.variable_size,) (for e.g. evidence, beliefs).
 
         Returns:
             A flat jnp.array for internal use
         """
-        for key in data:
-            if key not in self._keys_to_vars:
-                raise ValueError(f"data is referring to a non-existent variable {key}.")
-
-            if data[key].shape != (self.variable_size,) and data[key].shape != (1,):
+        for name in data:
+            if name not in self._names_to_variables:
                 raise ValueError(
-                    f"Variable {key} expects a data array of shape "
-                    f"{(self.variable_size,)} or (1,). Got {data[key].shape}."
+                    f"data is referring to a non-existent variable {name}."
                 )
 
-        flat_data = jnp.concatenate([data[key].flatten() for key in self.keys])
+            if data[name].shape != (self.variable_size,) and data[name].shape != (1,):
+                raise ValueError(
+                    f"Variable {name} expects a data array of shape "
+                    f"{(self.variable_size,)} or (1,). Got {data[name].shape}."
+                )
+
+        flat_data = jnp.concatenate([data[name].flatten() for name in self.names])
         return flat_data
 
     def unflatten(
@@ -469,7 +483,7 @@ class VariableDict(VariableGroup):
             flat_data: Internal flat data array.
 
         Returns:
-            Meaningful structured data. Should be a mapping with keys from self.variable_names.
+            Meaningful structured data. Should be a mapping with names from self.variable_names.
                 Each value should be an array of shape (1,) (for e.g. MAP decodings) or
                 (self.variable_size,) (for e.g. evidence, beliefs).
 
@@ -494,12 +508,12 @@ class VariableDict(VariableGroup):
 
         start = 0
         data = {}
-        for key in self.variable_names:
+        for name in self.variable_names:
             if use_num_states:
-                data[key] = flat_data[start : start + self.variable_size]
+                data[name] = flat_data[start : start + self.variable_size]
                 start += self.variable_size
             else:
-                data[key] = flat_data[np.array([start])]
+                data[name] = flat_data[np.array([start])]
                 start += 1
 
         return data
@@ -518,7 +532,7 @@ class FactorGroup:
         _variables_to_factors: maps set of involved variables to the corresponding factors
 
     Raises:
-        ValueError: if connected_var_keys is an empty list
+        ValueError: if connected_var_names is an empty list
     """
 
     variable_group: Union[CompositeVariableGroup, VariableGroup]
@@ -568,10 +582,10 @@ class FactorGroup:
     def _get_variables_to_factors(
         self,
     ) -> OrderedDict[FrozenSet, nodes.EnumerationFactor]:
-        """Function that generates a dictionary mapping keys to factors.
+        """Function that generates a dictionary mapping names to factors.
 
         Returns:
-            a dictionary mapping all possible keys to different factors.
+            a dictionary mapping all possible names to different factors.
         """
         raise NotImplementedError(
             "Please subclass the VariableGroup class and override this method"
@@ -626,8 +640,8 @@ class EnumerationFactorGroup(FactorGroup):
     uniform 0 unless the inheriting class includes a log_potentials argument.
 
     Args:
-        connected_var_keys: A list of list of tuples, where each innermost tuple contains a
-            key into variable_group. Each list within the outer list is taken to contain the keys of variables
+        connected_var_names: A list of list of tuples, where each innermost tuple contains a
+            name into variable_group. Each list within the outer list is taken to contain the names of variables
             neighboring a particular factor to be added.
         factor_configs: Array of shape (num_val_configs, num_variables)
             An array containing explicit enumeration of all valid configurations
@@ -637,7 +651,7 @@ class EnumerationFactorGroup(FactorGroup):
             initialized.
     """
 
-    connected_var_keys: Sequence[List]
+    connected_var_names: Sequence[List]
     factor_configs: np.ndarray
     log_potentials: Optional[np.ndarray] = None
 
@@ -649,7 +663,7 @@ class EnumerationFactorGroup(FactorGroup):
         Returns:
             a dictionary mapping all possible set of involved variables to different factors.
         """
-        num_factors = len(self.connected_var_keys)
+        num_factors = len(self.connected_var_names)
         num_val_configs = self.factor_configs.shape[0]
         if self.log_potentials is None:
             log_potentials = np.zeros((num_factors, num_val_configs), dtype=float)
@@ -672,14 +686,14 @@ class EnumerationFactorGroup(FactorGroup):
         variables_to_factors = collections.OrderedDict(
             [
                 (
-                    frozenset(self.connected_var_keys[ii]),
+                    frozenset(self.connected_var_names[ii]),
                     nodes.EnumerationFactor(
-                        tuple(self.variable_group[self.connected_var_keys[ii]]),
+                        tuple(self.variable_group[self.connected_var_names[ii]]),
                         self.factor_configs,
                         log_potentials[ii],
                     ),
                 )
-                for ii in range(len(self.connected_var_keys))
+                for ii in range(len(self.connected_var_names))
             ]
         )
         return variables_to_factors
@@ -765,15 +779,15 @@ class PairwiseFactorGroup(FactorGroup):
     one CompositeVariableGroup.
 
     Args:
-        connected_var_keys: A list of list of tuples, where each innermost tuple contains a
-            key into variable_group. Each list within the outer list is taken to contain the keys of variables
+        connected_var_names: A list of list of tuples, where each innermost tuple contains a
+            name into variable_group. Each list within the outer list is taken to contain the names of variables
             neighboring a particular factor to be added.
         log_potential_matrix: array of shape (var1.variable_size, var2.variable_size),
             where var1 and var2 are the 2 VariableGroups (that may refer to the same
-            VariableGroup) whose keys are present in each sub-list from self.connected_var_keys.
+            VariableGroup) whose names are present in each sub-list from self.connected_var_names.
     """
 
-    connected_var_keys: Sequence[List]
+    connected_var_names: Sequence[List]
     log_potential_matrix: Optional[np.ndarray] = None
 
     def _get_variables_to_factors(
@@ -785,15 +799,15 @@ class PairwiseFactorGroup(FactorGroup):
             a dictionary mapping all possible set of involved variables to different factors.
 
         Raises:
-            ValueError: if every sub-list within self.connected_var_keys has len != 2, or if the shape of the
+            ValueError: if every sub-list within self.connected_var_names has len != 2, or if the shape of the
                 log_potential_matrix is not the same as the variable sizes for each variable referenced in
-                each sub-list of self.connected_var_keys
+                each sub-list of self.connected_var_names
         """
         if self.log_potential_matrix is None:
             log_potential_matrix = np.zeros(
                 (
-                    self.variable_group[self.connected_var_keys[0][0]].num_states,
-                    self.variable_group[self.connected_var_keys[0][1]].num_states,
+                    self.variable_group[self.connected_var_names[0][0]].num_states,
+                    self.variable_group[self.connected_var_names[0][1]].num_states,
                 )
             )
         else:
@@ -807,14 +821,14 @@ class PairwiseFactorGroup(FactorGroup):
             )
 
         if log_potential_matrix.ndim == 3 and log_potential_matrix.shape[0] != len(
-            self.connected_var_keys
+            self.connected_var_names
         ):
             raise ValueError(
-                f"Expected log_potential_matrix for {len(self.connected_var_keys)} factors. "
+                f"Expected log_potential_matrix for {len(self.connected_var_names)} factors. "
                 f"Got log_potential_matrix for {log_potential_matrix.shape[0]} factors."
             )
 
-        for fac_list in self.connected_var_keys:
+        for fac_list in self.connected_var_names:
             if len(fac_list) != 2:
                 raise ValueError(
                     "All pairwise factors should connect to exactly 2 variables. Got a factor connecting to"
@@ -846,21 +860,21 @@ class PairwiseFactorGroup(FactorGroup):
         object.__setattr__(self, "log_potential_matrix", log_potential_matrix)
         log_potential_matrix = np.broadcast_to(
             log_potential_matrix,
-            (len(self.connected_var_keys),) + log_potential_matrix.shape[-2:],
+            (len(self.connected_var_names),) + log_potential_matrix.shape[-2:],
         )
         variables_to_factors = collections.OrderedDict(
             [
                 (
-                    frozenset(self.connected_var_keys[ii]),
+                    frozenset(self.connected_var_names[ii]),
                     nodes.EnumerationFactor(
-                        tuple(self.variable_group[self.connected_var_keys[ii]]),
+                        tuple(self.variable_group[self.connected_var_names[ii]]),
                         factor_configs,
                         log_potential_matrix[
                             ii, factor_configs[:, 0], factor_configs[:, 1]
                         ],
                     ),
                 )
-                for ii in range(len(self.connected_var_keys))
+                for ii in range(len(self.connected_var_names))
             ]
         )
         return variables_to_factors

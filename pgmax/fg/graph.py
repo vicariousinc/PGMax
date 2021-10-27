@@ -114,7 +114,7 @@ class FactorGraph:
         """
         factor_group = groups.EnumerationFactorGroup(
             self._variable_group,
-            connected_var_keys=[variable_names],
+            connected_var_names=[variable_names],
             factor_configs=factor_configs,
             log_potentials=log_potentials,
         )
@@ -335,27 +335,27 @@ def update_log_potentials(
     Returns:
         A flat jnp array containing updated log_potentials.
     """
-    for key in updates:
-        data = updates[key]
-        if key in fg_state.named_factor_groups:
-            factor_group = fg_state.named_factor_groups[key]
+    for name in updates:
+        data = updates[name]
+        if name in fg_state.named_factor_groups:
+            factor_group = fg_state.named_factor_groups[name]
             flat_data = factor_group.flatten(data)
             if flat_data.shape != factor_group.factor_group_log_potentials.shape:
                 raise ValueError(
                     f"Expected log potentials shape {factor_group.factor_group_log_potentials.shape} "
-                    f"for factor group {key}. Got incompatible data shape {data.shape}."
+                    f"for factor group {name}. Got incompatible data shape {data.shape}."
                 )
 
             start = fg_state.factor_group_to_potentials_starts[factor_group]
             log_potentials = log_potentials.at[start : start + flat_data.shape[0]].set(
                 flat_data
             )
-        elif frozenset(key) in fg_state.variables_to_factors:
-            factor = fg_state.variables_to_factors[frozenset(key)]
+        elif frozenset(name) in fg_state.variables_to_factors:
+            factor = fg_state.variables_to_factors[frozenset(name)]
             if data.shape != factor.log_potentials.shape:
                 raise ValueError(
                     f"Expected log potentials shape {factor.log_potentials.shape} "
-                    f"for factor {key}. Got {data.shape}."
+                    f"for factor {name}. Got {data.shape}."
                 )
 
             start = fg_state.factor_to_potentials_starts[factor]
@@ -363,7 +363,7 @@ def update_log_potentials(
                 start : start + factor.log_potentials.shape[0]
             ].set(data)
         else:
-            raise ValueError(f"Invalid key {key} for log potentials updates.")
+            raise ValueError(f"Invalid name {name} for log potentials updates.")
 
     return log_potentials
 
@@ -394,57 +394,57 @@ class LogPotentials:
 
             object.__setattr__(self, "value", jax.device_put(self.value))
 
-    def __getitem__(self, key: Any):
+    def __getitem__(self, name: Any):
         """Function to query log potentials for a named factor group or a factor.
 
         Args:
-            key: Name of a named factor group, or a frozenset containing the set
+            name: Name of a named factor group, or a frozenset containing the set
                 of involved variables for the queried factor.
 
         Returned:
             The quried log potentials.
         """
-        if not isinstance(key, Hashable):
-            key = frozenset(key)
+        if not isinstance(name, Hashable):
+            name = frozenset(name)
 
-        if key in self.fg_state.named_factor_groups:
-            factor_group = self.fg_state.named_factor_groups[key]
+        if name in self.fg_state.named_factor_groups:
+            factor_group = self.fg_state.named_factor_groups[name]
             start = self.fg_state.factor_group_to_potentials_starts[factor_group]
             log_potentials = jax.device_put(self.value)[
                 start : start + factor_group.factor_group_log_potentials.shape[0]
             ]
-        elif frozenset(key) in self.fg_state.variables_to_factors:
-            factor = self.fg_state.variables_to_factors[frozenset(key)]
+        elif frozenset(name) in self.fg_state.variables_to_factors:
+            factor = self.fg_state.variables_to_factors[frozenset(name)]
             start = self.fg_state.factor_to_potentials_starts[factor]
             log_potentials = jax.device_put(self.value)[
                 start : start + factor.log_potentials.shape[0]
             ]
         else:
-            raise ValueError(f"Invalid key {key} for log potentials updates.")
+            raise ValueError(f"Invalid name {name} for log potentials updates.")
 
         return log_potentials
 
     def __setitem__(
         self,
-        key: Any,
+        name: Any,
         data: Union[np.ndarray, jnp.ndarray],
     ):
         """Set the log potentials for a named factor group or a factor.
 
         Args:
-            key: Name of a named factor group, or a frozenset containing the set
+            name: Name of a named factor group, or a frozenset containing the set
                 of involved variables for the queried factor.
             data: Array containing the log potentials for the named factor group
                 or the factor.
         """
-        if not isinstance(key, Hashable):
-            key = frozenset(key)
+        if not isinstance(name, Hashable):
+            name = frozenset(name)
 
         object.__setattr__(
             self,
             "value",
             update_log_potentials(
-                jax.device_put(self.value), {key: jax.device_put(data)}, self.fg_state
+                jax.device_put(self.value), {name: jax.device_put(data)}, self.fg_state
             ),
         )
 
@@ -463,32 +463,32 @@ def update_ftov_msgs(
     Returns:
         A flat jnp array containing updated ftov_msgs.
     """
-    for keys in updates:
-        data = updates[keys]
+    for names in updates:
+        data = updates[names]
         if (
-            isinstance(keys, tuple)
-            and len(keys) == 2
-            and keys[1] in fg_state.variable_group.keys
+            isinstance(names, tuple)
+            and len(names) == 2
+            and names[1] in fg_state.variable_group.names
         ):
-            factor = fg_state.variables_to_factors[frozenset(keys[0])]
-            variable = fg_state.variable_group[keys[1]]
+            factor = fg_state.variables_to_factors[frozenset(names[0])]
+            variable = fg_state.variable_group[names[1]]
             start = fg_state.factor_to_msgs_starts[factor] + np.sum(
                 factor.edges_num_states[: factor.variables.index(variable)]
             )
             if data.shape != (variable.num_states,):
                 raise ValueError(
                     f"Given message shape {data.shape} does not match expected "
-                    f"shape {(variable.num_states,)} from factor {keys[0]} "
-                    f"to variable {keys[1]}."
+                    f"shape {(variable.num_states,)} from factor {names[0]} "
+                    f"to variable {names[1]}."
                 )
 
             ftov_msgs = ftov_msgs.at[start : start + variable.num_states].set(data)
-        elif keys in fg_state.variable_group.keys:
-            variable = fg_state.variable_group[keys]
+        elif names in fg_state.variable_group.names:
+            variable = fg_state.variable_group[names]
             if data.shape != (variable.num_states,):
                 raise ValueError(
                     f"Given belief shape {data.shape} does not match expected "
-                    f"shape {(variable.num_states,)} for variable {keys}."
+                    f"shape {(variable.num_states,)} for variable {names}."
                 )
 
             starts = np.nonzero(
@@ -501,10 +501,10 @@ def update_ftov_msgs(
                 )
         else:
             raise ValueError(
-                "Invalid keys for setting messages. "
-                "Supported keys include a tuple of length 2 with factor "
-                "and variable keys for directly setting factor to variable "
-                "messages, or a valid variable key for spreading expected "
+                "Invalid names for setting messages. "
+                "Supported names include a tuple of length 2 with factor "
+                "and variable names for directly setting factor to variable "
+                "messages, or a valid variable name for spreading expected "
                 "beliefs at a variable"
             )
 
@@ -537,29 +537,29 @@ class FToVMessages:
 
             object.__setattr__(self, "value", jax.device_put(self.value))
 
-    def __getitem__(self, keys: Tuple[Any, Any]) -> jnp.ndarray:
+    def __getitem__(self, names: Tuple[Any, Any]) -> jnp.ndarray:
         """Function to query messages from a factor to a variable
 
         Args:
-            keys: a tuple of length 2, with keys[0] being the key for
-                factor, and keys[1] being the key for variable
+            names: a tuple of length 2, with names[0] being the name for
+                factor, and names[1] being the name for variable
 
         Returns:
             An array containing the current ftov messages from factor
-            keys[0] to variable keys[1]
+            names[0] to variable names[1]
         """
         if not (
-            isinstance(keys, tuple)
-            and len(keys) == 2
-            and keys[1] in self.fg_state.variable_group.keys
+            isinstance(names, tuple)
+            and len(names) == 2
+            and names[1] in self.fg_state.variable_group.names
         ):
             raise ValueError(
-                f"Invalid keys {keys}. Please specify a tuple of factor, variable "
-                "keys to get the messages from a named factor to a variable"
+                f"Invalid names {names}. Please specify a tuple of factor, variable "
+                "names to get the messages from a named factor to a variable"
             )
 
-        factor = self.fg_state.variables_to_factors[frozenset(keys[0])]
-        variable = self.fg_state.variable_group[keys[1]]
+        factor = self.fg_state.variables_to_factors[frozenset(names[0])]
+        variable = self.fg_state.variable_group[names[1]]
         start = self.fg_state.factor_to_msgs_starts[factor] + np.sum(
             factor.edges_num_states[: factor.variables.index(variable)]
         )
@@ -569,47 +569,47 @@ class FToVMessages:
     @typing.overload
     def __setitem__(
         self,
-        keys: Tuple[Any, Any],
+        names: Tuple[Any, Any],
         data: Union[np.ndarray, jnp.ndarray],
     ) -> None:
         """Setting messages from a factor to a variable
 
         Args:
-            keys: A tuple of length 2
-                keys[0] is the key of the factor
-                keys[1] is the key of the variable
-            data: An array containing messages from factor keys[0]
-                to variable keys[1]
+            names: A tuple of length 2
+                names[0] is the name of the factor
+                names[1] is the name of the variable
+            data: An array containing messages from factor names[0]
+                to variable names[1]
         """
 
     @typing.overload
     def __setitem__(
         self,
-        keys: Any,
+        names: Any,
         data: Union[np.ndarray, jnp.ndarray],
     ) -> None:
         """Spreading beliefs at a variable to all connected factors
 
         Args:
-            keys: The key of the variable
+            names: The name of the variable
             data: An array containing the beliefs to be spread uniformly
                 across all factor to variable messages involving this
                 variable.
         """
 
-    def __setitem__(self, keys, data) -> None:
+    def __setitem__(self, names, data) -> None:
         if (
-            isinstance(keys, tuple)
-            and len(keys) == 2
-            and keys[1] in self.fg_state.variable_group.keys
+            isinstance(names, tuple)
+            and len(names) == 2
+            and names[1] in self.fg_state.variable_group.names
         ):
-            keys = (frozenset(keys[0]), keys[1])
+            names = (frozenset(names[0]), names[1])
 
         object.__setattr__(
             self,
             "value",
             update_ftov_msgs(
-                jax.device_put(self.value), {keys: jax.device_put(data)}, self.fg_state
+                jax.device_put(self.value), {names: jax.device_put(data)}, self.fg_state
             ),
         )
 
@@ -628,16 +628,16 @@ def update_evidence(
     Returns:
         A flat jnp array containing updated evidence.
     """
-    for key in updates:
-        data = updates[key]
-        if key in fg_state.variable_group.container_keys:
-            if key is None:
+    for name in updates:
+        data = updates[name]
+        if name in fg_state.variable_group.container_names:
+            if name is None:
                 variable_group = fg_state.variable_group
             else:
                 assert isinstance(
                     fg_state.variable_group, groups.CompositeVariableGroup
                 )
-                variable_group = fg_state.variable_group.variable_group_container[key]
+                variable_group = fg_state.variable_group.variable_group_container[name]
 
             start_index = fg_state.vars_to_starts[variable_group.variables[0]]
             flat_data = variable_group.flatten(data)
@@ -645,7 +645,7 @@ def update_evidence(
                 flat_data
             )
         else:
-            var = fg_state.variable_group[key]
+            var = fg_state.variable_group[name]
             start_index = fg_state.vars_to_starts[var]
             evidence = evidence.at[start_index : start_index + var.num_states].set(data)
 
@@ -676,40 +676,40 @@ class Evidence:
 
             object.__setattr__(self, "value", jax.device_put(self.value))
 
-    def __getitem__(self, key: Any) -> jnp.ndarray:
+    def __getitem__(self, name: Any) -> jnp.ndarray:
         """Function to query evidence for a variable
 
         Args:
-            key: key for the variable
+            name: name for the variable
 
         Returns:
             evidence for the queried variable
         """
-        variable = self.fg_state.variable_group[key]
+        variable = self.fg_state.variable_group[name]
         start = self.fg_state.vars_to_starts[variable]
         evidence = jax.device_put(self.value)[start : start + variable.num_states]
         return evidence
 
     def __setitem__(
         self,
-        key: Any,
+        name: Any,
         data: np.ndarray,
     ) -> None:
         """Function to update the evidence for variables
 
         Args:
-            key: The name of a variable group or a single variable.
-                If key is the name of a variable group, updates are derived by using the variable group to
+            name: The name of a variable group or a single variable.
+                If name is the name of a variable group, updates are derived by using the variable group to
                 flatten the data.
-                If key is the name of a variable, data should be of an array shape (variable_size,)
-                If key is None, updates are derived by using self.fg_state.variable_group to flatten the data.
+                If name is the name of a variable, data should be of an array shape (variable_size,)
+                If name is None, updates are derived by using self.fg_state.variable_group to flatten the data.
             data: Array containing the evidence updates.
         """
         object.__setattr__(
             self,
             "value",
             update_evidence(
-                jax.device_put(self.value), {key: jax.device_put(data)}, self.fg_state
+                jax.device_put(self.value), {name: jax.device_put(data)}, self.fg_state
             ),
         )
 

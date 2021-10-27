@@ -103,14 +103,14 @@ ax[1].imshow(vertical_oriented_cuts)
 grid_vars_group = groups.NDVariableArray(3, (2, M - 1, N - 1))
 
 # Make a group of additional variables for the edges of the grid
-extra_row_keys: List[Tuple[Any, ...]] = [(0, row, N - 1) for row in range(M - 1)]
-extra_col_keys: List[Tuple[Any, ...]] = [(1, M - 1, col) for col in range(N - 1)]
-additional_keys = tuple(extra_row_keys + extra_col_keys)
-additional_keys_group = groups.VariableDict(3, additional_keys)
+extra_row_names: List[Tuple[Any, ...]] = [(0, row, N - 1) for row in range(M - 1)]
+extra_col_names: List[Tuple[Any, ...]] = [(1, M - 1, col) for col in range(N - 1)]
+additional_names = tuple(extra_row_names + extra_col_names)
+additional_names_group = groups.VariableDict(3, additional_names)
 
 # Combine these two VariableGroups into one CompositeVariableGroup
 composite_grid_group = groups.CompositeVariableGroup(
-    {"grid_vars": grid_vars_group, "additional_vars": additional_keys_group}
+    {"grid_vars": grid_vars_group, "additional_vars": additional_names_group}
 )
 
 
@@ -233,14 +233,14 @@ valid_configs_supp = create_valid_suppression_config_arr(SUPPRESSION_DIAMETER)
 for row in range(M - 1):
     for col in range(N - 1):
         if row != M - 2 and col != N - 2:
-            curr_keys = [
+            curr_names = [
                 ("grid_vars", 0, row, col),
                 ("grid_vars", 1, row, col),
                 ("grid_vars", 0, row, col + 1),
                 ("grid_vars", 1, row + 1, col),
             ]
         elif row != M - 2:
-            curr_keys = [
+            curr_names = [
                 ("grid_vars", 0, row, col),
                 ("grid_vars", 1, row, col),
                 ("additional_vars", 0, row, col + 1),
@@ -248,7 +248,7 @@ for row in range(M - 1):
             ]
 
         elif col != N - 2:
-            curr_keys = [
+            curr_names = [
                 ("grid_vars", 0, row, col),
                 ("grid_vars", 1, row, col),
                 ("grid_vars", 0, row, col + 1),
@@ -256,7 +256,7 @@ for row in range(M - 1):
             ]
 
         else:
-            curr_keys = [
+            curr_names = [
                 ("grid_vars", 0, row, col),
                 ("grid_vars", 1, row, col),
                 ("additional_vars", 0, row, col + 1),
@@ -264,25 +264,25 @@ for row in range(M - 1):
             ]
 
         fg.add_factor(
-            curr_keys,
+            curr_names,
             valid_configs_non_supp,
             np.zeros(valid_configs_non_supp.shape[0], dtype=float),
         )
 
 
 # Create an EnumerationFactorGroup for vertical suppression factors
-vert_suppression_keys: List[List[Tuple[Any, ...]]] = []
+vert_suppression_names: List[List[Tuple[Any, ...]]] = []
 for col in range(N):
     for start_row in range(M - SUPPRESSION_DIAMETER):
         if col != N - 1:
-            vert_suppression_keys.append(
+            vert_suppression_names.append(
                 [
                     ("grid_vars", 0, r, col)
                     for r in range(start_row, start_row + SUPPRESSION_DIAMETER)
                 ]
             )
         else:
-            vert_suppression_keys.append(
+            vert_suppression_names.append(
                 [
                     ("additional_vars", 0, r, col)
                     for r in range(start_row, start_row + SUPPRESSION_DIAMETER)
@@ -290,18 +290,18 @@ for col in range(N):
             )
 
 
-horz_suppression_keys: List[List[Tuple[Any, ...]]] = []
+horz_suppression_names: List[List[Tuple[Any, ...]]] = []
 for row in range(M):
     for start_col in range(N - SUPPRESSION_DIAMETER):
         if row != M - 1:
-            horz_suppression_keys.append(
+            horz_suppression_names.append(
                 [
                     ("grid_vars", 1, row, c)
                     for c in range(start_col, start_col + SUPPRESSION_DIAMETER)
                 ]
             )
         else:
-            horz_suppression_keys.append(
+            horz_suppression_names.append(
                 [
                     ("additional_vars", 1, row, c)
                     for c in range(start_col, start_col + SUPPRESSION_DIAMETER)
@@ -315,12 +315,12 @@ for row in range(M):
 # %%
 fg.add_factor_group(
     factory=groups.EnumerationFactorGroup,
-    connected_var_keys=vert_suppression_keys,
+    connected_var_names=vert_suppression_names,
     factor_configs=valid_configs_supp,
 )
 fg.add_factor_group(
     factory=groups.EnumerationFactorGroup,
-    connected_var_keys=horz_suppression_keys,
+    connected_var_names=horz_suppression_names,
     factor_configs=valid_configs_supp,
 )
 

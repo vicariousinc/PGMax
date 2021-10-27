@@ -65,7 +65,7 @@ def test_log_potentials():
 
     with pytest.raises(
         ValueError,
-        match=re.escape(f"Invalid key {frozenset([1])} for log potentials updates."),
+        match=re.escape(f"Invalid name {frozenset([1])} for log potentials updates."),
     ):
         fg.bp_state.log_potentials[frozenset([1])] = np.zeros(10)
 
@@ -79,7 +79,7 @@ def test_log_potentials():
     assert jnp.all(log_potentials[[0]] == jnp.zeros(10))
     with pytest.raises(
         ValueError,
-        match=re.escape(f"Invalid key {frozenset([1])} for log potentials updates."),
+        match=re.escape(f"Invalid name {frozenset([1])} for log potentials updates."),
     ):
         fg.bp_state.log_potentials[[1]]
 
@@ -106,7 +106,7 @@ def test_ftov_msgs():
 
     with pytest.raises(
         ValueError,
-        match=re.escape("Invalid keys for setting messages"),
+        match=re.escape("Invalid names for setting messages"),
     ):
         fg.bp_state.ftov_msgs[1] = np.ones(10)
 
@@ -116,7 +116,7 @@ def test_ftov_msgs():
         graph.FToVMessages(fg_state=fg.fg_state, value=np.zeros(10))
 
     ftov_msgs = graph.FToVMessages(fg_state=fg.fg_state, value=np.zeros(15))
-    with pytest.raises(ValueError, match=re.escape("Invalid keys (10,)")):
+    with pytest.raises(ValueError, match=re.escape("Invalid names (10,)")):
         ftov_msgs[(10,)]
 
 
