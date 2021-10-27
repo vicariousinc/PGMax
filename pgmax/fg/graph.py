@@ -112,18 +112,13 @@ class FactorGraph:
                 If none, it is assumed the log potential is uniform 0 and such an array is automatically
                 initialized.
         """
-        if name in self._named_factor_groups:
-            raise ValueError(
-                f"A factor group with the name {name} already exists. Please choose a different name!"
-            )
-
         factor_group = groups.EnumerationFactorGroup(
             self._variable_group,
             connected_var_keys=[variable_names],
             factor_configs=factor_configs,
             log_potentials=log_potentials,
         )
-        self._register_factor_group(factor_group)
+        self._register_factor_group(factor_group, name)
 
     def add_factor_group(self, factory: Callable, *args, **kwargs) -> None:
         """Add a factor group to the factor graph

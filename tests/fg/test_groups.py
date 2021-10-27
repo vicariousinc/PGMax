@@ -89,7 +89,9 @@ def test_variable_dict():
 
     with pytest.raises(
         ValueError,
-        match=re.escape("Variable 2 expects a data array of shape (15,). Got (10,)"),
+        match=re.escape(
+            "Variable 2 expects a data array of shape (15,) or (1,). Got (10,)"
+        ),
     ):
         variable_dict.flatten({2: np.zeros(10)})
 

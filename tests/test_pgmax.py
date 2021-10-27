@@ -300,7 +300,7 @@ def test_e2e_sanity_check():
                 )
             else:
                 fg.add_factor(
-                    keys=curr_keys,
+                    variable_names=curr_keys,
                     factor_configs=valid_configs_non_supp,
                     log_potentials=np.zeros(
                         valid_configs_non_supp.shape[0], dtype=float
@@ -405,7 +405,7 @@ def test_e2e_heretic():
     W_pot = np.zeros((17, 3, 3, 3), dtype=float)
     for k_row in range(3):
         for k_col in range(3):
-            fg.add_factor(
+            fg.add_factor_group(
                 factory=groups.PairwiseFactorGroup,
                 connected_var_keys=binary_connected_variables(28, 28, k_row, k_col),
                 log_potential_matrix=W_pot[:, :, k_row, k_col],
