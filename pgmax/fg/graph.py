@@ -8,9 +8,11 @@ from dataclasses import asdict, dataclass
 from types import MappingProxyType
 from typing import (
     Any,
+    Callable,
     Dict,
     FrozenSet,
     Hashable,
+    List,
     Mapping,
     Optional,
     OrderedDict,
@@ -94,54 +96,62 @@ class FactorGraph:
 
     def add_factor(
         self,
-        *args,
-        **kwargs,
+        variable_names: List,
+        factor_configs: np.ndarray,
+        log_potentials: Optional[np.ndarray] = None,
+        name: Optional[str] = None,
     ) -> None:
-        """Function to add factor/factor group to this FactorGraph.
+        """Function to add a single factor to the FactorGraph.
 
         Args:
-            *args: optional sequence of arguments. If specified, and if there is no
-                "factor_factory" key specified as part of the **kwargs, then these args
-                are taken to specify the arguments to be used to instantiate an
-                EnumerationFactor. If there is a "factor_factory" key, then these args
-                are taken to specify the arguments to be used to construct the class
-                specified by the "factor_factory" argument. Note that either *args or
-                **kwargs must be specified.
-            **kwargs: optional mapping of keyword arguments. If specified, and if there
-                is no "factor_factory" key specified as part of this mapping, then these
-                args are taken to specify the arguments to be used to instantiate an
-                EnumerationFactor (specify a kwarg with the key 'keys' to indicate the
-                indices of variables ot be indexed to create the EnumerationFactor).
-                If there is a "factor_factory" key, then these args are taken to specify
-                the arguments to be used to construct the class specified by the
-                "factor_factory" argument.
-                If there is a "name" key, we add the added factor/factor group to the list
-                of named factors within the factor graph.
-                Note that either *args or **kwargs must be specified.
+            variable_names: A list containing the involved variable names.
+            factor_configs: Array of shape (num_val_configs, num_variables)
+                An array containing explicit enumeration of all valid configurations
+            log_potentials: Optional array of shape (num_val_configs,) or (num_factors, num_val_configs).
+                If specified, it contains the log of the potential value for every possible configuration.
+                If none, it is assumed the log potential is uniform 0 and such an array is automatically
+                initialized.
         """
-        name = kwargs.pop("name", None)
         if name in self._named_factor_groups:
             raise ValueError(
                 f"A factor group with the name {name} already exists. Please choose a different name!"
             )
 
-        factor_factory = kwargs.pop("factor_factory", None)
-        if factor_factory is not None:
-            factor_group = factor_factory(self._variable_group, *args, **kwargs)
-        else:
-            if len(args) > 0:
-                new_args = list(args)
-                new_args[0] = [args[0]]
-                factor_group = groups.EnumerationFactorGroup(
-                    self._variable_group, *new_args, **kwargs
-                )
-            else:
-                keys = kwargs.pop("keys")
-                kwargs["connected_var_keys"] = [keys]
-                factor_group = groups.EnumerationFactorGroup(
-                    self._variable_group, **kwargs
-                )
+        factor_group = groups.EnumerationFactorGroup(
+            self._variable_group,
+            connected_var_keys=[variable_names],
+            factor_configs=factor_configs,
+            log_potentials=log_potentials,
+        )
+        self._register_factor_group(factor_group)
 
+    def add_factor_group(self, factory: Callable, *args, **kwargs) -> None:
+        """Add a factor group to the factor graph
+
+        Args:
+            factory: Factory function that takes args and kwargs as input and outputs a factor group.
+            args: Args to be passed to the factory function.
+            kwargs: kwargs to be passed to the factory function, and an optional "name" argument
+                for specifying the name of a named factor group.
+        """
+        name = kwargs.pop("name", None)
+        factor_group = factory(self._variable_group, *args, **kwargs)
+        self._register_factor_group(factor_group, name)
+
+    def _register_factor_group(
+        self, factor_group: groups.FactorGroup, name: Optional[str] = None
+    ) -> None:
+        if name in self._named_factor_groups:
+            raise ValueError(
+                f"A factor group with the name {name} already exists. Please choose a different name!"
+            )
+
+        """Register a factor group to the factor graph, by updating the factor graph state.
+
+        Args:
+            factor_group: The factor group to be registered to the factor graph.
+            name: Optional name of the factor group.
+        """
         self._factor_group_to_msgs_starts[factor_group] = self._total_factor_num_states
         self._factor_group_to_potentials_starts[
             factor_group
@@ -249,27 +259,20 @@ class FactorGraphState:
     """FactorGraphState.
 
     Args:
-        variable_group: VariableGroup. contains all involved VariableGroups
-        vars_to_starts: MappingProxyType[nodes.Variable, int]. maps every variable to an int
-            representing an index in the evidence array at which the first entry of the evidence
-            for that particular variable should be placed.
-        num_var_states: int. represents the sum of all variable states of all variables in the
-            FactorGraph
-        total_factor_num_states:
-        variables_to_factors:
-        named_factor_groups: Dict[Hashable, groups.FactorGroup]. A dictionary mapping the names of
-            named factor groups to the corresponding factor groups.
-            We only support setting messages from factors within explicitly named factor groups
-            to connected variables.
-        factor_group_to_potentials_starts:
-        factor_to_potentials_starts:
-        factor_group_to_msgs_starts:
-        factor_to_msgs_starts:
-        total_factor_num_states: int. Current total number of edge states for the added factors.
-        factor_group_to_msgs_starts: Dict[groups.FactorGroup, int]. Maps a factor group to its
-            corresponding starting index in the flat message array.
-        log_potentials:
-        wiring:
+        variable_group: A variable group containing all the variables in the FactorGraph.
+        vars_to_starts: Maps variables to their starting indices in the flat evidence array.
+            flat_evidence[vars_to_starts[variable]: vars_to_starts[variable] + variable.num_var_states]
+            contains evidence to the variable.
+        num_var_states: Total number of variable states.
+        total_factor_num_states: Size of the flat ftov messages array.
+        variables_to_factors: Maps sets of involved variables (in the form of frozensets of
+            variable names) to corresponding factors.
+        named_factor_groups: Maps the names of named factor groups to the corresponding factor groups.
+        factor_group_to_potentials_starts: Maps factor groups to their starting indices in the flat log potentials.
+        factor_to_potentials_starts: Maps factors to their starting indices in the flat log potentials.
+        factor_to_msgs_starts: Maps factors to their starting indices in the flat ftov messages.
+        log_potentials: Flat log potentials array.
+        wiring: Wiring derived from the current set of factors.
     """
 
     variable_group: groups.VariableGroup
@@ -327,6 +330,16 @@ def update_log_potentials(
     updates: Dict[Any, jnp.ndarray],
     fg_state: FactorGraphState,
 ) -> jnp.ndarray:
+    """Function to update log_potentials.
+
+    Args:
+        log_potentials: A flat jnp array containing log_potentials.
+        updates: A dictionary containing updates for log_potentials
+        fg_state: Factor graph state
+
+    Returns:
+        A flat jnp array containing updated log_potentials.
+    """
     for key in updates:
         data = updates[key]
         if key in fg_state.named_factor_groups:
@@ -387,6 +400,15 @@ class LogPotentials:
             object.__setattr__(self, "value", jax.device_put(self.value))
 
     def __getitem__(self, key: Any):
+        """Function to query log potentials for a named factor group or a factor.
+
+        Args:
+            key: Name of a named factor group, or a frozenset containing the set
+                of involved variables for the queried factor.
+
+        Returned:
+            The quried log potentials.
+        """
         if not isinstance(key, Hashable):
             key = frozenset(key)
 
@@ -412,6 +434,14 @@ class LogPotentials:
         key: Any,
         data: Union[np.ndarray, jnp.ndarray],
     ):
+        """Set the log potentials for a named factor group or a factor.
+
+        Args:
+            key: Name of a named factor group, or a frozenset containing the set
+                of involved variables for the queried factor.
+            data: Array containing the log potentials for the named factor group
+                or the factor.
+        """
         if not isinstance(key, Hashable):
             key = frozenset(key)
 
@@ -428,6 +458,16 @@ class LogPotentials:
 def update_ftov_msgs(
     ftov_msgs: jnp.ndarray, updates: Dict[Any, jnp.ndarray], fg_state: FactorGraphState
 ) -> jnp.ndarray:
+    """Function to update ftov_msgs.
+
+    Args:
+        ftov_msgs: A flat jnp array containing ftov_msgs.
+        updates: A dictionary containing updates for ftov_msgs
+        fg_state: Factor graph state
+
+    Returns:
+        A flat jnp array containing updated ftov_msgs.
+    """
     for keys in updates:
         data = updates[keys]
         if (
@@ -483,7 +523,6 @@ class FToVMessages:
     Args:
         fg_state: Factor graph state
         value: Optionally specify initial value for ftov messages
-
     """
 
     fg_state: FactorGraphState
@@ -584,6 +623,16 @@ class FToVMessages:
 def update_evidence(
     evidence: jnp.ndarray, updates: Dict[Any, jnp.ndarray], fg_state: FactorGraphState
 ) -> jnp.ndarray:
+    """Function to update evidence.
+
+    Args:
+        evidence: A flat jnp array containing evidence.
+        updates: A dictionary containing updates for evidence
+        fg_state: Factor graph state
+
+    Returns:
+        A flat jnp array containing updated evidence.
+    """
     for key in updates:
         data = updates[key]
         if key in fg_state.variable_group.container_keys:
@@ -649,29 +698,17 @@ class Evidence:
     def __setitem__(
         self,
         key: Any,
-        data: Union[Dict[Hashable, np.ndarray], np.ndarray],
+        data: np.ndarray,
     ) -> None:
         """Function to update the evidence for variables
 
         Args:
-            key: tuple that represents the index into the VariableGroup
-                (self.fg_state.variable_group) that is created when the FactorGraph is instantiated. Note that
-                this can be an index referring to an entire VariableGroup (in which case, the evidence
-                is set for the entire VariableGroup at once), or to an individual Variable within the
-                VariableGroup.
-            data: a container for np.ndarrays representing the evidence
-                Currently supported containers are:
-                - an np.ndarray: if key indexes an NDVariableArray, then data
-                can simply be an np.ndarray with num_var_array_dims + 1 dimensions where
-                num_var_array_dims is the number of dimensions of the NDVariableArray, and the
-                +1 represents a dimension (that should be the final dimension) for the evidence.
-                Note that the size of the final dimension should be the same as
-                variable_group.variable_size. if key indexes a particular variable, then this array
-                must be of the same size as variable.num_states
-                - a dictionary: if key indexes a VariableDict, then data
-                must be a dictionary mapping keys of variable_group to np.ndarrays of evidence values.
-                Note that each np.ndarray in the dictionary values must have the same size as
-                variable_group.variable_size.
+            key: The name of a variable group or a single variable.
+                If key is the name of a variable group, updates are derived by using the variable group to
+                flatten the data.
+                If key is the name of a variable, data should be of an array shape (variable_size,)
+                If key is None, updates are derived by using self.fg_state.variable_group to flatten the data.
+            data: Array containing the evidence updates.
         """
         object.__setattr__(
             self,

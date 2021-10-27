@@ -499,7 +499,7 @@ class VariableDict(VariableGroup):
                 data[key] = flat_data[start : start + self.variable_size]
                 start += self.variable_size
             else:
-                data[key] = flat_data[[start]]
+                data[key] = flat_data[np.array([start])]
                 start += 1
 
         return data
@@ -637,7 +637,7 @@ class EnumerationFactorGroup(FactorGroup):
             initialized.
     """
 
-    connected_var_keys: Sequence[List[Tuple[Hashable, ...]]]
+    connected_var_keys: Sequence[List]
     factor_configs: np.ndarray
     log_potentials: Optional[np.ndarray] = None
 
@@ -773,7 +773,7 @@ class PairwiseFactorGroup(FactorGroup):
             VariableGroup) whose keys are present in each sub-list from self.connected_var_keys.
     """
 
-    connected_var_keys: Sequence[List[Tuple[Hashable, ...]]]
+    connected_var_keys: Sequence[List]
     log_potential_matrix: Optional[np.ndarray] = None
 
     def _get_variables_to_factors(
