@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import collections
 import copy
+import functools
 import typing
 from dataclasses import asdict, dataclass
 from types import MappingProxyType
@@ -319,7 +320,7 @@ class BPState:
         return self.log_potentials.fg_state
 
 
-@jax.partial(jax.jit, static_argnames="fg_state")
+@functools.partial(jax.jit, static_argnames="fg_state")
 def update_log_potentials(
     log_potentials: jnp.ndarray,
     updates: Dict[Any, jnp.ndarray],
@@ -449,7 +450,7 @@ class LogPotentials:
         )
 
 
-@jax.partial(jax.jit, static_argnames="fg_state")
+@functools.partial(jax.jit, static_argnames="fg_state")
 def update_ftov_msgs(
     ftov_msgs: jnp.ndarray, updates: Dict[Any, jnp.ndarray], fg_state: FactorGraphState
 ) -> jnp.ndarray:
@@ -614,7 +615,7 @@ class FToVMessages:
         )
 
 
-@jax.partial(jax.jit, static_argnames="fg_state")
+@functools.partial(jax.jit, static_argnames="fg_state")
 def update_evidence(
     evidence: jnp.ndarray, updates: Dict[Any, jnp.ndarray], fg_state: FactorGraphState
 ) -> jnp.ndarray:
