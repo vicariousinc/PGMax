@@ -315,12 +315,12 @@ for row in range(M):
 # %%
 fg.add_factor_group(
     factory=groups.EnumerationFactorGroup,
-    connected_var_names=vert_suppression_names,
+    connected_variable_names=vert_suppression_names,
     factor_configs=valid_configs_supp,
 )
 fg.add_factor_group(
     factory=groups.EnumerationFactorGroup,
-    connected_var_names=horz_suppression_names,
+    connected_variable_names=horz_suppression_names,
     factor_configs=valid_configs_supp,
 )
 

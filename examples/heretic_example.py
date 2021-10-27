@@ -117,7 +117,7 @@ for k_row in range(3):
     for k_col in range(3):
         fg.add_factor_group(
             factory=groups.PairwiseFactorGroup,
-            connected_var_names=binary_connected_variables(28, 28, k_row, k_col),
+            connected_variable_names=binary_connected_variables(28, 28, k_row, k_col),
             log_potential_matrix=W_pot[:, :, k_row, k_col],
         )
 

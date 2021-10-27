@@ -158,14 +158,17 @@ def test_enumeration_factor_group():
     ):
         enumeration_factor_group = groups.EnumerationFactorGroup(
             variable_group=variable_group,
-            connected_var_names=[[(0, 0), (0, 1), (1, 1)], [(0, 1), (1, 0), (1, 1)]],
+            connected_variable_names=[
+                [(0, 0), (0, 1), (1, 1)],
+                [(0, 1), (1, 0), (1, 1)],
+            ],
             factor_configs=np.zeros((1, 3), dtype=int),
             log_potentials=np.zeros((3, 2)),
         )
 
     enumeration_factor_group = groups.EnumerationFactorGroup(
         variable_group=variable_group,
-        connected_var_names=[[(0, 0), (0, 1), (1, 1)], [(0, 1), (1, 0), (1, 1)]],
+        connected_variable_names=[[(0, 0), (0, 1), (1, 1)], [(0, 1), (1, 0), (1, 1)]],
         factor_configs=np.zeros((1, 3), dtype=int),
     )
     name = [(0, 0), (1, 1)]

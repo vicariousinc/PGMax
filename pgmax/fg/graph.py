@@ -104,7 +104,7 @@ class FactorGraph:
         """Function to add a single factor to the FactorGraph.
 
         Args:
-            variable_names: A list containing the involved variable names.
+            variable_names: A list containing the connected variable names.
             factor_configs: Array of shape (num_val_configs, num_variables)
                 An array containing explicit enumeration of all valid configurations
             log_potentials: Optional array of shape (num_val_configs,) or (num_factors, num_val_configs).
@@ -114,7 +114,7 @@ class FactorGraph:
         """
         factor_group = groups.EnumerationFactorGroup(
             self._variable_group,
-            connected_var_names=[variable_names],
+            connected_variable_names=[variable_names],
             factor_configs=factor_configs,
             log_potentials=log_potentials,
         )
@@ -260,7 +260,7 @@ class FactorGraphState:
             contains evidence to the variable.
         num_var_states: Total number of variable states.
         total_factor_num_states: Size of the flat ftov messages array.
-        variables_to_factors: Maps sets of involved variables (in the form of frozensets of
+        variables_to_factors: Maps sets of connected variables (in the form of frozensets of
             variable names) to corresponding factors.
         named_factor_groups: Maps the names of named factor groups to the corresponding factor groups.
         factor_group_to_potentials_starts: Maps factor groups to their starting indices in the flat log potentials.
@@ -399,7 +399,7 @@ class LogPotentials:
 
         Args:
             name: Name of a named factor group, or a frozenset containing the set
-                of involved variables for the queried factor.
+                of connected variables for the queried factor.
 
         Returned:
             The quried log potentials.
@@ -433,7 +433,7 @@ class LogPotentials:
 
         Args:
             name: Name of a named factor group, or a frozenset containing the set
-                of involved variables for the queried factor.
+                of connected variables for the queried factor.
             data: Array containing the log potentials for the named factor group
                 or the factor.
         """

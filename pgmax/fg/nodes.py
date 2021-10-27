@@ -62,7 +62,7 @@ class EnumerationFactor:
     """An enumeration factor
 
     Args:
-        variables: List of involved variables
+        variables: List of connected variables
         configs: Array of shape (num_val_configs, num_variables)
             An array containing an explicit enumeration of all valid configurations
         log_potentials: Array of shape (num_val_configs,). An array containing
