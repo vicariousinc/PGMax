@@ -36,8 +36,8 @@ for ii in range(50):
         connected_var_keys.append([(ii, jj), (kk, jj)])
         connected_var_keys.append([(ii, jj), (ii, ll)])
 
-fg.add_factor(
-    factor_factory=groups.PairwiseFactorGroup,
+fg.add_factor_group(
+    factory=groups.PairwiseFactorGroup,
     connected_var_keys=connected_var_keys,
     log_potential_matrix=0.8 * np.array([[1.0, -1.0], [-1.0, 1.0]]),
     name="factors",

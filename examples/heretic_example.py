@@ -115,8 +115,8 @@ def binary_connected_variables(
 W_pot = W_orig.swapaxes(0, 1)
 for k_row in range(3):
     for k_col in range(3):
-        fg.add_factor(
-            factor_factory=groups.PairwiseFactorGroup,
+        fg.add_factor_group(
+            factory=groups.PairwiseFactorGroup,
             connected_var_keys=binary_connected_variables(28, 28, k_row, k_col),
             log_potential_matrix=W_pot[:, :, k_row, k_col],
         )

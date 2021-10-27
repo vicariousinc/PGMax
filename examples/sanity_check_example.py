@@ -313,13 +313,13 @@ for row in range(M):
 # ### Add FactorGroups Remaining to FactorGraph
 
 # %%
-fg.add_factor(
-    factor_factory=groups.EnumerationFactorGroup,
+fg.add_factor_group(
+    factory=groups.EnumerationFactorGroup,
     connected_var_keys=vert_suppression_keys,
     factor_configs=valid_configs_supp,
 )
-fg.add_factor(
-    factor_factory=groups.EnumerationFactorGroup,
+fg.add_factor_group(
+    factory=groups.EnumerationFactorGroup,
     connected_var_keys=horz_suppression_keys,
     factor_configs=valid_configs_supp,
 )
