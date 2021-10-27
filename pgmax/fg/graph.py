@@ -756,9 +756,10 @@ def BP(bp_state: BPState, num_iters: int):
         get_bp_state: Function to reconstruct the BPState from BPArrays.
         get_beliefs: Function to calculate beliefs from BPArrays.
     """
-    wiring = jax.device_put(bp_state.fg_state.wiring)
-    max_msg_size = int(jnp.max(wiring.edges_num_states))
-    num_val_configs = int(wiring.factor_configs_edge_states[-1, 0]) + 1
+    max_msg_size = int(np.max(bp_state.fg_state.wiring.edges_num_states))
+    num_val_configs = (
+        int(bp_state.fg_state.wiring.factor_configs_edge_states[-1, 0]) + 1
+    )
 
     @jax.jit
     def run_bp(
@@ -781,6 +782,7 @@ def BP(bp_state: BPState, num_iters: int):
         Returns:
             A BPArrays containing the updated log_potentials, ftov_msgs and evidence.
         """
+        wiring = jax.device_put(bp_state.fg_state.wiring)
         log_potentials = jax.device_put(bp_state.log_potentials.value)
         if log_potentials_updates is not None:
             log_potentials = update_log_potentials(
@@ -864,9 +866,10 @@ def BP(bp_state: BPState, num_iters: int):
         Returns:
             beliefs: An array or a PyTree container containing the beliefs for the variables.
         """
-        evidence = jax.device_put(bp_arrays.evidence)
         beliefs = bp_state.fg_state.variable_group.unflatten(
-            evidence.at[wiring.var_states_for_edges].add(bp_arrays.ftov_msgs)
+            jax.device_put(bp_arrays.evidence)
+            .at[jax.device_put(bp_state.fg_state.wiring.var_states_for_edges)]
+            .add(bp_arrays.ftov_msgs)
         )
         return beliefs
 
