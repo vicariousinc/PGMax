@@ -64,6 +64,7 @@ class FactorGraph:
             0,
             0,
         )
+        # See FactorGraphState docstrings for documentation on the following fields
         self._num_var_states = vars_num_states_cumsum[-1]
         self._vars_to_starts = MappingProxyType(
             {
@@ -137,17 +138,17 @@ class FactorGraph:
     def _register_factor_group(
         self, factor_group: groups.FactorGroup, name: Optional[str] = None
     ) -> None:
-        if name in self._named_factor_groups:
-            raise ValueError(
-                f"A factor group with the name {name} already exists. Please choose a different name!"
-            )
-
         """Register a factor group to the factor graph, by updating the factor graph state.
 
         Args:
             factor_group: The factor group to be registered to the factor graph.
             name: Optional name of the factor group.
         """
+        if name in self._named_factor_groups:
+            raise ValueError(
+                f"A factor group with the name {name} already exists. Please choose a different name!"
+            )
+
         self._factor_group_to_msgs_starts[factor_group] = self._total_factor_num_states
         self._factor_group_to_potentials_starts[
             factor_group
@@ -395,15 +396,15 @@ class LogPotentials:
 
             object.__setattr__(self, "value", jax.device_put(self.value))
 
-    def __getitem__(self, name: Any):
+    def __getitem__(self, name: Any) -> jnp.ndarray:
         """Function to query log potentials for a named factor group or a factor.
 
         Args:
             name: Name of a named factor group, or a frozenset containing the set
                 of connected variables for the queried factor.
 
-        Returned:
-            The quried log potentials.
+        Returns:
+            The queried log potentials.
         """
         if not isinstance(name, Hashable):
             name = frozenset(name)
@@ -565,7 +566,7 @@ class FToVMessages:
             factor.edges_num_states[: factor.variables.index(variable)]
         )
         msgs = jax.device_put(self.value)[start : start + variable.num_states]
-        return jax.device_put(msgs)
+        return msgs
 
     @typing.overload
     def __setitem__(
@@ -743,7 +744,7 @@ class BPArrays:
         return cls(**aux_data.unflatten(children))
 
 
-def BP(bp_state: BPState, num_iters: int):
+def BP(bp_state: BPState, num_iters: int) -> Tuple[Callable, Callable, Callable]:
     """Function for generating belief propagation functions.
 
     Args:
@@ -805,7 +806,7 @@ def BP(bp_state: BPState, num_iters: int):
             ftov_msgs, wiring.edges_num_states, max_msg_size
         )
 
-        def update(msgs, _):
+        def update(msgs: jnp.ndarray, _) -> Tuple[jnp.ndarray, None]:
             # Compute new variable to factor messages by message passing
             vtof_msgs = infer.pass_var_to_fac_messages(
                 msgs,
@@ -858,8 +859,8 @@ def BP(bp_state: BPState, num_iters: int):
         )
 
     @jax.jit
-    def get_beliefs(bp_arrays: BPArrays):
-        """Calculate beliefs from a given BPArrays
+    def get_beliefs(bp_arrays: BPArrays) -> Any:
+        """Calculate beliefs from given BPArrays
 
         Args:
             bp_arrays: A BPArrays containing arrays for belief propagation.
@@ -878,7 +879,7 @@ def BP(bp_state: BPState, num_iters: int):
 
 
 @jax.jit
-def decode_map_states(beliefs: Any):
+def decode_map_states(beliefs: Any) -> Any:
     """Function to decode MAP states given the calculated beliefs.
 
     Args:
