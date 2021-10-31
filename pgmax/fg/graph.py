@@ -143,6 +143,10 @@ class FactorGraph:
         Args:
             factor_group: The factor group to be registered to the factor graph.
             name: Optional name of the factor group.
+
+        Raises:
+            ValueError: If the factor group with the same name or a factor involving the same variables
+                already exists in the factor graph.
         """
         if name in self._named_factor_groups:
             raise ValueError(
@@ -302,6 +306,10 @@ class BPState:
         log_potentials: log potentials of the model
         ftov_msgs: factor to variable messages
         evidence: evidence (unary log potentials) for variables.
+
+    Raises:
+        ValueError: If log_potentials, ftov_msgs or evidence are not derived from the same
+            FactorGraphState.
     """
 
     log_potentials: LogPotentials
@@ -336,6 +344,10 @@ def update_log_potentials(
 
     Returns:
         A flat jnp array containing updated log_potentials.
+
+    Raises: ValueError if
+        (1) Provided log_potentials shape does not match the expected log_potentials shape.
+        (2) Provided name is not valid for log_potentials updates.
     """
     for name in updates:
         data = updates[name]
@@ -377,6 +389,9 @@ class LogPotentials:
     Args:
         fg_state: Factor graph state
         value: Optionally specify an initial value
+
+    Raises:
+        ValueError: If provided value shape does not match the expected log_potentials shape.
     """
 
     fg_state: FactorGraphState
@@ -464,6 +479,10 @@ def update_ftov_msgs(
 
     Returns:
         A flat jnp array containing updated ftov_msgs.
+
+    Raises: ValueError if:
+        (1) provided ftov_msgs shape does not match the expected ftov_msgs shape.
+        (2) provided name is not valid for ftov_msgs updates.
     """
     for names in updates:
         data = updates[names]
@@ -520,6 +539,9 @@ class FToVMessages:
     Args:
         fg_state: Factor graph state
         value: Optionally specify initial value for ftov messages
+
+    Raises: ValueError if provided value does not match expected ftov messages
+        shape.
     """
 
     fg_state: FactorGraphState
@@ -549,6 +571,8 @@ class FToVMessages:
         Returns:
             An array containing the current ftov messages from factor
             names[0] to variable names[1]
+
+        Raises: ValueError if provided names are not valid for querying ftov messages.
         """
         if not (
             isinstance(names, tuple)
@@ -661,6 +685,8 @@ class Evidence:
     Args:
         fg_state: Factor graph state
         value: Optionally specify initial value for evidence
+
+    Raises: ValueError if provided value does not match expected evidence shape.
     """
 
     fg_state: FactorGraphState
