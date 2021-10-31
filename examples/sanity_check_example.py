@@ -333,7 +333,7 @@ fg.add_factor_group(
 bp_state = fg.bp_state
 bp_state.evidence["grid_vars"] = grid_evidence_arr
 bp_state.evidence["additional_vars"] = additional_vars_evidence_dict
-run_bp, _, get_beliefs = graph.BP(bp_state, 1000)
+run_bp, get_bp_state, get_beliefs = graph.BP(bp_state, 1000)
 bp_start_time = timer()
 bp_arrays = run_bp()
 bp_end_time = timer()
