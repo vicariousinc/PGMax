@@ -175,7 +175,7 @@ def test_enumeration_factor_group():
     with pytest.raises(
         ValueError,
         match=re.escape(
-            f"The queried factor {frozenset(name)} is not present in the factor group."
+            f"The queried factor connected to the set of variables {frozenset(name)} is not present in the factor group."
         ),
     ):
         enumeration_factor_group[name]
