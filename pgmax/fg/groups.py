@@ -595,7 +595,7 @@ class FactorGroup:
         variables = frozenset(variables)
         if variables not in self._variables_to_factors:
             raise ValueError(
-                f"The queried factor {variables} is not present in the factor group."
+                f"The queried factor connected to the set of variables {variables} is not present in the factor group."
             )
 
         return self._variables_to_factors[variables]
