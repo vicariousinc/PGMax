@@ -103,14 +103,14 @@ ax[1].imshow(vertical_oriented_cuts)
 grid_vars_group = groups.NDVariableArray(3, (2, M - 1, N - 1))
 
 # Make a group of additional variables for the edges of the grid
-extra_row_keys: List[Tuple[Any, ...]] = [(0, row, N - 1) for row in range(M - 1)]
-extra_col_keys: List[Tuple[Any, ...]] = [(1, M - 1, col) for col in range(N - 1)]
-additional_keys = tuple(extra_row_keys + extra_col_keys)
-additional_keys_group = groups.VariableDict(3, additional_keys)
+extra_row_names: List[Tuple[Any, ...]] = [(0, row, N - 1) for row in range(M - 1)]
+extra_col_names: List[Tuple[Any, ...]] = [(1, M - 1, col) for col in range(N - 1)]
+additional_names = tuple(extra_row_names + extra_col_names)
+additional_names_group = groups.VariableDict(3, additional_names)
 
 # Combine these two VariableGroups into one CompositeVariableGroup
 composite_grid_group = groups.CompositeVariableGroup(
-    {"grid_vars": grid_vars_group, "additional_vars": additional_keys_group}
+    {"grid_vars": grid_vars_group, "additional_vars": additional_names_group}
 )
 
 
@@ -233,14 +233,14 @@ valid_configs_supp = create_valid_suppression_config_arr(SUPPRESSION_DIAMETER)
 for row in range(M - 1):
     for col in range(N - 1):
         if row != M - 2 and col != N - 2:
-            curr_keys = [
+            curr_names = [
                 ("grid_vars", 0, row, col),
                 ("grid_vars", 1, row, col),
                 ("grid_vars", 0, row, col + 1),
                 ("grid_vars", 1, row + 1, col),
             ]
         elif row != M - 2:
-            curr_keys = [
+            curr_names = [
                 ("grid_vars", 0, row, col),
                 ("grid_vars", 1, row, col),
                 ("additional_vars", 0, row, col + 1),
@@ -248,7 +248,7 @@ for row in range(M - 1):
             ]
 
         elif col != N - 2:
-            curr_keys = [
+            curr_names = [
                 ("grid_vars", 0, row, col),
                 ("grid_vars", 1, row, col),
                 ("grid_vars", 0, row, col + 1),
@@ -256,7 +256,7 @@ for row in range(M - 1):
             ]
 
         else:
-            curr_keys = [
+            curr_names = [
                 ("grid_vars", 0, row, col),
                 ("grid_vars", 1, row, col),
                 ("additional_vars", 0, row, col + 1),
@@ -264,25 +264,25 @@ for row in range(M - 1):
             ]
 
         fg.add_factor(
-            curr_keys,
+            curr_names,
             valid_configs_non_supp,
             np.zeros(valid_configs_non_supp.shape[0], dtype=float),
         )
 
 
 # Create an EnumerationFactorGroup for vertical suppression factors
-vert_suppression_keys: List[List[Tuple[Any, ...]]] = []
+vert_suppression_names: List[List[Tuple[Any, ...]]] = []
 for col in range(N):
     for start_row in range(M - SUPPRESSION_DIAMETER):
         if col != N - 1:
-            vert_suppression_keys.append(
+            vert_suppression_names.append(
                 [
                     ("grid_vars", 0, r, col)
                     for r in range(start_row, start_row + SUPPRESSION_DIAMETER)
                 ]
             )
         else:
-            vert_suppression_keys.append(
+            vert_suppression_names.append(
                 [
                     ("additional_vars", 0, r, col)
                     for r in range(start_row, start_row + SUPPRESSION_DIAMETER)
@@ -290,18 +290,18 @@ for col in range(N):
             )
 
 
-horz_suppression_keys: List[List[Tuple[Any, ...]]] = []
+horz_suppression_names: List[List[Tuple[Any, ...]]] = []
 for row in range(M):
     for start_col in range(N - SUPPRESSION_DIAMETER):
         if row != M - 1:
-            horz_suppression_keys.append(
+            horz_suppression_names.append(
                 [
                     ("grid_vars", 1, row, c)
                     for c in range(start_col, start_col + SUPPRESSION_DIAMETER)
                 ]
             )
         else:
-            horz_suppression_keys.append(
+            horz_suppression_names.append(
                 [
                     ("additional_vars", 1, row, c)
                     for c in range(start_col, start_col + SUPPRESSION_DIAMETER)
@@ -313,14 +313,14 @@ for row in range(M):
 # ### Add FactorGroups Remaining to FactorGraph
 
 # %%
-fg.add_factor(
-    factor_factory=groups.EnumerationFactorGroup,
-    connected_var_keys=vert_suppression_keys,
+fg.add_factor_group(
+    factory=groups.EnumerationFactorGroup,
+    connected_variable_names=vert_suppression_names,
     factor_configs=valid_configs_supp,
 )
-fg.add_factor(
-    factor_factory=groups.EnumerationFactorGroup,
-    connected_var_keys=horz_suppression_keys,
+fg.add_factor_group(
+    factory=groups.EnumerationFactorGroup,
+    connected_variable_names=horz_suppression_names,
     factor_configs=valid_configs_supp,
 )
 
@@ -330,17 +330,18 @@ fg.add_factor(
 # %%
 # Run BP
 # Set the evidence
-init_msgs = fg.get_init_msgs()
-init_msgs.evidence["grid_vars"] = grid_evidence_arr
-init_msgs.evidence["additional_vars"] = additional_vars_evidence_dict
+bp_state = fg.bp_state
+bp_state.evidence["grid_vars"] = grid_evidence_arr
+bp_state.evidence["additional_vars"] = additional_vars_evidence_dict
+run_bp, get_bp_state, get_beliefs = graph.BP(bp_state, 1000)
 bp_start_time = timer()
-final_msgs = fg.run_bp(1000, 0.5, init_msgs=init_msgs)
+bp_arrays = run_bp()
 bp_end_time = timer()
 print(f"time taken for bp {bp_end_time - bp_start_time}")
 
 # Run inference and convert result to human-readable data structure
 data_writeback_start_time = timer()
-map_message_dict = fg.decode_map_states(final_msgs)
+map_states = graph.decode_map_states(get_beliefs(bp_arrays))
 data_writeback_end_time = timer()
 print(
     f"time taken for data conversion of inference result {data_writeback_end_time - data_writeback_start_time}"
@@ -358,13 +359,11 @@ for i in range(2):
     for row in range(M):
         for col in range(N):
             try:
-                bp_values[i, row, col] = map_message_dict["grid_vars", i, row, col]
+                bp_values[i, row, col] = map_states["grid_vars"][i, row, col]
                 bu_evidence[i, row, col, :] = grid_evidence_arr[i, row, col]
-            except KeyError:
+            except IndexError:
                 try:
-                    bp_values[i, row, col] = map_message_dict[
-                        "additional_vars", i, row, col
-                    ]
+                    bp_values[i, row, col] = map_states["additional_vars"][i, row, col]
                     bu_evidence[i, row, col, :] = additional_vars_evidence_dict[
                         (i, row, col)
                     ]

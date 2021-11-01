@@ -62,27 +62,24 @@ class EnumerationFactor:
     """An enumeration factor
 
     Args:
-        variables: List of involved variables
+        variables: List of connected variables
         configs: Array of shape (num_val_configs, num_variables)
             An array containing an explicit enumeration of all valid configurations
-        factor_configs_log_potentials: Array of shape (num_val_configs,). An array containing
+        log_potentials: Array of shape (num_val_configs,). An array containing
             the log of the potential value for every possible configuration
 
     Raises:
         ValueError: If:
-            (1) the dtype of the configs array is not int
-            (2) the dtype of the potential array is not float
-            (3) configs array doesn't have the same number of columns
-            as there are variables
-            (4) the potential array doesn't have the same number of
-            rows as the configs array
-            (5) any value in the configs array is greater than the size
-            of the corresponding variable or less than 0.
+            (1) The dtype of the configs array is not int
+            (2) The dtype of the potential array is not float
+            (3) Configs does not have the correct shape
+            (4) The potential array does not have the correct shape
+            (5) The configs array contains invalid values
     """
 
     variables: Tuple[Variable, ...]
     configs: np.ndarray
-    factor_configs_log_potentials: np.ndarray
+    log_potentials: np.ndarray
 
     def __post_init__(self):
         self.configs.flags.writeable = False
@@ -91,9 +88,15 @@ class EnumerationFactor:
                 f"Configurations should be integers. Got {self.configs.dtype}."
             )
 
-        if not np.issubdtype(self.factor_configs_log_potentials.dtype, np.floating):
+        if not np.issubdtype(self.log_potentials.dtype, np.floating):
             raise ValueError(
-                f"Potential should be floats. Got {self.factor_configs_log_potentials.dtype}."
+                f"Potential should be floats. Got {self.log_potentials.dtype}."
+            )
+
+        if self.configs.ndim != 2:
+            raise ValueError(
+                "configs should be a 2D array containing a list of valid configurations for "
+                f"EnumerationFactor. Got a configs array of shape {self.configs.shape}."
             )
 
         if len(self.variables) != self.configs.shape[1]:
@@ -101,9 +104,11 @@ class EnumerationFactor:
                 f"Number of variables {len(self.variables)} doesn't match given configurations {self.configs.shape}"
             )
 
-        if self.configs.shape[0] != self.factor_configs_log_potentials.shape[0]:
+        if self.log_potentials.shape != (self.configs.shape[0],):
             raise ValueError(
-                f"The potential array has {self.factor_configs_log_potentials.shape[0]} rows, which is not equal to the number of configurations ({self.configs.shape[0]})"
+                f"Expected log potentials of shape {(self.configs.shape[0],)} for "
+                f"({self.configs.shape[0]}) valid configurations. Got log potentials of "
+                f"shape {self.log_potentials.shape}."
             )
 
         vars_num_states = np.array([variable.num_states for variable in self.variables])

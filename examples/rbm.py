@@ -17,6 +17,7 @@
 # %matplotlib inline
 import itertools
 
+import jax
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -47,25 +48,40 @@ for ii in range(nh):
         )
 
 # %%
-# Set evidence
-init_msgs = fg.get_init_msgs()
-init_msgs.evidence["hidden"] = np.stack(
-    [np.zeros_like(bh), bh + np.random.logistic(size=bh.shape)], axis=1
-)
-init_msgs.evidence["visible"] = np.stack(
-    [np.zeros_like(bv), bv + np.random.logistic(size=bv.shape)], axis=1
-)
+run_bp, _, get_beliefs = graph.BP(fg.bp_state, 100)
 
 # %%
-# Run inference and decode
-msgs = fg.run_bp(100, 0.5, init_msgs)
-map_states = fg.decode_map_states(msgs)
+# Run inference and decode using vmap
+n_samples = 16
+bp_arrays = jax.vmap(run_bp, in_axes=0, out_axes=0)(
+    evidence_updates={
+        "hidden": np.stack(
+            [
+                np.zeros((n_samples,) + bh.shape),
+                bh + np.random.logistic(size=(n_samples,) + bh.shape),
+            ],
+            axis=-1,
+        ),
+        "visible": np.stack(
+            [
+                np.zeros((n_samples,) + bv.shape),
+                bv + np.random.logistic(size=(n_samples,) + bv.shape),
+            ],
+            axis=-1,
+        ),
+    }
+)
+map_states = graph.decode_map_states(
+    jax.vmap(get_beliefs, in_axes=0, out_axes=0)(bp_arrays)
+)
 
 # %%
 # Visualize decodings
-img = np.zeros(bv.shape)
-for ii in range(nv):
-    img[ii] = map_states[("visible", ii)]
+fig, ax = plt.subplots(4, 4, figsize=(10, 10))
+for ii in range(16):
+    ax[np.unravel_index(ii, (4, 4))].imshow(
+        map_states["visible"][ii].copy().reshape((28, 28))
+    )
+    ax[np.unravel_index(ii, (4, 4))].axis("off")
 
-img = img.reshape((28, 28))
-plt.imshow(img)
+fig.tight_layout()

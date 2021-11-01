@@ -15,6 +15,8 @@
 
 # %%
 # %matplotlib inline
+import jax
+import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -25,18 +27,18 @@ from pgmax.fg import graph, groups
 
 # %%
 variables = groups.NDVariableArray(variable_size=2, shape=(50, 50))
-fg = graph.FactorGraph(variables=variables, evidence_default_mode="random")
-connected_var_keys = []
+fg = graph.FactorGraph(variables=variables)
+connected_variable_names = []
 for ii in range(50):
     for jj in range(50):
         kk = (ii + 1) % 50
         ll = (jj + 1) % 50
-        connected_var_keys.append([(ii, jj), (kk, jj)])
-        connected_var_keys.append([(ii, jj), (ii, ll)])
+        connected_variable_names.append([(ii, jj), (kk, jj)])
+        connected_variable_names.append([(ii, jj), (ii, ll)])
 
-fg.add_factor(
-    factor_factory=groups.PairwiseFactorGroup,
-    connected_var_keys=connected_var_keys,
+fg.add_factor_group(
+    factory=groups.PairwiseFactorGroup,
+    connected_variable_names=connected_variable_names,
     log_potential_matrix=0.8 * np.array([[1.0, -1.0], [-1.0, 1.0]]),
     name="factors",
 )
@@ -45,43 +47,72 @@ fg.add_factor(
 # ### Run inference and visualize results
 
 # %%
-msgs = fg.run_bp(3000, 0.5)
-map_states = fg.decode_map_states(msgs)
-img = np.zeros((50, 50))
-for key in map_states:
-    img[key] = map_states[key]
+bp_state = fg.bp_state
+run_bp, _, get_beliefs = graph.BP(bp_state, 3000)
 
+# %%
+bp_arrays = run_bp(
+    evidence_updates={None: jax.device_put(np.random.gumbel(size=(50, 50, 2)))}
+)
+
+# %%
+img = graph.decode_map_states(get_beliefs(bp_arrays))
 fig, ax = plt.subplots(1, 1, figsize=(10, 10))
 ax.imshow(img)
+
+
+# %% [markdown]
+# ### Gradients and batching
+
+# %%
+def loss(log_potentials_updates, evidence_updates):
+    bp_arrays = run_bp(
+        log_potentials_updates=log_potentials_updates, evidence_updates=evidence_updates
+    )
+    beliefs = get_beliefs(bp_arrays)
+    loss = -jnp.sum(beliefs)
+    return loss
+
+
+batch_loss = jax.jit(jax.vmap(loss, in_axes=(None, {None: 0}), out_axes=0))
+log_potentials_grads = jax.jit(jax.grad(loss, argnums=0))
+
+# %%
+batch_loss(None, {None: jax.device_put(np.random.gumbel(size=(10, 50, 50, 2)))})
+
+# %%
+grads = log_potentials_grads(
+    {"factors": jnp.eye(2)}, {None: jax.device_put(np.random.gumbel(size=(50, 50, 2)))}
+)
 
 # %% [markdown]
 # ### Message and evidence manipulation
 
 # %%
 # Query evidence for variable (0, 0)
-msgs.evidence[0, 0]
+bp_state.evidence[0, 0]
 
 # %%
 # Set evidence for variable (0, 0)
-msgs.evidence[0, 0] = np.array([1.0, 1.0])
-msgs.evidence[0, 0]
+bp_state.evidence[0, 0] = np.array([1.0, 1.0])
+bp_state.evidence[0, 0]
 
 # %%
 # Set evidence for all variables using an array
 evidence = np.random.randn(50, 50, 2)
-msgs.evidence[:] = evidence
-msgs.evidence[10, 10] == evidence[10, 10]
+bp_state.evidence[None] = evidence
+bp_state.evidence[10, 10] == evidence[10, 10]
 
 # %%
 # Query messages from the factor involving (0, 0), (0, 1) in factor group "factors" to variable (0, 0)
-msgs.ftov[("factors", frozenset([(0, 0), (0, 1)])), (0, 0)]
+bp_state.ftov_msgs[[(0, 0), (0, 1)], (0, 0)]
 
 # %%
 # Set messages from the factor involving (0, 0), (0, 1) in factor group "factors" to variable (0, 0)
-msgs.ftov[("factors", frozenset([(0, 0), (0, 1)])), (0, 0)] = np.array([1.0, 1.0])
-msgs.ftov[("factors", frozenset([(0, 0), (0, 1)])), (0, 0)]
+bp_state.ftov_msgs[[(0, 0), (0, 1)], (0, 0)] = np.array([1.0, 1.0])
+bp_state.ftov_msgs[[(0, 0), (0, 1)], (0, 0)]
 
 # %%
 # Uniformly spread expected belief at a variable to all connected factors
-msgs.ftov[0, 0] = np.array([1.0, 1.0])
-msgs.ftov[("factors", frozenset([(0, 0), (0, 1)])), (0, 0)]
+bp_state.ftov_msgs[0, 0] = np.array([1.0, 1.0])
+bp_state.ftov_msgs[[(0, 0), (0, 1)], (0, 0)]
