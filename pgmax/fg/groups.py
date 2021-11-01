@@ -64,6 +64,9 @@ class VariableGroup:
 
         Returns:
             A single variable if the name is not a list. A list of variables if name is a list
+
+        Raises:
+            ValueError: if the name is not found in the group
         """
 
         if isinstance(name, List):
@@ -196,6 +199,9 @@ class CompositeVariableGroup(VariableGroup):
 
         Returns:
             A single variable if the name is not a list. A list of variables if name is a list
+
+        Raises:
+            ValueError: if the name does not have the right format (tuples with at least two elements).
         """
         if isinstance(name, List):
             names_list = name
@@ -277,6 +283,11 @@ class CompositeVariableGroup(VariableGroup):
 
         Returns:
             Meaningful structured data, with structure matching that of self.variable_group_container.
+
+        Raises:
+            ValueError if:
+                (1) flat_data is not a 1D array
+                (2) flat_data is not of the right shape
         """
         if flat_data.ndim != 1:
             raise ValueError(
@@ -378,6 +389,9 @@ class NDVariableArray(VariableGroup):
 
         Returns:
             A flat jnp.array for internal use
+
+        Raises:
+            ValueError: If the data is not of the correct shape.
         """
         if data.shape != self.shape and data.shape != self.shape + (
             self.variable_size,
@@ -400,6 +414,11 @@ class NDVariableArray(VariableGroup):
         Returns:
             Meaningful structured data. An array of shape self.shape (for e.g. MAP decodings)
                 or an array of shape self.shape + (self.variable_size,) (for e.g. evidence, beliefs).
+
+        Raises:
+            ValueError if:
+                (1) flat_data is not a 1D array
+                (2) flat_data is not of the right shape
         """
         if flat_data.ndim != 1:
             raise ValueError(
@@ -458,6 +477,11 @@ class VariableDict(VariableGroup):
 
         Returns:
             A flat jnp.array for internal use
+
+        Raises:
+            ValueError if:
+                (1) data is referring to a non-existing variable
+                (2) data is not of the correct shape
         """
         for name in data:
             if name not in self._names_to_variables:
@@ -487,6 +511,10 @@ class VariableDict(VariableGroup):
                 Each value should be an array of shape (1,) (for e.g. MAP decodings) or
                 (self.variable_size,) (for e.g. evidence, beliefs).
 
+        Raises:
+            ValueError if:
+                (1) flat_data is not a 1D array
+                (2) flat_data is not of the right shape
         """
         if flat_data.ndim != 1:
             raise ValueError(
@@ -560,6 +588,9 @@ class FactorGroup:
 
         Returns:
             A queried individual factor
+
+        Raises:
+            ValueError: if the queried factor is not present in the factor group
         """
         variables = frozenset(variables)
         if variables not in self._variables_to_factors:
@@ -588,7 +619,7 @@ class FactorGroup:
             a dictionary mapping all possible names to different factors.
         """
         raise NotImplementedError(
-            "Please subclass the VariableGroup class and override this method"
+            "Please subclass the FactorGroup class and override this method"
         )
 
     @cached_property
@@ -662,6 +693,9 @@ class EnumerationFactorGroup(FactorGroup):
 
         Returns:
             a dictionary mapping all possible set of connected variables to different factors.
+
+        Raises:
+            ValueError: if the specified log_potentials is not of the right shape
         """
         num_factors = len(self.connected_variable_names)
         num_val_configs = self.factor_configs.shape[0]
@@ -708,6 +742,9 @@ class EnumerationFactorGroup(FactorGroup):
 
         Returns:
             A flat jnp.array for internal use
+
+        Raises:
+            ValueError: if data is not of the right shape.
         """
         num_factors = len(self.factors)
         if (
@@ -744,6 +781,11 @@ class EnumerationFactorGroup(FactorGroup):
             Meaningful structured data. Should be an array of shape (num_val_configs,)
                 (for shared log potentials) or (num_factors, num_val_configs) (for log potentials)
                 or (num_factors, num_edge_states) (for ftov messages).
+
+        Raises:
+            ValueError if:
+                (1) flat_data is not a 1D array
+                (2) flat_data is not of the right shape
         """
         if flat_data.ndim != 1:
             raise ValueError(
@@ -799,9 +841,12 @@ class PairwiseFactorGroup(FactorGroup):
             a dictionary mapping all possible set of connected variables to different factors.
 
         Raises:
-            ValueError: if every sub-list within self.connected_variable_names has len != 2, or if the shape of the
-                log_potential_matrix is not the same as the variable sizes for each variable referenced in
-                each sub-list of self.connected_variable_names
+            ValueError if:
+                (1) The specified log_potential_matrix is not a 2D or 3D array.
+                (2) Some pairwise factors connect to less or more than 2 variables.
+                (3) The specified log_potential_matrix does not match the number of factors.
+                (4) The specified log_potential_matrix does not match the number of variable states of the
+                    variables in the factors.
         """
         if self.log_potential_matrix is None:
             log_potential_matrix = np.zeros(
@@ -925,6 +970,11 @@ class PairwiseFactorGroup(FactorGroup):
                 (num_factors, var0_num_states, var1_num_states) (for log potential matrices)
                 or (num_factors, var0_num_states + var1_num_states) (for ftov messages)
                 or (var0_num_states, var1_num_states) (for shared log potential matrix).
+
+        Raises:
+            ValueError if:
+                (1) flat_data is not a 1D array
+                (2) flat_data is not of the right shape
         """
         if flat_data.ndim != 1:
             raise ValueError(

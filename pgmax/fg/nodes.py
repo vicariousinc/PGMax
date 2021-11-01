@@ -70,14 +70,11 @@ class EnumerationFactor:
 
     Raises:
         ValueError: If:
-            (1) the dtype of the configs array is not int
-            (2) the dtype of the potential array is not float
-            (3) configs array doesn't have the same number of columns
-            as there are variables
-            (4) the potential array doesn't have the same number of
-            rows as the configs array
-            (5) any value in the configs array is greater than the size
-            of the corresponding variable or less than 0.
+            (1) The dtype of the configs array is not int
+            (2) The dtype of the potential array is not float
+            (3) Configs does not have the correct shape
+            (4) The potential array does not have the correct shape
+            (5) The configs array contains invalid values
     """
 
     variables: Tuple[Variable, ...]
