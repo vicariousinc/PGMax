@@ -16,3 +16,17 @@ PGMax is a library for working with Factor Graphs in [JAX](https://jax.readthedo
 1. Install the project's dependencies into your virtual environment with the command `poetry install`. Your environment will now contain both developer and user dependencies!
     1. By default this installs JAX for CPU. If you'd like to use JAX with a GPU and specific CUDA version (highly recommended), follow the official instructions [here](https://github.com/google/jax#pip-installation-gpu-cuda).
 1. Do `pre-commit install` to initialize pre-commit hooks
+
+## Citing PGMax
+
+To cite this repository
+```
+@software{pgmax2021github,
+  author = {Guangyao Zhou* and Nishanth Kumar* and Miguel L\’{a}zaro-Gredilla and Dileep George},
+  title = {{PGMax}: {F}actor graph on discrete variables and hardware-accelerated differentiable loopy belief propagation in {JAX}},
+  howpublished={\url{http://github.com/vicariousinc/PGMax}},
+  version = {0.2.1},
+  year = {2021},
+}
+```
+where * indicates equal contribution.
