@@ -15,8 +15,6 @@ PGMax implements general factor graphs for probabilistic graphical models (PGMs)
 pip install pgmax
 ```
 
-By default this installs JAX for CPU. If you'd like to use JAX with a GPU and specific CUDA version (highly recommended), follow the official instructions [here](https://github.com/google/jax#pip-installation-gpu-cuda).
-
 ### Install latest version from GitHub
 ```
 pip install git+https://github.com/vicariousinc/PGMax.git
@@ -31,7 +29,10 @@ poetry shell
 poetry install
 pre-commit install
 ```
-By default this installs JAX for CPU. If you'd like to use JAX with a GPU and specific CUDA version (highly recommended), follow the official instructions [here](https://github.com/google/jax#pip-installation-gpu-cuda).
+
+### Install on GPU
+
+By default the above commands install JAX for CPU. If you have access to a GPU, follow the official instructions [here](https://github.com/google/jax#pip-installation-gpu-cuda) to install JAX for GPU.
 
 ## Citing PGMax
 
