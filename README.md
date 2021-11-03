@@ -2,20 +2,36 @@
 [![PyPI version](https://badge.fury.io/py/pgmax.svg)](https://badge.fury.io/py/pgmax)
 
 # PGMax
-PGMax is a library for working with Factor Graphs in [JAX](https://jax.readthedocs.io/en/latest/). It currently provides an interface for specifying factor graphs of any type, as well as an efficient implementation of max-product belief propagation and inference on these graphs.
 
-## Installation Instructions
-### User
-1. Install the library using pip via: `pip install pgmax`
-1. By default this installs JAX for CPU. If you'd like to use JAX with a GPU and specific CUDA version (highly recommended), follow the official instructions [here](https://github.com/google/jax#pip-installation-gpu-cuda).
+PGMax implements general factor graphs for probabilistic graphical models (PGMs) with discrete variables, and hardware-accelerated differentiable loopy belief propagation (LBP) in [JAX](https://jax.readthedocs.io/en/latest/).
+
+- **General factor graphs**: PGMax goes beyond pairwise PGMs, and supports arbitrary factor graph topology, including higher-order factors.
+- **LBP in JAX**: PGMax generates pure JAX functions implementing LBP for a given factor graph. The generated pure JAX functions run on modern accelerators (GPU/TPU), work with JAX transformations (e.g. `vmap` for processing batches of models/samples, `grad` for differentiating through the LBP iterative process), and can be easily used as part of a larger end-to-end differentiable system.
+
+## Installation
+
+### Install from PyPI
+```
+pip install pgmax
+```
+
+By default this installs JAX for CPU. If you'd like to use JAX with a GPU and specific CUDA version (highly recommended), follow the official instructions [here](https://github.com/google/jax#pip-installation-gpu-cuda).
+
+### Install latest version from GitHub
+```
+pip install git+https://github.com/vicariousinc/PGMax.git
+```
 
 ### Developer
-1. Clone this project's [GitHub Repository](https://github.com/vicariousinc/PGMax)
-1. Install Poetry by following [these instructions](https://python-poetry.org/docs/master/). Note: you may need to logout and log back in after running the install command for the `poetry --version` command to work in your shell environment.
-1. Navigate to this project's directory and activate a poetry shell via the command `poetry shell`. This creates and activates a virtual environment for you to use with this project.
-1. Install the project's dependencies into your virtual environment with the command `poetry install`. Your environment will now contain both developer and user dependencies!
-    1. By default this installs JAX for CPU. If you'd like to use JAX with a GPU and specific CUDA version (highly recommended), follow the official instructions [here](https://github.com/google/jax#pip-installation-gpu-cuda).
-1. Do `pre-commit install` to initialize pre-commit hooks
+```
+git clone https://github.com/vicariousinc/PGMax.git
+curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/install-poetry.py | python -
+cd PGMax
+poetry shell
+poetry install
+pre-commit install
+```
+By default this installs JAX for CPU. If you'd like to use JAX with a GPU and specific CUDA version (highly recommended), follow the official instructions [here](https://github.com/google/jax#pip-installation-gpu-cuda).
 
 ## Citing PGMax
 
