@@ -16,7 +16,7 @@ keywords = ["PGMax", "jax"]
 [tool.poetry.dependencies]
 python = ">=3.7,<3.8"
 jupyter = "^1.0.0"
-matplotlib = "^3.3.0"
+matplotlib = "^3.2.0"
 jax = "^0.2.14"
 jaxlib = "^0.1.67"
 numpy = "^1.19.0"
