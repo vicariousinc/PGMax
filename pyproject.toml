@@ -21,12 +21,13 @@ jax = "^0.2.14"
 jaxlib = "^0.1.67"
 numpy = "^1.19.0"
 scipy = "^1.4.0"
+jupytext = "^1.11.3"
+tqdm = "^4.61.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"
 Sphinx = "^3.0.0"
 pre-commit = "^2.13.0"
-jupytext = "^1.11.3"
 sphinx-rtd-theme = "^0.5.2"
 pytest-cov = "^2.12.1"
 
