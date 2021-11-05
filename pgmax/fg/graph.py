@@ -25,6 +25,7 @@ from typing import (
 import jax
 import jax.numpy as jnp
 import numpy as np
+from tqdm import tqdm
 
 from pgmax.bp import infer
 from pgmax.fg import fg_utils, groups, nodes
@@ -194,7 +195,7 @@ class FactorGraph:
             Compiled wiring from individual factors.
         """
         wirings = [
-            factor.compile_wiring(self._vars_to_starts) for factor in self.factors
+            factor.compile_wiring(self._vars_to_starts) for factor in tqdm(self.factors)
         ]
         wiring = fg_utils.concatenate_enumeration_wirings(wirings)
         return wiring
