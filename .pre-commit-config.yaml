@@ -1,11 +1,11 @@
 repos:
 -   repo: https://github.com/PyCQA/isort
-    rev: 5.8.0
+    rev: 5.10.0
     hooks:
     -   id: isort
 
--   repo: https://github.com/ambv/black
-    rev:  21.6b0
+-   repo: https://github.com/psf/black
+    rev:  21.10b0
     hooks:
     -   id: black
         language_version: python3.7
@@ -19,8 +19,8 @@ repos:
         files: (\.py|\.rst|\.yaml|)$
     -   id: check-merge-conflict
 
--   repo: https://gitlab.com/pycqa/flake8
-    rev: 3.9.2
+-   repo: https://github.com/PyCQA/flake8
+    rev: 4.0.1
     hooks:
     -   id: flake8
         # To turn this into an error, remove --exit-zero below
@@ -28,7 +28,7 @@ repos:
         verbose: true
 
 -   repo: https://github.com/pre-commit/mirrors-mypy
-    rev: 'v0.902'  # Use the sha / tag you want to point at
+    rev: 'v0.910-1'  # Use the sha / tag you want to point at
     hooks:
     -   id: mypy
         additional_dependencies: [tokenize-rt==3.2.0]
