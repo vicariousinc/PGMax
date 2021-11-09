@@ -15,7 +15,6 @@ jobs:
       matrix:
         python-version: [3.7]
         poetry-version: [1.1.8]
-    if: ${{ github.event_name == 'pull_request' }}
     steps:
       #----------------------------------------------
       #       cancel any pending actions
