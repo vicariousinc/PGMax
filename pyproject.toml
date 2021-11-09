@@ -2,7 +2,7 @@
 name = "pgmax"
 version = "0.2.0"
 description = "Loopy belief propagation for factor graphs on discrete variables, in JAX!"
-authors = ["Stannis Zhou <stannis@vicarious.com>", "Nishanth Kumar <nkumar@vicarious.com>", "Miguel Lazaro-Gredilla <miguel@vicarious.com>", "Dileep George <dileep@vicarious.com>"]
+authors = ["Stannis Zhou <stannis@vicarious.com>", "Nishanth Kumar <njk@csail.mit.edu>", "Miguel Lazaro-Gredilla <miguel@vicarious.com>", "Dileep George <dileep@vicarious.com>"]
 # Additional info
 license = "MIT"
 readme = "README.md"
