@@ -9,11 +9,9 @@ sys.path.append(str(parent_dir))
 
 import time
 
-import matplotlib.pyplot as plt
 import numpy as np
 from learning import Model, get_number_of_states, index_to_rc, rc_to_index
 from load_data import get_mnist_data_iters
-from preproc import Preproc
 
 
 # export

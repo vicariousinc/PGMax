@@ -67,34 +67,3 @@ def visualize_graph(frc, edge):
 
     plt.imshow(img, cmap="gray")
     return img
-
-
-def visualize_predictions(map_states_dict, test_idx, hps, vps):
-    map_states = map_states_dict[test_idx]
-    imgs = np.ones((len(models), 200, 200))
-
-    for key in map_states.keys():
-        model_idx, i = key
-        v = models[model_idx].V[i]
-
-        idx = map_states[(model_idx, i)]
-        f, r, c = v.get_frc()
-        delta_r, delta_c = index_to_rc(idx, hps, vps)
-
-        rd, cd = r + delta_r, c + delta_c
-        imgs[model_idx, rd, cd] = 0
-
-    plt.imshow(test_set[test_idx][0], cmap="gray")
-    plt.figure()
-
-    plt.figure(figsize=(15, 15))
-    plt.suptitle(
-        f"Backtraces of different models on the digit {int(test_labels[test_idx])}"
-    )
-
-    for i in range(20):
-        plt.subplot(4, 5, 1 + i)
-        plt.title(f" Model {int(train_labels[i])}")
-        plt.imshow(imgs[i, :, :], cmap="gray")
-
-    return imgs

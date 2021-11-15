@@ -25,7 +25,6 @@ from helpers import (
     get_number_of_states,
     index_to_rc,
     initialize_evidences,
-    rc_to_index,
     visualize_graph,
 )
 from load_data import get_mnist_data_iters
