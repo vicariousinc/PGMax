@@ -16,7 +16,7 @@ def get_number_of_states(hps, vps):
     return (2 * hps + 1) * (2 * vps + 1) + 1
 
 
-def initialize_vertex_beliefs(inf_img, frcs, hps, vps, neg_inf=-1000):
+def initialize_evidences(inf_img, frcs, hps, vps, neg_inf=-1000):
     M = get_number_of_states(hps, vps)
     
     preproc_layer = Preproc(cross_channel_pooling=True)

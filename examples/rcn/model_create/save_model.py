@@ -91,7 +91,7 @@ def save_valid_configs(edges, save_dir):
 
 # export
 data_dir = "/home/skushagra/Documents/science_rcn/data/MNIST/"
-train_size = 1000
+train_size = 20
 hps = 11
 vps = 11
 save_dir = f"{parent_dir}/model_{train_size}_{hps}_{vps}"
