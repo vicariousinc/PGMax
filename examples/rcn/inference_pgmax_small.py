@@ -17,26 +17,25 @@
 # %matplotlib inline
 import os
 import time
-from jax import jit
-
+from jax import jit, tree_util
+from jax import numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
-from helpers import (
-    get_number_of_states,
-    index_to_rc,
-    initialize_evidences,
-    visualize_graph,
-)
+
 from load_data import get_mnist_data_iters
+from preproc import Preproc
 
 from pgmax.fg import graph, groups
 
 os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 
-# # 1. Load the data
-
-hps, vps = 11, 11
+# %% [markdown]
+# ## 1. Load the data
+#
+#
+# %%
+hps, vps = 12, 12
 train_size = 20
 test_size = 20
 data_dir = "/storage/users/skushagra/MNIST/"
@@ -53,20 +52,55 @@ for i in range(len(test_set)):
     test_labels[i] = test_set[i][1]
 # -
 
-# # 2. Load the model
 
-directory = f"model_{train_size}_{hps}_{vps}"
+
+# %% [markdown]
+# ## 2. Load the model
+#
+#
+
+# %%
+directory = f"/storage/users/skushagra/pgmax_rcn_artifacts/model_science_{train_size}_{hps}_{vps}"
 frcs = np.load(f"{directory}/frcs.npy", allow_pickle=True, encoding='latin1')
 edges = np.load(f"{directory}/edges.npy", allow_pickle=True, encoding='latin1')
 phis = np.load(f"{directory}/phis.npy", allow_pickle=True, encoding='latin1')
-M = get_number_of_states(hps, vps)
+M = (2 * hps + 1) * (2 * vps + 1) + 1 
 
-img = visualize_graph(frcs[4], edges[4])
+# %% [markdown]
+# ## 3. Visualize loaded model.
+#
+#
 
-# # 3. Make pgmax graph
+# %%
+img = np.zeros((200, 200))
 
+frc, edge = frcs[4], edges[4]
+plt.figure(figsize=(10, 10))
+for e in edge:
+    i1, i2, w = e
+    f1, r1, c1 = frc[i1]
+    f2, r2, c2 = frc[i2]
+
+    img[r1, c1] = 255
+    img[r2, c2] = 255
+    plt.text((c1 + c2) // 2, (r1 + r2) // 2, str(w), color="blue")
+    plt.plot([c1, c2], [r1, r2], color="blue", linewidth=0.5)
+
+plt.imshow(img, cmap="gray")
+
+
+
+# %% [markdown]
+# ## 4. Make pgmax graph
+#
+#
+
+# %% [markdown]
 # ## 3.1 Make variables
+#
+#
 
+# %%
 # +
 start = time.time()
 assert frcs.shape[0] == edges.shape[0]
@@ -82,9 +116,14 @@ end = time.time()
 print(f"Creating variables took {end-start:.3f} seconds.")
 # -
 
-# ## 3.2 Make factors
 
-# +
+
+# %% [markdown]
+# ## 3.2 Make factors
+#
+#
+
+# %%
 start = end
 
 fg = graph.FactorGraph(variables=variables_all_models)
@@ -102,45 +141,50 @@ for idx in range(edges.shape[0]):
 end = time.time()
 print(f"Creating factors took {end-start:.3f} seconds.")
 
-# -
 
-# # 4. Run inference
 
-# ## 4.1 Helper functins to compute score that will be useful later
+# %% [markdown]
+# ## 4. Run inference
+#
+#
 
-@jit
-def jax_get_pgmax_score(map_state, bu_msg, frc, hps, vps):
-    score = 0
-    for v in range(frc.shape[0]):
+# %% [markdown]
+# ## 4.1 Helper function to initialize the evidence for a given image
+#
+#
 
-        idx = map_state[v]
-        #if idx == 0: continue
-
-        f, r, c = frc[v]
-        
-        rd = r - hps + (idx - 1) // (2 * vps + 1)
-        cd = c - vps + (idx - 1) %  (2 * vps + 1)
-        
-        score += bu_msg[f, rd, cd]
+# %%
+def initialize_evidences(test_img, frcs, hps, vps):
+    preproc_layer = Preproc(cross_channel_pooling=True)
+    bu_msg = preproc_layer.fwd_infer(test_img)
     
-    return score
+    evidence_updates = {}
+    for idx in range(frcs.shape[0]):
+        frc = frcs[idx]
+
+        unary_msg = -1 + np.zeros((frc.shape[0], M))
+        for v in range(frc.shape[0]):
+            f, r, c = frc[v, :]
+            evidence = bu_msg[f, r - hps : r + hps + 1, c - hps : c + hps + 1]
+            indices = np.transpose(np.nonzero(evidence > 0))
+
+            for index in indices:
+                r1, c1 = index
+                delta_r, delta_c = r1 - hps, c1 - vps
+
+                index = 1 + delta_c + vps + (2 * hps + 1) * (delta_r + hps)
+                unary_msg[v, index] = 1
+
+        evidence_updates[idx] = unary_msg
+    return bu_msg, evidence_updates
 
 
-def get_pgmax_scores(map_states, bu_msg, frcs, hps, vps, verbose=False):
-    start = time.time()
-
-    scores = [0] * frcs.shape[0]
-    for i in range(frcs.shape[0]):
-        scores[i] = jax_get_pgmax_score(map_states[i], bu_msg, frcs[i], hps, vps)
-
-    end = time.time()
-    print(f"Computing scores took {end-start:.3f} seconds.")
-    return np.array(scores)
-
-
+# %% [markdown]
 # ## 4.2 Run map product inference on all test images
+#
+#
 
-# +
+# %%
 run_bp_fn, _, get_beliefs_fn = graph.BP(fg.bp_state, 30)
 scores = np.zeros((len(test_set), frcs.shape[0]))
 map_states_dict = {}
@@ -152,31 +196,59 @@ for test_idx in range(len(test_set)):
     bu_msg, evidence_updates = initialize_evidences(img, frcs, hps, vps)
     end = time.time()
     print(f"Initializing evidences took {end-start:.3f} seconds for image {test_idx}.")
-    
-    
+
     start = end
     map_states = graph.decode_map_states(get_beliefs_fn(run_bp_fn(evidence_updates=evidence_updates)))
     end = time.time()
     print(f"Max product inference took {end-start:.3f} seconds for image {test_idx}.")
 
     map_states_dict[test_idx] = map_states
-    scores[test_idx, :] = get_pgmax_scores(map_states, bu_msg, frcs, hps, vps)
-# -
+    start = end
+    score = tree_util.tree_multimap(
+            lambda evidence, map: jnp.sum(
+                evidence[jnp.arange(map.shape[0]), map]
+            ), 
+            evidence_updates, 
+            map_states
+        )
+    for ii in score: scores[test_idx, ii] = score[ii]
+    end = time.time()
+    print(f"Computing scores took {end-start:.3f} seconds for image {test_idx}.")
 
-# # 5. Compute metrics (accuracy)
+    #scores[test_idx, :] = score
 
+
+
+# %% [markdown]
+# ## 5. Compute metrics (accuracy)
+#
+#
+
+# %%
 test_preds = train_labels[scores.argmax(axis=1)]
 accuracy = (test_preds == test_labels).sum() / test_labels.shape[0]
 
 print(f"accuracy = {accuracy}")
 
-# # 6. Visualize predictions (backtrace)
 
+
+# %% [markdown]
+# ## 6. Visualize predictions (backtrace)
+#
+#
+
+# %%
 test_idx = 0
 plt.imshow(test_set[test_idx][0], cmap="gray")
 
+
+
+# %%
 # ## 6.1 Backtrace of some models on this test image
 
+
+
+# %%
 # +
 map_states = map_states_dict[test_idx]
 imgs = np.ones((len(frcs), 200, 200))
@@ -189,7 +261,7 @@ for i in range(frcs.shape[0]):
         idx = map_state[v]
         f, r, c = frc[v]
 
-        delta_r, delta_c = index_to_rc(idx, hps, vps)
+        delta_r, delta_c = -hps + (idx - 1) // (2 * vps + 1), -vps + (idx - 1) % (2 * vps + 1)
         rd, cd = r + delta_r, c + delta_c
         imgs[i, rd, cd] = 0
 plt.figure(figsize=(15, 15))
@@ -201,3 +273,5 @@ for k, index in enumerate(range(0, len(train_set), 5)):
 # -
 
 
+
+# %%
