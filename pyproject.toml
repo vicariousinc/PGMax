@@ -26,6 +26,7 @@ scipy = "^1.2.3"
 jupytext = "^1.11.3"
 tqdm = "^4.61.0"
 sphinx = {version = "^3", optional = true}
+scikit-learn = "^1.0.1"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"
