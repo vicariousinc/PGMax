@@ -17,11 +17,12 @@
 # %matplotlib inline
 import os
 import time
-from jax import jit, tree_util
-from jax import numpy as jnp
+
 import matplotlib.pyplot as plt
 import numpy as np
-
+from jax import jit
+from jax import numpy as jnp
+from jax import tree_util
 from load_data import get_mnist_data_iters
 from preproc import Preproc
 
@@ -53,7 +54,6 @@ for i in range(len(test_set)):
 # -
 
 
-
 # %% [markdown]
 # ## 2. Load the model
 #
@@ -61,9 +61,9 @@ for i in range(len(test_set)):
 
 # %%
 directory = f"/storage/users/skushagra/pgmax_rcn_artifacts/model_science_{train_size}_{hps}_{vps}"
-frcs = np.load(f"{directory}/frcs.npy", allow_pickle=True, encoding='latin1')
-edges = np.load(f"{directory}/edges.npy", allow_pickle=True, encoding='latin1')
-M = (2 * hps + 1) * (2 * vps + 1) + 1 
+frcs = np.load(f"{directory}/frcs.npy", allow_pickle=True, encoding="latin1")
+edges = np.load(f"{directory}/edges.npy", allow_pickle=True, encoding="latin1")
+M = (2 * hps + 1) * (2 * vps + 1) + 1
 
 # %% [markdown]
 # ## 3. Visualize loaded model.
@@ -86,7 +86,6 @@ for e in edge:
     plt.plot([c1, c2], [r1, r2], color="blue", linewidth=0.5)
 
 plt.imshow(img, cmap="gray")
-
 
 
 # %% [markdown]
@@ -123,7 +122,7 @@ print(f"Creating variables took {end-start:.3f} seconds.")
 # %%
 
 # %% [markdown]
-# ## 3.2.1 Pre-compute the valid configs for different perturb radii. 
+# ## 3.2.1 Pre-compute the valid configs for different perturb radii.
 #
 #
 
@@ -149,6 +148,7 @@ def valid_configs(r):
                 index += 1
 
     return np.stack([rows, cols], axis=1)
+
 
 max_perturb_radii = 25
 phis = []
@@ -181,7 +181,6 @@ end = time.time()
 print(f"Creating factors took {end-start:.3f} seconds.")
 
 
-
 # %% [markdown]
 # ## 4. Run inference
 #
@@ -196,7 +195,7 @@ print(f"Creating factors took {end-start:.3f} seconds.")
 def initialize_evidences(test_img, frcs, hps, vps):
     preproc_layer = Preproc(cross_channel_pooling=True)
     bu_msg = preproc_layer.fwd_infer(test_img)
-    
+
     evidence_updates = {}
     for idx in range(frcs.shape[0]):
         frc = frcs[idx]
@@ -237,25 +236,25 @@ for test_idx in range(len(test_set)):
     print(f"Initializing evidences took {end-start:.3f} seconds for image {test_idx}.")
 
     start = end
-    map_states = graph.decode_map_states(get_beliefs_fn(run_bp_fn(evidence_updates=evidence_updates)))
+    map_states = graph.decode_map_states(
+        get_beliefs_fn(run_bp_fn(evidence_updates=evidence_updates))
+    )
     end = time.time()
     print(f"Max product inference took {end-start:.3f} seconds for image {test_idx}.")
 
     map_states_dict[test_idx] = map_states
     start = end
     score = tree_util.tree_multimap(
-            lambda evidence, map: jnp.sum(
-                evidence[jnp.arange(map.shape[0]), map]
-            ), 
-            evidence_updates, 
-            map_states
-        )
-    for ii in score: scores[test_idx, ii] = score[ii]
+        lambda evidence, map: jnp.sum(evidence[jnp.arange(map.shape[0]), map]),
+        evidence_updates,
+        map_states,
+    )
+    for ii in score:
+        scores[test_idx, ii] = score[ii]
     end = time.time()
     print(f"Computing scores took {end-start:.3f} seconds for image {test_idx}.")
 
-    #scores[test_idx, :] = score
-
+    # scores[test_idx, :] = score
 
 
 # %% [markdown]
@@ -270,7 +269,6 @@ accuracy = (test_preds == test_labels).sum() / test_labels.shape[0]
 print(f"accuracy = {accuracy}")
 
 
-
 # %% [markdown]
 # ## 6. Visualize predictions (backtrace)
 #
@@ -281,10 +279,8 @@ test_idx = 0
 plt.imshow(test_set[test_idx][0], cmap="gray")
 
 
-
 # %%
 # ## 6.1 Backtrace of some models on this test image
-
 
 
 # %%
@@ -306,11 +302,10 @@ for i in range(frcs.shape[0]):
 plt.figure(figsize=(15, 15))
 
 for k, index in enumerate(range(0, len(train_set), 5)):
-    plt.subplot(1, 4, 1+k)
+    plt.subplot(1, 4, 1 + k)
     plt.title(f" Model {int(train_labels[index])}")
     plt.imshow(imgs[index, :, :], cmap="gray")
 # -
-
 
 
 # %%

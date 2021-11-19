@@ -10,8 +10,8 @@ sys.path.append(str(parent_dir))
 import time
 
 import numpy as np
-from learning import Model
 from helpers import get_number_of_states, index_to_rc, rc_to_index
+from learning import Model
 from load_data import get_mnist_data_iters
 
 

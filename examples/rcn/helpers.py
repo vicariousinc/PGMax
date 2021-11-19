@@ -18,10 +18,10 @@ def get_number_of_states(hps, vps):
 
 def initialize_evidences(inf_img, frcs, hps, vps, neg_inf=-1000):
     M = get_number_of_states(hps, vps)
-    
+
     preproc_layer = Preproc(cross_channel_pooling=True)
     bu_msg = preproc_layer.fwd_infer(inf_img)
-    
+
     evidence_updates = {}
 
     for idx in range(frcs.shape[0]):
