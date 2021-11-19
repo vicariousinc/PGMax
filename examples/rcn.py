@@ -48,18 +48,16 @@ def fetch_mnist_dataset(train_size, test_size, seed=5):
     dataset = fetch_openml("mnist_784", as_frame=False, cache=True)
 
     print("Fetched the data")
-    images = dataset["data"]
-    labels = dataset["target"].astype("int")
+    mnist_images = dataset["data"]
+    mnist_labels = dataset["target"].astype("int")
 
     def _sample_data(images, labels, num_per_class):
         t_set = []
         t_labels = []
         for i in range(10):
-            idxs = np.random.choice(
-                np.argwhere(full_train_labels == i)[:, 0], num_per_class
-            )
+            idxs = np.random.choice(np.argwhere(labels == i)[:, 0], num_per_class)
             for idx in idxs:
-                img = full_train_set[idx].reshape(28, 28)
+                img = images[idx].reshape(28, 28)
                 img_arr = jax.image.resize(
                     image=img, shape=(112, 112), method="bicubic"
                 )
@@ -76,16 +74,20 @@ def fetch_mnist_dataset(train_size, test_size, seed=5):
 
     np.random.seed(seed)
     full_train_set, full_train_labels = (
-        images[:mnist_train_size],
-        labels[:mnist_train_size],
+        mnist_images[:mnist_train_size],
+        mnist_labels[:mnist_train_size],
     )
     full_test_set, full_test_labels = (
-        images[mnist_train_size:],
-        labels[mnist_train_size:],
+        mnist_images[mnist_train_size:],
+        mnist_labels[mnist_train_size:],
     )
 
-    train_set, train_labels = _sample_data(images, labels, train_size // 10)
-    test_set, test_labels = _sample_data(images, labels, test_size // 10)
+    train_set, train_labels = _sample_data(
+        full_train_set, full_train_labels, train_size // 10
+    )
+    test_set, test_labels = _sample_data(
+        full_test_set, full_test_labels, test_size // 10
+    )
 
     return train_set, np.array(train_labels), test_set, np.array(test_labels)
 
