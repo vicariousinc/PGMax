@@ -3,15 +3,15 @@
 #define NEG_INF -1000
 
 int f_index_r(int index, int hps, int vps){
-    return -hps + (index - 1) /(2*vps+1);
+    return -hps + index /(2*vps+1);
 }
 
 int f_index_c(int index, int hps, int vps){
-    return -vps + (index - 1)%(2*vps+1);
+    return -vps + index%(2*vps+1);
 }
 
 int f_rc_index(int r, int c, int hps, int vps){
-    return 1 + c + vps + (2*hps+1)*(r+hps);
+    return c + vps + (2*hps+1)*(r+hps);
 }
 
 int max(int a, int b){
@@ -34,7 +34,7 @@ void _initialize_phi(int M, int r, int hps, int vps, int *len, int **rows, int**
     data2 = (int *)malloc(sizeof(int) * size);
     int index = 0;
 
-    for(i=1; i<M; i++){
+    for(i=0; i<M; i++){
         int r1 = f_index_r(i, hps, vps);
         int c1 = f_index_c(i, hps, vps);
 
@@ -63,13 +63,6 @@ double* compute_new_belief(int* rows, int* cols, int n, const double *belief, in
     double * new_belief = (double *)malloc(sizeof(double) * len_belief);
     int i, j, k;
     int first_init = 1;
-
-    new_belief[0] = belief[0];
-    for(i=1;i<len_belief;i++){
-        if(new_belief[0] < belief[i])
-            new_belief[0] = belief[i];
-    }
-    new_belief[0] += NEG_INF;
 
     for(k=0;k<n;k++){
         i = rows[k];

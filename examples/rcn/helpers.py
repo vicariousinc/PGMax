@@ -5,15 +5,15 @@ from scipy.special import logsumexp
 
 
 def index_to_rc(index, hps, vps):
-    return -hps + (index - 1) // (2 * vps + 1), -vps + (index - 1) % (2 * vps + 1)
+    return -hps + index // (2 * vps + 1), -vps + index % (2 * vps + 1)
 
 
 def rc_to_index(r, c, hps, vps):
-    return 1 + c + vps + (2 * hps + 1) * (r + hps)
+    return c + vps + (2 * hps + 1) * (r + hps)
 
 
 def get_number_of_states(hps, vps):
-    return (2 * hps + 1) * (2 * vps + 1) + 1
+    return (2 * hps + 1) * (2 * vps + 1)
 
 
 def initialize_evidences(inf_img, frcs, hps, vps, neg_inf=-1000):
@@ -30,7 +30,6 @@ def initialize_evidences(inf_img, frcs, hps, vps, neg_inf=-1000):
         unary_msg = neg_inf + np.zeros((frc.shape[0], M))
 
         for v in range(frc.shape[0]):
-            unary_msg[v, 0] = 0
 
             f, r, c = frc[v, :]
             evidence = bu_msg[f, r - hps : r + hps + 1, c - hps : c + hps + 1]
@@ -42,7 +41,6 @@ def initialize_evidences(inf_img, frcs, hps, vps, neg_inf=-1000):
 
                 index = rc_to_index(delta_r, delta_c, hps, vps)
                 unary_msg[v, index] = 0
-                unary_msg[v, 0] = neg_inf
 
         unary_msg = unary_msg - logsumexp(unary_msg, axis=1)[:, None]
         unary_msg[unary_msg < neg_inf // 2] = neg_inf

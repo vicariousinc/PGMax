@@ -10,7 +10,8 @@ sys.path.append(str(parent_dir))
 import time
 
 import numpy as np
-from learning import Model, get_number_of_states, index_to_rc, rc_to_index
+from learning import Model
+from helpers import get_number_of_states, index_to_rc, rc_to_index
 from load_data import get_mnist_data_iters
 
 
@@ -53,7 +54,7 @@ def valid_configs(r, hps, vps):
     rows = []
     cols = []
     index = 0
-    for i in range(1, M):
+    for i in range(M):
         r1, c1 = index_to_rc(i, hps, vps)
 
         r2_min = max(r1 - r, -hps)
@@ -89,7 +90,7 @@ def save_valid_configs(edges, save_dir):
 
 # export
 data_dir = "/home/skushagra/Documents/science_rcn/data/MNIST/"
-train_size = 20
+train_size = 1000
 hps = 11
 vps = 11
 save_dir = f"{parent_dir}/model_{train_size}_{hps}_{vps}"

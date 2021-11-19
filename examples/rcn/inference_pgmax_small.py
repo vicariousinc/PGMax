@@ -63,7 +63,6 @@ for i in range(len(test_set)):
 directory = f"/storage/users/skushagra/pgmax_rcn_artifacts/model_science_{train_size}_{hps}_{vps}"
 frcs = np.load(f"{directory}/frcs.npy", allow_pickle=True, encoding='latin1')
 edges = np.load(f"{directory}/edges.npy", allow_pickle=True, encoding='latin1')
-phis = np.load(f"{directory}/phis.npy", allow_pickle=True, encoding='latin1')
 M = (2 * hps + 1) * (2 * vps + 1) + 1 
 
 # %% [markdown]
@@ -116,14 +115,54 @@ end = time.time()
 print(f"Creating variables took {end-start:.3f} seconds.")
 # -
 
-
-
 # %% [markdown]
 # ## 3.2 Make factors
 #
 #
 
 # %%
+
+# %% [markdown]
+# ## 3.2.1 Pre-compute the valid configs for different perturb radii. 
+#
+#
+
+# %%
+# -
+def valid_configs(r):
+    rows = []
+    cols = []
+    index = 0
+    for i in range(M):
+        r1, c1 = -hps + i // (2 * vps + 1), -vps + i % (2 * vps + 1)
+
+        r2_min = max(r1 - r, -hps)
+        r2_max = min(r1 + r, hps)
+        c2_min = max(c1 - r, -vps)
+        c2_max = min(c1 + r, vps)
+
+        for r2 in range(r2_min, r2_max + 1):
+            for c2 in range(c2_min, c2_max + 1):
+                j = c2 + vps + (2 * hps + 1) * (r2 + hps)
+                rows.append(i)
+                cols.append(j)
+                index += 1
+
+    return np.stack([rows, cols], axis=1)
+
+max_perturb_radii = 25
+phis = []
+for r in range(max_perturb_radii):
+    phi_r = valid_configs(r)
+    phis.append(phi_r)
+
+# %% [markdown]
+# ## 3.2.2 Make the factor graph
+#
+#
+
+# %%
+# -
 start = end
 
 fg = graph.FactorGraph(variables=variables_all_models)
@@ -172,7 +211,7 @@ def initialize_evidences(test_img, frcs, hps, vps):
                 r1, c1 = index
                 delta_r, delta_c = r1 - hps, c1 - vps
 
-                index = 1 + delta_c + vps + (2 * hps + 1) * (delta_r + hps)
+                index = delta_c + vps + (2 * hps + 1) * (delta_r + hps)
                 unary_msg[v, index] = 1
 
         evidence_updates[idx] = unary_msg
@@ -261,7 +300,7 @@ for i in range(frcs.shape[0]):
         idx = map_state[v]
         f, r, c = frc[v]
 
-        delta_r, delta_c = -hps + (idx - 1) // (2 * vps + 1), -vps + (idx - 1) % (2 * vps + 1)
+        delta_r, delta_c = -hps + idx // (2 * vps + 1), -vps + idx % (2 * vps + 1)
         rd, cd = r + delta_r, c + delta_c
         imgs[i, rd, cd] = 0
 plt.figure(figsize=(15, 15))

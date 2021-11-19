@@ -123,7 +123,7 @@ class Factor:
         rows = []
         cols = []
         vals = []
-        for i in range(1, self.M):
+        for i in range(self.M):
             r1, c1 = index_to_rc(i, self.hps, self.vps)
 
             r2_min = max(r1 - self.r, -self.hps)
