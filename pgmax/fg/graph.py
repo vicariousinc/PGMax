@@ -49,7 +49,7 @@ class FactorGraph:
         Mapping[Any, groups.VariableGroup],
         Sequence[groups.VariableGroup],
         groups.VariableGroup,
-        Mapping[int, groups.NDVariableArray],
+        Mapping[int, groups.VariableGroup],
     ]
 
     def __post_init__(self):
