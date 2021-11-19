@@ -16,6 +16,7 @@
 # %%
 import os
 import time
+from typing import Dict
 
 import jax
 import matplotlib.pyplot as plt
@@ -42,7 +43,17 @@ train_size = 20
 test_size = 20
 
 
-def fetch_mnist_dataset(train_size, test_size, seed=5):
+def fetch_mnist_dataset(train_size: int, test_size: int, seed: int = 5):
+    """Returns training and test images sampled randomly from the set of MNIST images.
+    Args:
+        train_size: Desired number of training images.
+        test_size: Desired number of test images.
+    Returns:
+        train_set: A list of length train_size containing images from the MNIST train dataset.
+        train_labels: Corresponding labels for the train images.
+        test_set: A list of length test_size containing images from the MNIST test dataset.
+        test_labels: Corresponding labels for the test images.
+    """
 
     mnist_train_size = 60000
     dataset = fetch_openml("mnist_784", as_frame=False, cache=True)
@@ -160,7 +171,14 @@ print(f"Creating variables took {end-start:.3f} seconds.")
 # ### 3.2.1 Pre-compute the valid configs for different perturb radii.
 
 # %%
-def valid_configs(r):
+def valid_configs(r: int) -> np.ndarray:
+    """Returns the valid configurations for the potential matrix given the perturb radius.
+    Args:
+        r: Peturb radius
+    Returns:
+        phi: A configuration matrix (shape n X 2) where n is the number of valid configurations.
+    """
+
     rows = []
     cols = []
     index = 0
@@ -216,7 +234,15 @@ print(f"Creating factors took {end-start:.3f} seconds.")
 # ## 4.1 Helper functions to initialize the evidence for a given image
 
 # %%
-def get_bu_msg(img, suppression_masks, filters):
+def get_bu_msg(img: np.ndarray) -> np.ndarray:
+    """Computes the bottom-up messages given a test image.
+    Args:
+        img: The rgb image to compute bottom up messages on (H x W x 3).
+    Returns:
+        bu_msg: An array of shape [16 x H x W] denoting the presence or absence of an oriented line segment at a particular location.
+                The elements of this array belong to the set {+1, -1}.
+    """
+
     num_orients = 16
     brightness_diff_threshold = 40.0
 
@@ -251,8 +277,15 @@ def get_bu_msg(img, suppression_masks, filters):
 
 
 # %%
-def initialize_evidences(test_img, frcs, hps, vps):
-    bu_msg = get_bu_msg(test_img, suppression_masks, filters)
+def initialize_evidences(test_img: np.ndarray) -> Dict:
+    """Computes the initial evidences to the PGMax factor graph given a test image.
+    Args:
+        test_img: The image to run inference on.
+    Returns:
+        evidence_updates: A dictionary containing the initial messages to all the variables in the factor graph.
+    """
+
+    bu_msg = get_bu_msg(test_img)
 
     evidence_updates = {}
     for idx in range(frcs.shape[0]):
@@ -287,7 +320,7 @@ for test_idx in range(len(test_set)):
     img = test_set[test_idx]
 
     start = time.time()
-    evidence_updates = initialize_evidences(img, frcs, hps, vps)
+    evidence_updates = initialize_evidences(img)
     end = time.time()
     print(f"Initializing evidences took {end-start:.3f} seconds for image {test_idx}.")
 
