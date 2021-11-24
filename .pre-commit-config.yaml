@@ -32,3 +32,5 @@ repos:
     hooks:
     -   id: mypy
         additional_dependencies: [tokenize-rt==3.2.0]
+ci:
+  autoupdate_schedule: 'quarterly'
