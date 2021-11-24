@@ -20,6 +20,7 @@ from typing import (
     Sequence,
     Tuple,
     Union,
+    cast,
 )
 
 import jax
@@ -45,7 +46,7 @@ class FactorGraph:
     """
 
     variables: Union[
-        Mapping[Hashable, groups.VariableGroup],
+        Mapping[Any, groups.VariableGroup],
         Sequence[groups.VariableGroup],
         groups.VariableGroup,
     ]
@@ -399,9 +400,7 @@ class LogPotentials:
 
     def __post_init__(self):
         if self.value is None:
-            object.__setattr__(
-                self, "value", jax.device_put(self.fg_state.log_potentials)
-            )
+            object.__setattr__(self, "value", self.fg_state.log_potentials)
         else:
             if not self.value.shape == self.fg_state.log_potentials.shape:
                 raise ValueError(
@@ -409,9 +408,9 @@ class LogPotentials:
                     f"Got {self.value.shape}."
                 )
 
-            object.__setattr__(self, "value", jax.device_put(self.value))
+            object.__setattr__(self, "value", self.value)
 
-    def __getitem__(self, name: Any) -> jnp.ndarray:
+    def __getitem__(self, name: Any) -> np.ndarray:
         """Function to query log potentials for a named factor group or a factor.
 
         Args:
@@ -421,21 +420,20 @@ class LogPotentials:
         Returns:
             The queried log potentials.
         """
+        value = cast(np.ndarray, self.value)
         if not isinstance(name, Hashable):
             name = frozenset(name)
 
         if name in self.fg_state.named_factor_groups:
             factor_group = self.fg_state.named_factor_groups[name]
             start = self.fg_state.factor_group_to_potentials_starts[factor_group]
-            log_potentials = jax.device_put(self.value)[
+            log_potentials = value[
                 start : start + factor_group.factor_group_log_potentials.shape[0]
             ]
         elif frozenset(name) in self.fg_state.variables_to_factors:
             factor = self.fg_state.variables_to_factors[frozenset(name)]
             start = self.fg_state.factor_to_potentials_starts[factor]
-            log_potentials = jax.device_put(self.value)[
-                start : start + factor.log_potentials.shape[0]
-            ]
+            log_potentials = value[start : start + factor.log_potentials.shape[0]]
         else:
             raise ValueError(f"Invalid name {name} for log potentials updates.")
 
@@ -460,8 +458,12 @@ class LogPotentials:
         object.__setattr__(
             self,
             "value",
-            update_log_potentials(
-                jax.device_put(self.value), {name: jax.device_put(data)}, self.fg_state
+            np.asarray(
+                update_log_potentials(
+                    jax.device_put(self.value),
+                    {name: jax.device_put(data)},
+                    self.fg_state,
+                )
             ),
         )
 
@@ -545,12 +547,12 @@ class FToVMessages:
     """
 
     fg_state: FactorGraphState
-    value: Optional[Union[np.ndarray, jnp.ndarray]] = None
+    value: Optional[np.ndarray] = None
 
     def __post_init__(self):
         if self.value is None:
             object.__setattr__(
-                self, "value", jnp.zeros(self.fg_state.total_factor_num_states)
+                self, "value", np.zeros(self.fg_state.total_factor_num_states)
             )
         else:
             if not self.value.shape == (self.fg_state.total_factor_num_states,):
@@ -559,9 +561,9 @@ class FToVMessages:
                     f"Got {self.value.shape}."
                 )
 
-            object.__setattr__(self, "value", jax.device_put(self.value))
+            object.__setattr__(self, "value", self.value)
 
-    def __getitem__(self, names: Tuple[Any, Any]) -> jnp.ndarray:
+    def __getitem__(self, names: Tuple[Any, Any]) -> np.ndarray:
         """Function to query messages from a factor to a variable
 
         Args:
@@ -574,6 +576,7 @@ class FToVMessages:
 
         Raises: ValueError if provided names are not valid for querying ftov messages.
         """
+        value = cast(np.ndarray, self.value)
         if not (
             isinstance(names, tuple)
             and len(names) == 2
@@ -589,7 +592,7 @@ class FToVMessages:
         start = self.fg_state.factor_to_msgs_starts[factor] + np.sum(
             factor.edges_num_states[: factor.variables.index(variable)]
         )
-        msgs = jax.device_put(self.value)[start : start + variable.num_states]
+        msgs = value[start : start + variable.num_states]
         return msgs
 
     @typing.overload
@@ -634,8 +637,12 @@ class FToVMessages:
         object.__setattr__(
             self,
             "value",
-            update_ftov_msgs(
-                jax.device_put(self.value), {names: jax.device_put(data)}, self.fg_state
+            np.asarray(
+                update_ftov_msgs(
+                    jax.device_put(self.value),
+                    {names: jax.device_put(data)},
+                    self.fg_state,
+                )
             ),
         )
 
@@ -690,11 +697,11 @@ class Evidence:
     """
 
     fg_state: FactorGraphState
-    value: Optional[Union[np.ndarray, jnp.ndarray]] = None
+    value: Optional[np.ndarray] = None
 
     def __post_init__(self):
         if self.value is None:
-            object.__setattr__(self, "value", jnp.zeros(self.fg_state.num_var_states))
+            object.__setattr__(self, "value", np.zeros(self.fg_state.num_var_states))
         else:
             if self.value.shape != (self.fg_state.num_var_states,):
                 raise ValueError(
@@ -702,9 +709,9 @@ class Evidence:
                     f"Got {self.value.shape}."
                 )
 
-            object.__setattr__(self, "value", jax.device_put(self.value))
+            object.__setattr__(self, "value", self.value)
 
-    def __getitem__(self, name: Any) -> jnp.ndarray:
+    def __getitem__(self, name: Any) -> np.ndarray:
         """Function to query evidence for a variable
 
         Args:
@@ -713,9 +720,10 @@ class Evidence:
         Returns:
             evidence for the queried variable
         """
+        value = cast(np.ndarray, self.value)
         variable = self.fg_state.variable_group[name]
         start = self.fg_state.vars_to_starts[variable]
-        evidence = jax.device_put(self.value)[start : start + variable.num_states]
+        evidence = value[start : start + variable.num_states]
         return evidence
 
     def __setitem__(
@@ -736,8 +744,12 @@ class Evidence:
         object.__setattr__(
             self,
             "value",
-            update_evidence(
-                jax.device_put(self.value), {name: jax.device_put(data)}, self.fg_state
+            np.asarray(
+                update_evidence(
+                    jax.device_put(self.value),
+                    {name: jax.device_put(data)},
+                    self.fg_state,
+                ),
             ),
         )
 
@@ -789,7 +801,6 @@ def BP(bp_state: BPState, num_iters: int) -> Tuple[Callable, Callable, Callable]
         int(bp_state.fg_state.wiring.factor_configs_edge_states[-1, 0]) + 1
     )
 
-    @jax.jit
     def run_bp(
         log_potentials_updates: Optional[Dict[Any, jnp.ndarray]] = None,
         ftov_msgs_updates: Optional[Dict[Any, jnp.ndarray]] = None,
@@ -810,20 +821,20 @@ def BP(bp_state: BPState, num_iters: int) -> Tuple[Callable, Callable, Callable]
         Returns:
             A BPArrays containing the updated log_potentials, ftov_msgs and evidence.
         """
-        wiring = jax.device_put(bp_state.fg_state.wiring)
-        log_potentials = jax.device_put(bp_state.log_potentials.value)
+        wiring = bp_state.fg_state.wiring
+        log_potentials = bp_state.log_potentials.value
         if log_potentials_updates is not None:
             log_potentials = update_log_potentials(
                 log_potentials, log_potentials_updates, bp_state.fg_state
             )
 
-        ftov_msgs = jax.device_put(bp_state.ftov_msgs.value)
+        ftov_msgs = bp_state.ftov_msgs.value
         if ftov_msgs_updates is not None:
             ftov_msgs = update_ftov_msgs(
                 ftov_msgs, ftov_msgs_updates, bp_state.fg_state
             )
 
-        evidence = jax.device_put(bp_state.evidence.value)
+        evidence = bp_state.evidence.value
         if evidence_updates is not None:
             evidence = update_evidence(evidence, evidence_updates, bp_state.fg_state)
 
