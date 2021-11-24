@@ -422,5 +422,5 @@ def test_e2e_heretic():
     bp_state.evidence[0, 0, 0] = np.array([0.0, 0.0, 0.0])
     bp_state.evidence[0, 0, 0]
     bp_state.evidence[1, 0, 0]
-    assert isinstance(bp_state.evidence.value, jnp.ndarray)
+    assert isinstance(bp_state.evidence.value, np.ndarray)
     assert len(fg.factors) == 7056
