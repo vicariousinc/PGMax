@@ -23,10 +23,10 @@ numpy = "^1.19.0"
 scipy = "^1.2.3"
 jupytext = "^1.11.3"
 tqdm = "^4.61.0"
+sphinx = {version = "^3", optional = true}
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"
-sphinx = {version = "^3", optional = true}
 pre-commit = "^2.13.0"
 sphinx-rtd-theme = "^0.5.2"
 pytest-cov = "^2.12.1"
