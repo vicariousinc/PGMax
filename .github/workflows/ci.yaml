@@ -1,6 +1,7 @@
 name: continuous-integration
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - master
@@ -78,6 +79,6 @@ jobs:
       #        test docs build only on PR
       #----------------------------------------------
       - name: Test docs build
-        run: |
-          cd docs
-          poetry run make html
+        uses: ammaraskar/sphinx-action@master
+        with:
+          docs-folder: "docs/"

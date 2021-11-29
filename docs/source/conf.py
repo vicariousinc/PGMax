@@ -22,11 +22,11 @@ project = "PGMax"
 copyright = "2021, Vicarious FPC Inc"
 author = (
     "Nishanth Kumar, Guangyao (Stannis) Zhou,"
-    + " Miguel Lazaro-Gredilla, Wolfgang Lehrach"
+    + " Miguel Lazaro-Gredilla, Dileep George"
 )
 
 # The full version, including alpha/beta/rc tags
-release = "0.0"
+release = "0.2.0"
 
 
 # -- General configuration ---------------------------------------------------
@@ -49,6 +49,7 @@ templates_path = ["_templates"]
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = []  # type: ignore
+master_doc = "index"
 
 
 # -- Options for HTML output -------------------------------------------------

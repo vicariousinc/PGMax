@@ -1,17 +1,36 @@
 Installation Guide
 ===================
 
-If all you want is to use PGMax's functionality in your own project, go ahead and follow the `User Installation Instructions`_ below. If, however, you're interested in contributing to the development of PGMax, then go ahead and follow the `Developer Installation Instructions`_.
+If all you want is to use PGMax's functionality in your own project, go ahead and follow the `User Installation Instructions`_ below. If, however, you're interested in contributing to the development of PGMax, then go ahead and follow the `Developer Installation Instructions`_. Regardless of which install you choose, do follow the `GPU Installation`_ instructions if your system is equipped with a GPU.
 
 User Installation Instructions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-(TODO)
+From PyPI
+
+::
+
+    pip install pgmax
+
+From GitHub
+
+::
+
+    pip install git+https://github.com/vicariousinc/PGMax.git
+
 
 Developer Installation Instructions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-#. Install Poetry by following `these instructions <https://python-poetry.org/docs/master/>`_. Note: you may need to logout and log back in after running the install command for the `poetry --version` command to work in your shell environment.
-#. Navigate to this project's directory and activate a poetry shell via the command :code:`poetry shell`. This creates and activates a virtual environment for you to use with this project.
-#. Install the project's dependencies into your virtual environment with the command :code:`poetry install`. Your environment will now contain both developer and user dependencies!
-    #. By default this installs JAX for CPU. If you'd like to use JAX with a GPU and specific CUDA version, follow the official instructions `here <https://github.com/google/jax#pip-installation-gpu-cuda>`_.
-#. Do :code:`pre-commit install` to initialize pre-commit hooks
+::
+
+    git clone https://github.com/vicariousinc/PGMax.git
+    curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/install-poetry.py | python -
+    cd PGMax
+    poetry shell
+    poetry install
+    pre-commit install
+
+
+GPU Installation
+~~~~~~~~~~~~~~~~
+By default the above commands install JAX for CPU. If you have access to a GPU, follow the official instructions `here <https://github.com/google/jax#pip-installation-gpu-cuda>`_ to install JAX for GPU.
