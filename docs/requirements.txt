@@ -2,4 +2,4 @@
 # We might want to use myst-nb for doc tutorials with jupyter notebooks!
 sphinx >=3, <4
 sphinx-rtd-theme==0.5.2
--e .
+.
