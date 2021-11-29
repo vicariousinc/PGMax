@@ -791,7 +791,7 @@ def BP(bp_state: BPState, num_iters: int) -> Tuple[Callable, Callable, Callable]
 
     Returns:
         tuple containing
-        
+
         run_bp: Function for running belief propagation for num_iters.
         Optionally takes as input log_potentials updates, ftov_msgs updates,
         evidence updates, and damping factor, and outputs a BPArrays.
