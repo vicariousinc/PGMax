@@ -26,10 +26,13 @@ tqdm = "^4.61.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"
-Sphinx = "^3.0.0"
+sphinx = {version = "^3", optional = true}
 pre-commit = "^2.13.0"
 sphinx-rtd-theme = "^0.5.2"
 pytest-cov = "^2.12.1"
+
+[tool.poetry.extras]
+docs = ["sphinx"]
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
