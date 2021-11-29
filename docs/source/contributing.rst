@@ -31,5 +31,4 @@ Follow these steps to contribute code:
    ``pytest`` (for unit tests) from within your poetry environment from
    the root of the repository.
 4. Submit a pull request (PR) from the particular branch you've changed
-   on your fork of PGMax. Be sure to follow the below checklist prior to
-   submitting a PR.
+   on your fork of PGMax.
