@@ -79,6 +79,6 @@ jobs:
       #        test docs build only on PR
       #----------------------------------------------
       - name: Test docs build
-        uses: ammaraskar/sphinx-action@master
-        with:
-          docs-folder: "docs/"
+        run: |
+          cd docs
+          poetry run make html SPHINXOPTS="-W"
