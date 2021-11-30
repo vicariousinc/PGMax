@@ -81,4 +81,4 @@ jobs:
       - name: Test docs build
         run: |
           cd docs
-          poetry run make html SPHINXOPTS="-W"'
+          poetry run make html SPHINXOPTS="-W"
