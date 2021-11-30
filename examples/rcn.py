@@ -39,6 +39,9 @@ os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 # # 1. Load the data
 # %%
 hps, vps = 12, 12
+
+# Use train_size = 100 if you have a gpu with atleast 8Gbs memory.
+# Recommend that jax is installed with cuda enabled for this option.
 train_size = 20
 test_size = 20
 
@@ -98,7 +101,9 @@ train_labels = (
 # # 2. Load the model
 
 # %%
-data = np.load("example_data/rcn.npz", allow_pickle=True, encoding="latin1")
+data = np.load(
+    f"example_data/rcn_{train_size}.npz", allow_pickle=True, encoding="latin1"
+)
 frcs, edges, suppression_masks, filters = (
     data["frcs"],
     data["edges"],
@@ -113,7 +118,7 @@ M = (2 * hps + 1) * (2 * vps + 1)
 
 # %%
 img = np.ones((200, 200))
-
+pad = 44
 frc, edge = frcs[4], edges[4]
 plt.figure(figsize=(10, 10))
 for e in edge:
@@ -123,10 +128,10 @@ for e in edge:
 
     img[r1, c1] = 0
     img[r2, c2] = 0
-    plt.text((c1 + c2) // 2, (r1 + r2) // 2, str(w), color="green")
-    plt.plot([c1, c2], [r1, r2], color="green", linewidth=0.5)
+    plt.text((c1 + c2) // 2 - pad, (r1 + r2) // 2 - pad, str(w), color="green")
+    plt.plot([c1 - pad, c2 - pad], [r1 - pad, r2 - pad], color="green", linewidth=0.5)
 
-plt.imshow(img, cmap="gray")
+plt.imshow(img[pad : 200 - pad, pad : 200 - pad], cmap="gray")
 
 
 # %% [markdown]
@@ -412,6 +417,7 @@ plt.figure(figsize=(15, 15))
 pred_idxs = np.argmax(scores, axis=1)
 n_plots = [0, 5, 10]
 for ii, pred_idx in enumerate(n_plots):
+    plt.subplot(len(n_plots), 1, 1 + ii)
 
     map_states = map_states_dict[pred_idx]
     map_state = map_states[pred_idxs[pred_idx]]
@@ -423,10 +429,8 @@ for ii, pred_idx in enumerate(n_plots):
 
         delta_r, delta_c = -hps + idx // (2 * vps + 1), -vps + idx % (2 * vps + 1)
         rd, cd = r + delta_r, c + delta_c
-        imgs[ii, rd, cd] = 0
+        imgs[ii, rd, cd] = 255
+        plt.plot(cd, rd, "r.")
 
-    plt.subplot(len(n_plots), 2, 1 + 2 * ii)
+    # plt.imshow(imgs[ii, :, :])
     plt.imshow(test_set[pred_idx], cmap="gray")
-
-    plt.subplot(len(n_plots), 2, 2 + 2 * ii)
-    plt.imshow(imgs[ii, :, :], cmap="gray")
