@@ -3,6 +3,7 @@ name = "pgmax"
 version = "0.2.0"
 description = "Loopy belief propagation for factor graphs on discrete variables, in JAX!"
 authors = ["Stannis Zhou <stannis@vicarious.com>", "Nishanth Kumar <njk@csail.mit.edu>", "Miguel Lazaro-Gredilla <miguel@vicarious.com>", "Dileep George <dileep@vicarious.com>"]
+maintainers = ["Stannis Zhou <stannis@vicarious.com>", "Nishanth Kumar <njk@csail.mit.edu>"]
 # Additional info
 license = "MIT"
 readme = "README.md"
@@ -11,6 +12,7 @@ include = [
 ]
 homepage = "https://github.com/vicariousinc/PGMax"
 repository = "https://github.com/vicariousinc/PGMax"
+documentation = "https://pgmax.readthedocs.io/en/latest/"
 keywords = ["PGMax", "jax"]
 
 [tool.poetry.dependencies]
