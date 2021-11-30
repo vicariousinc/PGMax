@@ -1,6 +1,11 @@
 PGMax Reference Documentation
 ==============================
-PGMax is a library for working with Factor Graphs in `JAX <https://jax.readthedocs.io/en/latest/>`_. It currently provides an interface for specifying factor graphs of any type, as well as an efficient implementation of max-product belief propagation and inference on these graphs.
+PGMax implements general factor graphs for probabilistic graphical models (PGMs) with discrete variables, and hardware-accelerated differentiable loopy belief propagation (LBP) in `JAX <https://jax.readthedocs.io/en/latest/>`_.
+
+- General factor graphs: PGMax goes beyond pairwise PGMs, and supports arbitrary factor graph topology, including higher-order factors.
+- LBP in JAX: PGMax generates pure JAX functions implementing LBP for a given factor graph. The generated pure JAX functions run on modern accelerators (GPU/TPU), work with JAX transformations (e.g. ``vmap`` for processing batches of models/samples, ``grad`` for differentiating through the LBP iterative process), and can be easily used as part of a larger end-to-end differentiable system.
+
+
 
 .. toctree::
    :maxdepth: 1
