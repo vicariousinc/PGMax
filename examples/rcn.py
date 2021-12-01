@@ -17,7 +17,6 @@
 # %matplotlib inline
 import os
 import time
-from typing import Dict
 
 import jax
 import matplotlib.pyplot as plt
@@ -178,38 +177,30 @@ print(f"Creating variables took {end-start:.3f} seconds.")
 # %%
 def valid_configs(r: int) -> np.ndarray:
     """Returns the valid configurations for the potential matrix given the perturb radius.
+
     Args:
         r: Peturb radius
+
     Returns:
-        config_matrix: A configuration matrix (shape n X 2) where n is the number of valid configurations.
+        A configuration matrix (shape n X 2) where n is the number of valid configurations.
     """
 
-    rows = []
-    cols = []
-    index = 0
-    for i in range(M):
-        r1, c1 = -hps + i // (2 * vps + 1), -vps + i % (2 * vps + 1)
+    configs = []
+    for i, (r1, c1) in enumerate(np.array(np.unravel_index(np.arange(M), (25, 25))).T):
+        r2_min = max(r1 - r, 0)
+        r2_max = min(r1 + r, 2 * hps)
+        c2_min = max(c1 - r, 0)
+        c2_max = min(c1 + r, 2 * vps)
+        j = np.ravel_multi_index(
+            tuple(np.mgrid[r2_min : r2_max + 1, c2_min : c2_max + 1]), (25, 25)
+        ).ravel()
+        configs.append(np.stack([np.full(j.shape, fill_value=i), j], axis=1))
 
-        r2_min = max(r1 - r, -hps)
-        r2_max = min(r1 + r, hps)
-        c2_min = max(c1 - r, -vps)
-        c2_max = min(c1 + r, vps)
-
-        for r2 in range(r2_min, r2_max + 1):
-            for c2 in range(c2_min, c2_max + 1):
-                j = c2 + vps + (2 * hps + 1) * (r2 + hps)
-                rows.append(i)
-                cols.append(j)
-                index += 1
-
-    return np.stack([rows, cols], axis=1)
+    return np.concatenate(configs)
 
 
-max_perturb_radii = 25
-phis = []
-for r in range(max_perturb_radii):
-    phi_r = valid_configs(r)
-    phis.append(phi_r)
+max_perturb_radius = 25
+valid_configs_list = [valid_configs(r) for r in range(max_perturb_radius)]
 
 # %% [markdown]
 # ### 4.2.2 Make the factor graph
@@ -224,8 +215,7 @@ for idx in range(edges.shape[0]):
         i1, i2, r = e
         fg.add_factor(
             [(idx, i1), (idx, i2)],
-            phis[r],
-            np.zeros(phis[r].shape[0]),
+            valid_configs_list[r],
         )
 
 end = time.time()
@@ -241,11 +231,13 @@ print(f"Creating factors took {end-start:.3f} seconds.")
 # %%
 def get_bu_msg(img: np.ndarray) -> np.ndarray:
     """Computes the bottom-up messages given a test image.
+
     Args:
         img: The rgb image to compute bottom up messages on (H x W x 3).
+
     Returns:
-        bu_msg: An array of shape [16 x H x W] denoting the presence or absence of an oriented line segment at a particular location.
-                The elements of this array belong to the set {+1, -1}.
+        An array of shape [16 x H x W] denoting the presence or absence of an oriented line segment at a particular location.
+            The elements of this array belong to the set {+1, -1}.
     """
 
     num_orients = 16
@@ -293,7 +285,6 @@ def get_bu_msg(img: np.ndarray) -> np.ndarray:
 r_test_img = test_set[4]
 r_bu_msg = get_bu_msg(r_test_img)
 img = np.ones((200, 200))
-
 fig, ax = plt.subplots(1, 2, figsize=(20, 10))
 ax[0].imshow(r_test_img, cmap="gray")
 ax[0].axis("off")
@@ -306,73 +297,31 @@ ax[1].axis("off")
 ax[1].set_title("Max filter response across 16 channels", fontsize=30)
 fig.tight_layout()
 
-# %% [markdown]
-# Showing the individual filter activations in r_bu_msg
-
-# %%
-fig, ax = plt.subplots(4, 4, figsize=(10, 10))
-
-for i in range(r_bu_msg.shape[0]):
-    idx = np.unravel_index(i, (4, 4))
-    rbm = r_bu_msg[i]
-    rbm[rbm == 1] = -2
-    ax[idx].imshow(rbm, cmap="gray")
-    ax[idx].set_xticks([])
-    ax[idx].set_yticks([])
-
-fig.tight_layout()
-
-
-# %%
-def initialize_evidences(test_img: np.ndarray) -> Dict:
-    """Computes the initial evidences to the PGMax factor graph given a test image.
-    Args:
-        test_img: The image to run inference on.
-    Returns:
-        evidence_updates: A dictionary containing the initial messages to all the variables in the factor graph.
-    """
-
-    bu_msg = get_bu_msg(test_img)
-    # jnp_bu_msg = jnp.asarray(bu_msg)
-
-    evidence_updates = {}
-    for idx in range(frcs.shape[0]):
-        frc = frcs[idx]
-
-        unary_msg = -1 + np.zeros((frc.shape[0], M))
-        # evidence_updates[idx] = get_evidence(jnp_bu_msg, frc)
-
-        for v in range(frc.shape[0]):
-            f, r, c = frc[v, :]
-            evidence = bu_msg[f, r - hps : r + hps + 1, c - vps : c + vps + 1]
-            unary_msg[v] = evidence.ravel()
-
-        evidence_updates[idx] = unary_msg
-
-    return evidence_updates
-
-
-# from functools import partial
-
-
-# @partial(jax.vmap, in_axes=(None, 0), out_axes=0)
-# def get_evidence(bu_msg, frc):
-#     """
-#     bu_msg: Array of shape (n_features, M, N)
-#     frc: Array of shape (n_frcs, 3)
-#     """
-
-#     return jax.lax.dynamic_slice(
-#         bu_msg[frc[0]],
-#         jnp.array([frc[1] - hps, frc[2] - vps]),
-#         jnp.array([2 * hps + 1, 2 * vps + 1])
-#     ).ravel()
 
 # %% [markdown]
 # ## 5.2 Run map product inference on all test images
 
 # %%
-run_bp_fn, _, get_beliefs_fn = graph.BP(fg.bp_state, 30)
+def get_evidence(bu_msg: np.ndarray, frc: np.ndarray):
+    """Function to get evidence
+
+    Args:
+        bu_msg: Array of shape (n_features, 200, 200). Contains BU messages
+        frc: Array of shape (n_frcs, 3).
+
+    Returns:
+        evidence; Array of shape (n_frcs, M). Contains evidence
+    """
+    evidence = np.zeros((frc.shape[0], M))
+    for v, (f, r, c) in enumerate(frc):
+        evidence[v] = bu_msg[f, r - hps : r + hps + 1, c - vps : c + vps + 1].ravel()
+
+    return evidence
+
+
+# %%
+frcs_dict = {model_idx: frcs[model_idx] for model_idx in range(frcs.shape[0])}
+run_bp, _, get_beliefs = graph.BP(fg.bp_state, 30)
 scores = np.zeros((len(test_set), frcs.shape[0]))
 map_states_dict = {}
 
@@ -380,14 +329,16 @@ for test_idx in range(len(test_set)):
     img = test_set[test_idx]
 
     start = time.time()
-    evidence_updates = initialize_evidences(img)
-
+    bu_msg = get_bu_msg(img)
+    evidence_updates = jax.tree_util.tree_map(
+        lambda frc: get_evidence(bu_msg, frc), frcs_dict
+    )
     end = time.time()
     print(f"Initializing evidences took {end-start:.3f} seconds for image {test_idx}.")
 
     start = end
     map_states = graph.decode_map_states(
-        get_beliefs_fn(run_bp_fn(evidence_updates=evidence_updates))
+        get_beliefs(run_bp(evidence_updates=evidence_updates))
     )
     end = time.time()
     print(f"Max product inference took {end-start:.3f} seconds for image {test_idx}.")
@@ -409,7 +360,8 @@ for test_idx in range(len(test_set)):
 # # 6. Compute metrics (accuracy)
 
 # %%
-test_preds = train_labels[scores.argmax(axis=1)]
+best_model_idx = np.argmax(scores, axis=1)
+test_preds = train_labels[best_model_idx]
 accuracy = (test_preds == test_labels).sum() / test_labels.shape[0]
 
 print(f"accuracy = {accuracy}")
@@ -419,25 +371,20 @@ print(f"accuracy = {accuracy}")
 # # 7. Visualize predictions - backtrace for the top model
 
 # %%
-imgs = np.ones((20, 200, 200))
 fig, ax = plt.subplots(5, 4, figsize=(16, 20))
-best_model_idx = np.argmax(scores, axis=1)
 for test_idx in range(20):
-    ax_idx = np.unravel_index(test_idx, (5, 4))
+    idx = np.unravel_index(test_idx, (5, 4))
     map_state = map_states_dict[test_idx][best_model_idx[test_idx]]
-    frc = frcs[best_model_idx[test_idx]]
-    for v in range(frc.shape[0]):
-        idx = map_state[v]
-        f, r, c = frc[v]
-        delta_r, delta_c = -hps + idx // (2 * vps + 1), -vps + idx % (2 * vps + 1)
-        rd, cd = r + delta_r, c + delta_c
-        imgs[ii, rd, cd] = 255
-        ax[ax_idx].plot(cd, rd, "r.")
+    offsets = np.array(np.unravel_index(map_state, (25, 25))).T - np.array([hps, vps])
+    activations = frcs[best_model_idx[test_idx]][:, 1:] + offsets
+    for rd, cd in activations:
+        ax[idx].plot(cd, rd, "r.")
 
-    ax[ax_idx].imshow(test_set[test_idx], cmap="gray")
-    ax[ax_idx].set_title(
-        f"GT: {test_labels[test_idx]}, Pred: {test_preds[test_idx]}", fontsize=20
+    ax[idx].imshow(test_set[test_idx], cmap="gray")
+    ax[idx].set_title(
+        f"Ground Truth: {test_labels[test_idx]}, Pred: {test_preds[test_idx]}",
+        fontsize=20,
     )
-    ax[ax_idx].axis("off")
+    ax[idx].axis("off")
 
 fig.tight_layout()
