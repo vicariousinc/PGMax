@@ -6,7 +6,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.13.1
+#       jupytext_version: 1.13.2
 #   kernelspec:
 #     display_name: Python 3
 #     language: python
@@ -14,15 +14,13 @@
 # ---
 
 # %%
+# %matplotlib inline
 import os
 import time
 from typing import Dict
 
 import jax
 import matplotlib.pyplot as plt
-
-# %%
-# %matplotlib inline
 import numpy as np
 from jax import numpy as jnp
 from jax import tree_util
@@ -42,7 +40,7 @@ hps, vps = 12, 12
 
 # Use train_size = 100 if you have a gpu with atleast 8Gbs memory.
 # Recommend that jax is installed with cuda enabled for this option.
-train_size = 20
+train_size = 100
 test_size = 20
 
 
@@ -101,12 +99,10 @@ train_labels = (
 # # 2. Load the model
 
 # %%
-data = np.load(
-    f"example_data/rcn_{train_size}.npz", allow_pickle=True, encoding="latin1"
-)
+data = np.load("example_data/rcn_100.npz", allow_pickle=True, encoding="latin1")
 frcs, edges, suppression_masks, filters = (
-    data["frcs"],
-    data["edges"],
+    data["frcs"][:train_size],
+    data["edges"][:train_size],
     data["suppression_masks"],
     data["filters"],
 )
@@ -118,9 +114,9 @@ M = (2 * hps + 1) * (2 * vps + 1)
 
 # %%
 img = np.ones((200, 200))
-pad = 44
+pad = 55
 frc, edge = frcs[4], edges[4]
-plt.figure(figsize=(10, 10))
+fig, ax = plt.subplots(1, 1, figsize=(10, 10))
 for e in edge:
     i1, i2, w = e
     f1, r1, c1 = frc[i1]
@@ -128,10 +124,13 @@ for e in edge:
 
     img[r1, c1] = 0
     img[r2, c2] = 0
-    plt.text((c1 + c2) // 2 - pad, (r1 + r2) // 2 - pad, str(w), color="green")
-    plt.plot([c1 - pad, c2 - pad], [r1 - pad, r2 - pad], color="green", linewidth=0.5)
+    ax.text(
+        (c1 + c2) // 2 - pad, (r1 + r2) // 2 - pad, str(w), color="green", fontsize=15
+    )
+    ax.plot([c1 - pad, c2 - pad], [r1 - pad, r2 - pad], color="green", linewidth=0.5)
 
-plt.imshow(img[pad : 200 - pad, pad : 200 - pad], cmap="gray")
+ax.axis("off")
+ax.imshow(img[pad : 200 - pad, pad : 200 - pad], cmap="gray")
 
 
 # %% [markdown]
@@ -141,10 +140,13 @@ plt.imshow(img[pad : 200 - pad, pad : 200 - pad], cmap="gray")
 # The filters are used to detect the oriented edges on a given image. They are pre-computed using Gabor filters.
 
 # %%
-plt.figure(figsize=(10, 10))
+fig, ax = plt.subplots(4, 4, figsize=(10, 10))
 for i in range(filters.shape[0]):
-    plt.subplot(4, 4, i + 1)
-    plt.imshow(filters[i], cmap="gray")
+    idx = np.unravel_index(i, (4, 4))
+    ax[idx].imshow(filters[i], cmap="gray")
+    ax[idx].axis("off")
+
+fig.tight_layout()
 
 # %% [markdown]
 # # 4. Make pgmax graph
@@ -292,27 +294,33 @@ r_test_img = test_set[4]
 r_bu_msg = get_bu_msg(r_test_img)
 img = np.ones((200, 200))
 
-plt.figure(figsize=(10, 10))
-
-plt.subplot(1, 2, 1)
-plt.imshow(r_test_img, cmap="gray")
+fig, ax = plt.subplots(1, 2, figsize=(20, 10))
+ax[0].imshow(r_test_img, cmap="gray")
+ax[0].axis("off")
+ax[0].set_title("Input image", fontsize=30)
 for i in range(r_bu_msg.shape[0]):
     img[r_bu_msg[i] > 0] = 0
 
-plt.subplot(1, 2, 2)
-plt.imshow(img, cmap="gray")
+ax[1].imshow(img, cmap="gray")
+ax[1].axis("off")
+ax[1].set_title("BU Messages", fontsize=30)
+fig.tight_layout()
 
 # %% [markdown]
 # Showing the individual filter activations in r_bu_msg
 
 # %%
-plt.figure(figsize=(10, 10))
+fig, ax = plt.subplots(4, 4, figsize=(10, 10))
 
 for i in range(r_bu_msg.shape[0]):
-    plt.subplot(5, 4, i + 1)
+    idx = np.unravel_index(i, (4, 4))
     rbm = r_bu_msg[i]
     rbm[rbm == 1] = -2
-    plt.imshow(rbm, cmap="gray")
+    ax[idx].imshow(rbm, cmap="gray")
+    ax[idx].set_xticks([])
+    ax[idx].set_yticks([])
+
+fig.tight_layout()
 
 
 # %%
@@ -365,6 +373,7 @@ def initialize_evidences(test_img: np.ndarray) -> Dict:
 
 # %%
 run_bp_fn, _, get_beliefs_fn = graph.BP(fg.bp_state, 30)
+run_bp_fn = jax.jit(run_bp_fn)
 scores = np.zeros((len(test_set), frcs.shape[0]))
 map_states_dict = {}
 
@@ -412,25 +421,22 @@ print(f"accuracy = {accuracy}")
 
 # %%
 imgs = np.ones((20, 200, 200))
-plt.figure(figsize=(15, 15))
-
+fig, ax = plt.subplots(5, 4, figsize=(16, 20))
 pred_idxs = np.argmax(scores, axis=1)
-n_plots = [0, 5, 10]
+n_plots = range(20)
 for ii, pred_idx in enumerate(n_plots):
-    plt.subplot(len(n_plots), 1, 1 + ii)
-
-    map_states = map_states_dict[pred_idx]
-    map_state = map_states[pred_idxs[pred_idx]]
+    ax_idx = np.unravel_index(ii, (5, 4))
+    map_state = map_states_dict[pred_idx][pred_idxs[pred_idx]]
     frc = frcs[pred_idx]
-
     for v in range(frc.shape[0]):
         idx = map_state[v]
         f, r, c = frc[v]
-
         delta_r, delta_c = -hps + idx // (2 * vps + 1), -vps + idx % (2 * vps + 1)
         rd, cd = r + delta_r, c + delta_c
         imgs[ii, rd, cd] = 255
-        plt.plot(cd, rd, "r.")
+        ax[ax_idx].plot(cd, rd, "r.")
 
-    # plt.imshow(imgs[ii, :, :])
-    plt.imshow(test_set[pred_idx], cmap="gray")
+    ax[ax_idx].imshow(test_set[pred_idx], cmap="gray")
+    ax[ax_idx].axis("off")
+
+fig.tight_layout()
