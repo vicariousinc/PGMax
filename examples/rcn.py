@@ -6,9 +6,9 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.13.2
+#       jupytext_version: 1.11.4
 #   kernelspec:
-#     display_name: Python 3
+#     display_name: Python 3 (ipykernel)
 #     language: python
 #     name: python3
 # ---
@@ -303,7 +303,7 @@ for i in range(r_bu_msg.shape[0]):
 
 ax[1].imshow(img, cmap="gray")
 ax[1].axis("off")
-ax[1].set_title("BU Messages", fontsize=30)
+ax[1].set_title("Max filter response across 16 channels", fontsize=30)
 fig.tight_layout()
 
 # %% [markdown]
@@ -373,7 +373,6 @@ def initialize_evidences(test_img: np.ndarray) -> Dict:
 
 # %%
 run_bp_fn, _, get_beliefs_fn = graph.BP(fg.bp_state, 30)
-run_bp_fn = jax.jit(run_bp_fn)
 scores = np.zeros((len(test_set), frcs.shape[0]))
 map_states_dict = {}
 
@@ -422,12 +421,11 @@ print(f"accuracy = {accuracy}")
 # %%
 imgs = np.ones((20, 200, 200))
 fig, ax = plt.subplots(5, 4, figsize=(16, 20))
-pred_idxs = np.argmax(scores, axis=1)
-n_plots = range(20)
-for ii, pred_idx in enumerate(n_plots):
-    ax_idx = np.unravel_index(ii, (5, 4))
-    map_state = map_states_dict[pred_idx][pred_idxs[pred_idx]]
-    frc = frcs[pred_idx]
+best_model_idx = np.argmax(scores, axis=1)
+for test_idx in range(20):
+    ax_idx = np.unravel_index(test_idx, (5, 4))
+    map_state = map_states_dict[test_idx][best_model_idx[test_idx]]
+    frc = frcs[best_model_idx[test_idx]]
     for v in range(frc.shape[0]):
         idx = map_state[v]
         f, r, c = frc[v]
@@ -436,7 +434,10 @@ for ii, pred_idx in enumerate(n_plots):
         imgs[ii, rd, cd] = 255
         ax[ax_idx].plot(cd, rd, "r.")
 
-    ax[ax_idx].imshow(test_set[pred_idx], cmap="gray")
+    ax[ax_idx].imshow(test_set[test_idx], cmap="gray")
+    ax[ax_idx].set_title(
+        f"GT: {test_labels[test_idx]}, Pred: {test_preds[test_idx]}", fontsize=20
+    )
     ax[ax_idx].axis("off")
 
 fig.tight_layout()
