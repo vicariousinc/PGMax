@@ -1,3 +1,5 @@
+"""A module containing the classes for variable and factor groups in a Factor Graph."""
+
 import collections
 import itertools
 import typing

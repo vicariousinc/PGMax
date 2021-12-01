@@ -25,7 +25,9 @@ def pass_var_to_fac_messages(
     Args:
         ftov_msgs: Array of shape (num_edge_state,). This holds all the flattened factor to variable
             messages.
-        Array of shape (num_var_states,) representing the flattened evidence for each variable
+        evidence: Array of shape (num_var_states,) representing the flattened evidence for each variable
+        var_states_for_edges: Array of shape (num_edge_states,)
+            Global variable state indices for each edge state
     Returns:
         Array of shape (num_edge_state,). This holds all the flattened variable to factor messages.
     """

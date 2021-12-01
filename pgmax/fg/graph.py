@@ -542,8 +542,7 @@ class FToVMessages:
         fg_state: Factor graph state
         value: Optionally specify initial value for ftov messages
 
-    Raises: ValueError if provided value does not match expected ftov messages
-        shape.
+    Raises: ValueError if provided value does not match expected ftov messages shape.
     """
 
     fg_state: FactorGraphState
@@ -790,13 +789,12 @@ def BP(bp_state: BPState, num_iters: int) -> Tuple[Callable, Callable, Callable]
         num_iters: Number of belief propagation iterations.
 
     Returns:
-        tuple containing
-
-        run_bp: Function for running belief propagation for num_iters.
-        Optionally takes as input log_potentials updates, ftov_msgs updates,
-        evidence updates, and damping factor, and outputs a BPArrays.
-        get_bp_state: Function to reconstruct the BPState from BPArrays.
-        get_beliefs: Function to calculate beliefs from BPArrays.
+        Tuple containing\n
+        \trun_bp: Function for running belief propagation for num_iters.\n
+        \t\tOptionally takes as input log_potentials updates, ftov_msgs updates,
+        \t\tevidence updates, and damping factor, and outputs a BPArrays.\n
+        \tget_bp_state: Function to reconstruct the BPState from BPArrays.\n
+        \tget_beliefs: Function to calculate beliefs from BPArrays.\n
     """
     max_msg_size = int(np.max(bp_state.fg_state.wiring.edges_num_states))
     num_val_configs = (
