@@ -24,7 +24,7 @@ Developer Installation Instructions
 ::
 
     git clone https://github.com/vicariousinc/PGMax.git
-    curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/install-poetry.py | python -
+    curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/install-poetry.py | python3 -
     cd PGMax
     poetry shell
     poetry install
