@@ -1,9 +1,8 @@
 [tool.poetry]
 name = "pgmax"
-version = "0.2.0"
+version = "0.2.1"
 description = "Loopy belief propagation for factor graphs on discrete variables, in JAX!"
 authors = ["Stannis Zhou <stannis@vicarious.com>", "Nishanth Kumar <njk@csail.mit.edu>", "Miguel Lazaro-Gredilla <miguel@vicarious.com>", "Dileep George <dileep@vicarious.com>"]
-maintainers = ["Stannis Zhou <stannis@vicarious.com>", "Nishanth Kumar <njk@csail.mit.edu>"]
 # Additional info
 license = "MIT"
 readme = "README.md"
@@ -12,11 +11,10 @@ include = [
 ]
 homepage = "https://github.com/vicariousinc/PGMax"
 repository = "https://github.com/vicariousinc/PGMax"
-documentation = "https://pgmax.readthedocs.io/en/latest/"
 keywords = ["PGMax", "jax"]
 
 [tool.poetry.dependencies]
-python = ">=3.7,<3.9"
+python = ">=3.7,<3.8"
 jupyter = "^1.0.0"
 matplotlib = "^3.2.0"
 jax = "^0.2.14"
@@ -25,16 +23,13 @@ numpy = "^1.19.0"
 scipy = "^1.2.3"
 jupytext = "^1.11.3"
 tqdm = "^4.61.0"
-sphinx = {version = "^3", optional = true}
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"
+Sphinx = "^3.0.0"
 pre-commit = "^2.13.0"
 sphinx-rtd-theme = "^0.5.2"
 pytest-cov = "^2.12.1"
-
-[tool.poetry.extras]
-docs = ["sphinx"]
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
