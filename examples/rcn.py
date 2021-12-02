@@ -19,12 +19,13 @@
 # %% [markdown]
 # RCN is a neuroscience based, data-efficient, interpretable object detection/vision system. It is a probabilistic graphical model (PGM) that trains in minutes and generalizes well (for certain traits). It can reason about, and is robust to, occlusion. It can also imagine and interpret scenes.
 #
-# Please refer to the [Science](https://www.cs.jhu.edu/~ayuille/JHUcourses/ProbabilisticModelsOfVisualCognition2020/Lec21/A%20generative%20vision%20model%20that%20trains%20with%20high%20data%20efficiency%20and%20breaks%20text-based%20CAPTCHAs.pdf) paper for more details. In this notebook, we implement a two-level RCN model on a small subset of the MNIST dataset.
+# Please refer to the [science](https://www.science.org/doi/10.1126/science.aag2612) paper for more details. In this notebook, we implement a two-level RCN model on a small subset of the MNIST dataset.
 
 # %%
 # %matplotlib inline
 import os
 import time
+from typing import Tuple
 
 import jax
 import matplotlib.pyplot as plt
@@ -34,8 +35,6 @@ from jax import tree_util
 from joblib import Memory
 
 memory = Memory("./example_data/tmp")
-
-from typing import Tuple
 
 from scipy.ndimage import maximum_filter
 from scipy.signal import fftconvolve
@@ -112,6 +111,12 @@ test_set, test_labels = fetch_mnist_dataset(test_size)
 # %% [markdown]
 # # 2. Load the model
 
+# %% [markdown]
+# We load the following variables (that have been pre-computed).
+# - train_set and train_labels - A sample of MNIST train dataset containing 100 train images and their labels.
+# - frcs and edges - Used to represent the learned rcn graphical models.
+# - suppression_masks and filters - Saved numpy arrays that are used to detect the presence or absence of an oriented/directed edge in an image. Please refer to the function get_bu_msg to see how they are used.
+
 # %%
 data = np.load("example_data/rcn.npz", allow_pickle=True, encoding="latin1")
 idxs = range(0, 100, 100 // train_size)
@@ -125,10 +130,16 @@ train_set, train_labels, frcs, edges, suppression_masks, filters = (
     data["filters"],
 )
 
-hps, vps = 12, 12  # Horizontal and vertical pool sizes respectively for RCN models.
+# %% [markdown]
+# We initialize the following hyper-parameters.
+# - hps and vps - Horizontal and vertical pool sizes respectively for RCN models. This represents the radius of the window around a pool vertex. Thus, a pool vertex will be activated by an input pixel in a rectangle of size [2*hps+1, 2*vps+1].
+# - num_orients - The number of different orientations at which edges are detected.
+# - brightness_diff_threshold - The brightness level at a pixel at which we declare the presence of an edge.
+
+# %%
+hps, vps = 12, 12  #
 num_orients = filters.shape[0]
 brightness_diff_threshold = 40.0
-max_perturb_radius = 22
 
 # %% [markdown]
 # # 3. Visualize loaded model
@@ -247,6 +258,9 @@ def valid_configs(r: int, hps: int, vps: int) -> np.ndarray:
     return np.concatenate(configs)
 
 
+max_perturb_radius = (
+    22  # The maximum perturb radii for which to pre-compute the valid configs.
+)
 valid_configs_list = [valid_configs(r, hps, vps) for r in range(max_perturb_radius)]
 
 # %% [markdown]
