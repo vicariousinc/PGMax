@@ -225,7 +225,7 @@ print(f"Creating variables took {end-start:.3f} seconds.")
 # ## 4.2 Make factors
 
 # %% [markdown]
-# ### 4.2.1 Pre-compute the valid configs for different perturb radii.
+# ### 4.2.1 Pre-compute the valid configs for different perturb radius.
 
 # %%
 def valid_configs(r: int, hps: int, vps: int) -> np.ndarray:
@@ -258,7 +258,7 @@ def valid_configs(r: int, hps: int, vps: int) -> np.ndarray:
 
 
 max_perturb_radius = (
-    22  # The maximum perturb radii for which to pre-compute the valid configs.
+    22  # The maximum perturb radius for which to pre-compute the valid configs.
 )
 valid_configs_list = [valid_configs(r, hps, vps) for r in range(max_perturb_radius)]
 
