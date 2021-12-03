@@ -348,18 +348,18 @@ img = np.ones((200, 200))
 fig, ax = plt.subplots(1, 2, figsize=(20, 10))
 ax[0].imshow(r_test_img, cmap="gray")
 ax[0].axis("off")
-ax[0].set_title("Input image", fontsize=20)
+ax[0].set_title("Input image", fontsize=40)
 for i in range(r_bu_msg.shape[0]):
     img[r_bu_msg[i] > 0] = 0
 
 ax[1].imshow(img, cmap="gray")
 ax[1].axis("off")
-ax[1].set_title("Max filter response across 16 channels", fontsize=20)
+ax[1].set_title("Max filter response across 16 channels", fontsize=40)
 fig.tight_layout()
 
 
 # %% [markdown]
-# ## 5.2 Run maximum a-posteriori probability (map) inference on all test images
+# ## 5.2 Run MAP inference on all test images
 
 # %%
 def get_evidence(bu_msg: np.ndarray, frc: np.ndarray) -> np.ndarray:
