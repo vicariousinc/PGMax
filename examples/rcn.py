@@ -22,10 +22,11 @@
 # Please refer to the [science](https://www.science.org/doi/10.1126/science.aag2612) paper for more details. In this notebook, we implement a two-level RCN model on a small subset of the MNIST dataset.
 
 # %%
+from __future__ import annotations
+
 # %matplotlib inline
 import os
 import time
-from typing import Tuple
 
 import jax
 import matplotlib.pyplot as plt
@@ -33,15 +34,13 @@ import numpy as np
 from jax import numpy as jnp
 from jax import tree_util
 from joblib import Memory
-
-memory = Memory("./example_data/tmp")
-
 from scipy.ndimage import maximum_filter
 from scipy.signal import fftconvolve
 from sklearn.datasets import fetch_openml
 
 from pgmax.fg import graph, groups
 
+memory = Memory("./example_data/tmp")
 fetch_openml_cached = memory.cache(fetch_openml)
 os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
@@ -57,7 +56,7 @@ test_size = 20
 
 
 # %%
-def fetch_mnist_dataset(test_size: int, seed: int = 5) -> Tuple[np.ndarray, np.ndarray]:
+def fetch_mnist_dataset(test_size: int, seed: int = 5) -> tuple[np.ndarray, np.ndarray]:
     """Returns test images sampled randomly from the set of MNIST images.
 
     Args:
@@ -112,7 +111,7 @@ test_set, test_labels = fetch_mnist_dataset(test_size)
 # # 2. Load the model
 
 # %% [markdown]
-# We load the following variables (that have been pre-computed).
+# We load a pre-trained rcn model that has been trained using the code [here](https://github.com/vicariousinc/science_rcn/tree/master/science_rcn). The details of the variables are.
 # - train_set and train_labels - A sample of MNIST train dataset containing 100 train images and their labels.
 # - frcs and edges - Used to represent the learned rcn graphical models.
 # - suppression_masks and filters - Saved numpy arrays that are used to detect the presence or absence of an oriented/directed edge in an image. Please refer to the function get_bu_msg to see how they are used.
@@ -158,7 +157,7 @@ fig, ax = plt.subplots(1, 2, figsize=(20, 10))
 
 frc, edge, train_img = frcs[img_idx], edges[img_idx], train_set[img_idx]
 ax[0].imshow(train_img[pad : 200 - pad, pad : 200 - pad], cmap="gray")
-ax[0].set_title("Sample training image", fontsize=20)
+ax[0].set_title("Sample training image", fontsize=40)
 
 for e in edge:
     i1, i2, w = e  # The vertices for this edge along with the perturn radius.
@@ -168,13 +167,13 @@ for e in edge:
     model_img[r1, c1] = 0
     model_img[r2, c2] = 0
     ax[1].text(
-        (c1 + c2) // 2 - pad, (r1 + r2) // 2 - pad, str(w), color="green", fontsize=15
+        (c1 + c2) // 2 - pad, (r1 + r2) // 2 - pad, str(w), color="green", fontsize=25
     )
     ax[1].plot([c1 - pad, c2 - pad], [r1 - pad, r2 - pad], color="green", linewidth=0.5)
 
 ax[1].axis("off")
 ax[1].imshow(model_img[pad : 200 - pad, pad : 200 - pad], cmap="gray")
-ax[1].set_title("Corresponding learned rcn model", fontsize=20)
+ax[1].set_title("Corresponding learned rcn model", fontsize=40)
 
 fig.tight_layout()
 

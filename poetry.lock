@@ -1530,7 +1530,7 @@ docs = ["sphinx"]
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.7,<3.9"
-content-hash = "aa81d6fdff4c8158085b211a8e1fea3d4e1423bcc0a40e79d127b99a6f577135"
+content-hash = "277675bd283337f64f87a293eafb66aed0e4fe54442d21903dfa8706e308442e"
 
 [metadata.files]
 absl-py = [
