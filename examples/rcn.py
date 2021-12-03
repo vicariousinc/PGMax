@@ -308,7 +308,7 @@ def get_bu_msg(img: np.ndarray) -> np.ndarray:
         kern = filters[i, :, :]
         filtered[i] = fftconvolve(img, kern, mode="same")
 
-    # Apllying non-max supression to all the filtered images.
+    # Applying non-max suppression to all the filtered images.
     localized = np.zeros_like(filtered)
     cross_orient_max = filtered.max(0)
     filtered[filtered < 0] = 0
