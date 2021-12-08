@@ -26,6 +26,7 @@ from typing import (
 import jax
 import jax.numpy as jnp
 import numpy as np
+from jax.scipy.special import logsumexp
 
 from pgmax.bp import infer
 from pgmax.fg import fg_utils, groups, nodes
@@ -930,3 +931,20 @@ def decode_map_states(beliefs: Any) -> Any:
         beliefs,
     )
     return map_states
+
+
+@jax.jit
+def get_marginals(beliefs: Any) -> Any:
+    """Function to get marginal probabilities given the calculated beliefs.
+
+    Args:
+        beliefs: An array or a PyTree container containing beliefs for different variables.
+
+    Returns:
+        An array or a PyTree container containing the marginal probabilities different variables.
+    """
+    marginals = jax.tree_util.tree_map(
+        lambda x: jnp.exp(x - logsumexp(x, axis=-1, keepdims=True)),
+        beliefs,
+    )
+    return marginals
