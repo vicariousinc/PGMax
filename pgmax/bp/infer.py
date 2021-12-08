@@ -36,19 +36,20 @@ def pass_var_to_fac_messages(
     return vtof_msgs
 
 
-@functools.partial(jax.jit, static_argnames=("num_val_configs"))
+@functools.partial(jax.jit, static_argnames=("num_val_configs", "temperature"))
 def pass_fac_to_var_messages(
     vtof_msgs: jnp.ndarray,
     factor_configs_edge_states: jnp.ndarray,
     log_potentials: jnp.ndarray,
     num_val_configs: int,
+    temperature: float,
 ) -> jnp.ndarray:
 
     """Passes messages from Factors to Variables.
 
     The update is performed in two steps. First, a "summary" array is generated that has an entry for every valid
     configuration for every factor. The elements of this array are simply the sums of messages across each valid
-    config. Then, the info from edge_vals_to_config_summary_indices is used to apply the scattering operation and
+    config. Then, the info from factor_configs_edge_states is used to apply the scattering operation and
     generate a flat set of output messages.
 
     Args:
@@ -69,11 +70,37 @@ def pass_fac_to_var_messages(
         .at[factor_configs_edge_states[..., 0]]
         .add(vtof_msgs[factor_configs_edge_states[..., 1]])
     ) + log_potentials
-    ftov_msgs = (
-        jnp.full(shape=(vtof_msgs.shape[0],), fill_value=NEG_INF)
-        .at[factor_configs_edge_states[..., 1]]
-        .max(fac_config_summary_sum[factor_configs_edge_states[..., 0]])
-    ) - vtof_msgs
+    if temperature == 0.0:
+        ftov_msgs = (
+            jnp.full(shape=(vtof_msgs.shape[0],), fill_value=NEG_INF)
+            .at[factor_configs_edge_states[..., 1]]
+            .max(fac_config_summary_sum[factor_configs_edge_states[..., 0]])
+        ) - vtof_msgs
+    else:
+        ftov_msgs = (
+            temperature
+            * jnp.log(
+                jnp.zeros(shape=(vtof_msgs.shape[0],))
+                .at[factor_configs_edge_states[..., 1]]
+                .sum(
+                    jnp.exp(
+                        (
+                            fac_config_summary_sum[factor_configs_edge_states[..., 0]]
+                            - jax.ops.segment_max(
+                                fac_config_summary_sum[
+                                    factor_configs_edge_states[..., 0]
+                                ],
+                                factor_configs_edge_states[..., 1],
+                                num_segments=vtof_msgs.shape[0],
+                            )
+                        )
+                        / temperature
+                    )
+                )
+            )
+            - vtof_msgs
+        )
+
     return ftov_msgs
 
 

@@ -782,12 +782,16 @@ class BPArrays:
         return cls(**aux_data.unflatten(children))
 
 
-def BP(bp_state: BPState, num_iters: int) -> Tuple[Callable, Callable, Callable]:
+def BP(
+    bp_state: BPState, num_iters: int, temperature: float = 0.0
+) -> Tuple[Callable, Callable, Callable]:
     """Function for generating belief propagation functions.
 
     Args:
         bp_state: Belief propagation state.
         num_iters: Number of belief propagation iterations.
+        temperature: Temperature for loopy belief propagation.
+            1.0 corresponds to sum-product, 0.0 corresponds to max-product.
 
     Returns:
         Tuple containing\n
@@ -857,6 +861,7 @@ def BP(bp_state: BPState, num_iters: int) -> Tuple[Callable, Callable, Callable]
                 wiring.factor_configs_edge_states,
                 log_potentials,
                 num_val_configs,
+                temperature,
             )
             # Use the results of message passing to perform damping and
             # update the factor to variable messages
