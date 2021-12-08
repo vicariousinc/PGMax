@@ -13,6 +13,8 @@
 #     name: python3
 # ---
 
+import jax
+
 # %%
 # %matplotlib inline
 import matplotlib.pyplot as plt
@@ -81,7 +83,7 @@ fg.add_factor_group(
     connected_variable_names=[
         [(ii, jj), (ii + 1, jj)] for ii in range(M - 1) for jj in range(N)
     ],
-    log_potential_matrix=weights["logWtd"],
+    name="td",
 )
 # Add left-right factors
 fg.add_factor_group(
@@ -89,7 +91,7 @@ fg.add_factor_group(
     connected_variable_names=[
         [(ii, jj), (ii, jj + 1)] for ii in range(M) for jj in range(N - 1)
     ],
-    log_potential_matrix=weights["logWlr"],
+    name="lr",
 )
 # Add diagonal factors
 fg.add_factor_group(
@@ -97,18 +99,45 @@ fg.add_factor_group(
     connected_variable_names=[
         [(ii, jj), (ii + 1, jj + 1)] for ii in range(M - 1) for jj in range(N - 1)
     ],
-    log_potential_matrix=weights["logWfd"],
+    name="fd",
 )
 fg.add_factor_group(
     factory=groups.PairwiseFactorGroup,
     connected_variable_names=[
         [(ii, jj), (ii - 1, jj + 1)] for ii in range(1, M) for jj in range(N - 1)
     ],
-    log_potential_matrix=weights["logWsd"],
+    name="sd",
 )
 
 # %%
 run_bp, _, get_beliefs = graph.BP(fg.bp_state, 15, 1.0)
+
+
+# %%
+def loss(evidence, targets, log_potentials):
+    marginals = graph.get_marginals(
+        get_beliefs(
+            run_bp(
+                evidence_updates={None: evidence},
+                log_potentials_updates=log_potentials,
+                damping=0.0,
+            )
+        )
+    )
+    logp = np.mean(np.log(np.sum(targets * marginals, axis=-1)))
+    return -logp
+
+
+log_potentials = {
+    "td": weights["logWtd"],
+    "lr": weights["logWlr"],
+    "fd": weights["logWfd"],
+    "sd": weights["logWsd"],
+}
+
+# %%
+idx = 0
+grads = jax.grad(loss, argnums=2)(evidence[idx], targets[idx], log_potentials)
 
 # %%
 idx = 0
@@ -118,6 +147,4 @@ marginals = graph.get_marginals(
 fig, ax = plt.subplots(1, 2, figsize=(20, 10))
 ax[0].imshow(evidence[idx, ..., -2])
 ax[1].imshow(marginals[..., -2] < 0.5)
-
-# %%
 logp = np.mean(np.log(np.sum(targets[idx] * marginals, axis=-1)))
