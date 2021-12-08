@@ -72,12 +72,12 @@ def pass_fac_to_var_messages(
         .at[factor_configs_edge_states[..., 0]]
         .add(vtof_msgs[factor_configs_edge_states[..., 1]])
     ) + log_potentials
-    max_fac_config_for_edge_states = (
+    max_factor_config_summary_for_edge_states = (
         jnp.full(shape=(vtof_msgs.shape[0],), fill_value=NEG_INF)
         .at[factor_configs_edge_states[..., 1]]
         .max(fac_config_summary_sum[factor_configs_edge_states[..., 0]])
     )
-    ftov_msgs = max_fac_config_for_edge_states - vtof_msgs
+    ftov_msgs = max_factor_config_summary_for_edge_states - vtof_msgs
     if temperature != 0.0:
         ftov_msgs = ftov_msgs + (
             temperature
@@ -88,7 +88,7 @@ def pass_fac_to_var_messages(
                     jnp.exp(
                         (
                             fac_config_summary_sum[factor_configs_edge_states[..., 0]]
-                            - max_fac_config_for_edge_states[
+                            - max_factor_config_summary_for_edge_states[
                                 factor_configs_edge_states[..., 1]
                             ]
                         )

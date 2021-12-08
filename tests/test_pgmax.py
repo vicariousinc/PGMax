@@ -425,6 +425,6 @@ def test_e2e_heretic():
     bp_state.evidence[1, 0, 0]
     assert isinstance(bp_state.evidence.value, np.ndarray)
     assert len(fg.factors) == 7056
-    run_bp, _, get_beliefs = graph.BP(bp_state, 100, 1.0)
+    run_bp, _, get_beliefs = graph.BP(bp_state, 1, 1.0)
     marginals = graph.get_marginals(get_beliefs(run_bp()))
     assert jnp.allclose(jnp.sum(marginals[0], axis=-1), 1.0)
