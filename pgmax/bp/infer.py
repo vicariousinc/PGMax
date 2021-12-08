@@ -61,6 +61,8 @@ def pass_fac_to_var_messages(
         log_potentials: Array of shape (num_val_configs, ). An entry at index i is the log potential
             function value for the configuration with global factor config index i.
         num_val_configs: the total number of valid configurations for factors in the factor graph.
+        temperature: Temperature for loopy belief propagation.
+            1.0 corresponds to sum-product, 0.0 corresponds to max-product.
 
     Returns:
         Array of shape (num_edge_state,). This holds all the flattened factor to variable messages.
