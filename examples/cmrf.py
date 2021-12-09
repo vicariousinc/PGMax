@@ -20,7 +20,7 @@ import jax.numpy as jnp
 import joblib
 import numpy as np
 from jax.experimental import optimizers
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 
 from pgmax.fg import graph, groups
 
@@ -153,4 +153,4 @@ with tqdm(total=n_epochs * n_batches) as pbar:
             pbar.update()
             pbar.set_postfix(loss=value)
             if step % 100 == 0:
-                joblib.dump(log_potentials, "weights.joblib")
+                joblib.dump(get_params(opt_state), "weights.joblib")
