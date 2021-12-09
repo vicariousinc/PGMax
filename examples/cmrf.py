@@ -17,62 +17,33 @@
 # %matplotlib inline
 import jax
 import jax.numpy as jnp
-import numba as nb
+import joblib
 import numpy as np
 from jax.experimental import optimizers
 from tqdm.notebook import tqdm
 
 from pgmax.fg import graph, groups
 
-
-# %%
-@nb.njit()
-def contours_to_mess_bu(input_train, p_contour, n_clones):
-    assert (input_train == 0).sum() + (
-        input_train == 1
-    ).sum() == input_train.size  # (binary inputs, where 0 is contour)
-    assert len(p_contour) == 3
-    n_states = n_clones.sum()
-    state_loc = np.hstack((np.array([0], dtype=n_clones.dtype), n_clones)).cumsum()
-    messages_bu = np.zeros(input_train.shape + (n_states,))
-    for i in range(input_train.shape[0]):
-        for r in range(input_train.shape[1]):
-            for c in range(input_train.shape[2]):
-                v = input_train[i, r, c]
-                for d in range(3):
-                    start, stop = state_loc[d : d + 2]
-                    messages_bu[i, r, c, start:stop] = (
-                        p_contour[d] if v == 0 else 1 - p_contour[d]
-                    )
-
-    return messages_bu
-
-
-@nb.njit()
-def img_to_mess_bu(images, n_clones):
-    n_states = n_clones.sum()
-    state_loc = np.hstack((np.array([0], dtype=n_clones.dtype), n_clones)).cumsum()
-    messages_bu = np.zeros(images.shape + (n_states,))
-    for i in range(images.shape[0]):
-        for r in range(images.shape[1]):
-            for c in range(images.shape[2]):
-                v = images[i, r, c]
-                start, stop = state_loc[v : v + 2]
-                messages_bu[i, r, c, start:stop] = 1
-    return messages_bu
-
-
 # %%
 data = np.load("/storage/ltr/papers/icml2020_query_training/cmrf/noisy_mnist_8_0.2.npz")
 weights = np.load(
     "/storage/ltr/papers/icml2020_query_training/cmrf/cmrf8_weights_15_mb50_lr1em2_nc64_emp.npz"
 )
-p_contour = data["p_contour"]
 n_clones = weights["n_clones"]
-evidence = contours_to_mess_bu(data["noisy_images_test"], p_contour, n_clones)
-evidence[evidence == 0.0] = 1e-10
-evidence = np.log(evidence)
-targets = img_to_mess_bu(data["images_test"], n_clones)
+p_contour = np.repeat(data["p_contour"], n_clones)
+p_contour[p_contour == 0.0] = 1e-10
+p_contour = jax.device_put(p_contour)
+prototype_targets = jax.device_put(
+    np.array(
+        [
+            np.repeat(np.array([1, 0, 0]), n_clones),
+            np.repeat(np.array([0, 1, 0]), n_clones),
+            np.repeat(np.array([0, 0, 1]), n_clones),
+        ]
+    )
+)
+noisy_images = data["noisy_images_train"]
+target_images = data["images_train"]
 
 # %%
 M, N = data["images_train"].shape[-2:]
@@ -117,7 +88,9 @@ run_bp, _, get_beliefs = graph.BP(fg.bp_state, 15, 1.0)
 
 
 # %%
-def loss(evidence, targets, log_potentials):
+def loss(noisy_image, target_image, log_potentials):
+    evidence = jnp.log(jnp.where(noisy_image[..., None] == 0, p_contour, 1 - p_contour))
+    target = prototype_targets[target_image]
     marginals = graph.get_marginals(
         get_beliefs(
             run_bp(
@@ -127,19 +100,30 @@ def loss(evidence, targets, log_potentials):
             )
         )
     )
-    logp = jnp.mean(jnp.log(jnp.sum(targets * marginals, axis=-1)))
+    logp = jnp.mean(jnp.log(jnp.sum(target * marginals, axis=-1)))
     return -logp
 
 
-def batch_loss(evidence, targets, log_potentials):
+def batch_loss(noisy_images, target_images, log_potentials):
     return jnp.mean(
         jax.vmap(loss, in_axes=(0, 0, None), out_axes=0)(
-            evidence, targets, log_potentials
+            noisy_images, target_images, log_potentials
         )
     )
 
 
 value_and_grad = jax.jit(jax.value_and_grad(batch_loss, argnums=2))
+init_fun, opt_update, get_params = optimizers.adam(2e-3)
+
+
+@jax.jit
+def update(step, batch_noisy_images, batch_target_images, opt_state):
+    value, grad = value_and_grad(
+        batch_noisy_images, batch_target_images, get_params(opt_state)
+    )
+    opt_state = opt_update(step, grad, opt_state)
+    return value, opt_state
+
 
 # %%
 log_potentials = {
@@ -148,32 +132,25 @@ log_potentials = {
     "fd": weights["logWfd"],
     "sd": weights["logWsd"],
 }
-
-init_fun, opt_update, get_params = optimizers.adam(2e-3)
 opt_state = init_fun(log_potentials)
 
-
-@jax.jit
-def update(step, batch_evidence, batch_targets, opt_state):
-    value, grad = value_and_grad(batch_evidence, batch_targets, get_params(opt_state))
-    opt_state = opt_update(step, grad, opt_state)
-    return value, opt_state
-
-
 batch_size = 10
-n_batches = evidence.shape[0] // batch_size
+n_batches = noisy_images.shape[0] // batch_size
 n_epochs = 10
 with tqdm(total=n_epochs * n_batches) as pbar:
     for epoch in range(n_epochs):
-        indices = np.random.permutation(evidence.shape[0])
+        indices = np.random.permutation(noisy_images.shape[0])
         for idx in range(n_batches):
             batch_indices = indices[idx * batch_size : (idx + 1) * batch_size]
-            batch_evidence, batch_targets = (
-                evidence[batch_indices],
-                targets[batch_indices],
+            batch_noisy_images, batch_target_images = (
+                noisy_images[batch_indices],
+                target_images[batch_indices],
             )
+            step = epoch * n_batches + idx
             value, opt_state = update(
-                epoch * n_batches + idx, batch_evidence, batch_targets, opt_state
+                step, batch_noisy_images, batch_target_images, opt_state
             )
             pbar.update()
             pbar.set_postfix(loss=value)
+            if step % 100 == 0:
+                joblib.dump(log_potentials, "weights.joblib")
