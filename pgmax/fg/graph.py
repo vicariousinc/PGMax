@@ -848,6 +848,7 @@ def BP(
             ftov_msgs, wiring.edges_num_states, max_msg_size
         )
 
+        @jax.checkpoint
         def update(msgs: jnp.ndarray, _) -> Tuple[jnp.ndarray, None]:
             # Compute new variable to factor messages by message passing
             vtof_msgs = infer.pass_var_to_fac_messages(

@@ -6,17 +6,17 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.13.2
+#       jupytext_version: 1.11.4
 #   kernelspec:
-#     display_name: Python 3
+#     display_name: Python 3 (ipykernel)
 #     language: python
 #     name: python3
 # ---
 
-import jax
-
 # %%
 # %matplotlib inline
+import jax
+import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numba as nb
 import numpy as np
@@ -62,14 +62,16 @@ def img_to_mess_bu(images, n_clones):
 
 
 # %%
-data = np.load("/home/stannis/noisy_mnist_8_0.2.npz")
-weights = np.load("/home/stannis/cmrf8_weights_15_mb50_lr1em2_nc64_emp.npz")
+data = np.load("/storage/ltr/papers/icml2020_query_training/cmrf/noisy_mnist_8_0.2.npz")
+weights = np.load(
+    "/storage/ltr/papers/icml2020_query_training/cmrf/cmrf8_weights_15_mb50_lr1em2_nc64_emp.npz"
+)
 p_contour = data["p_contour"]
 n_clones = weights["n_clones"]
-evidence = contours_to_mess_bu(data["noisy_images_test"], p_contour, n_clones)
+evidence = contours_to_mess_bu(data["noisy_images_test"][:10], p_contour, n_clones)
 evidence[evidence == 0.0] = 1e-10
 evidence = np.log(evidence)
-targets = img_to_mess_bu(data["images_test"], n_clones)
+targets = img_to_mess_bu(data["images_test"][:10], n_clones)
 
 # %%
 M, N = data["images_train"].shape[-2:]
@@ -124,8 +126,16 @@ def loss(evidence, targets, log_potentials):
             )
         )
     )
-    logp = np.mean(np.log(np.sum(targets * marginals, axis=-1)))
+    logp = jnp.mean(jnp.log(jnp.sum(targets * marginals, axis=-1)))
     return -logp
+
+
+def batch_loss(evidence, targets, log_potentials):
+    return jnp.mean(
+        jax.vmap(loss, in_axes=(0, 0, None), out_axes=0)(
+            evidence, targets, log_potentials
+        )
+    )
 
 
 log_potentials = {
@@ -135,9 +145,10 @@ log_potentials = {
     "sd": weights["logWsd"],
 }
 
+jitted_grad = jax.jit(jax.grad(batch_loss, argnums=2))
+
 # %%
-idx = 0
-grads = jax.grad(loss, argnums=2)(evidence[idx], targets[idx], log_potentials)
+grads = jitted_grad(evidence, targets, log_potentials)
 
 # %%
 idx = 0
