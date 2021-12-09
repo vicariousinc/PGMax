@@ -17,9 +17,10 @@
 # %matplotlib inline
 import jax
 import jax.numpy as jnp
-import matplotlib.pyplot as plt
 import numba as nb
 import numpy as np
+from jax.experimental import optimizers
+from tqdm.notebook import tqdm
 
 from pgmax.fg import graph, groups
 
@@ -68,10 +69,10 @@ weights = np.load(
 )
 p_contour = data["p_contour"]
 n_clones = weights["n_clones"]
-evidence = contours_to_mess_bu(data["noisy_images_test"][:10], p_contour, n_clones)
+evidence = contours_to_mess_bu(data["noisy_images_test"], p_contour, n_clones)
 evidence[evidence == 0.0] = 1e-10
 evidence = np.log(evidence)
-targets = img_to_mess_bu(data["images_test"][:10], n_clones)
+targets = img_to_mess_bu(data["images_test"], n_clones)
 
 # %%
 M, N = data["images_train"].shape[-2:]
@@ -138,6 +139,9 @@ def batch_loss(evidence, targets, log_potentials):
     )
 
 
+value_and_grad = jax.jit(jax.value_and_grad(batch_loss, argnums=2))
+
+# %%
 log_potentials = {
     "td": weights["logWtd"],
     "lr": weights["logWlr"],
@@ -145,17 +149,31 @@ log_potentials = {
     "sd": weights["logWsd"],
 }
 
-jitted_grad = jax.jit(jax.grad(batch_loss, argnums=2))
+init_fun, opt_update, get_params = optimizers.adam(2e-3)
+opt_state = init_fun(log_potentials)
 
-# %%
-grads = jitted_grad(evidence, targets, log_potentials)
 
-# %%
-idx = 0
-marginals = graph.get_marginals(
-    get_beliefs(run_bp(evidence_updates={None: evidence[idx]}, damping=0.0))
-)
-fig, ax = plt.subplots(1, 2, figsize=(20, 10))
-ax[0].imshow(evidence[idx, ..., -2])
-ax[1].imshow(marginals[..., -2] < 0.5)
-logp = np.mean(np.log(np.sum(targets[idx] * marginals, axis=-1)))
+@jax.jit
+def update(step, batch_evidence, batch_targets, opt_state):
+    value, grad = value_and_grad(batch_evidence, batch_targets, get_params(opt_state))
+    opt_state = opt_update(step, grad, opt_state)
+    return value, opt_state
+
+
+batch_size = 10
+n_batches = evidence.shape[0] // batch_size
+n_epochs = 10
+with tqdm(total=n_epochs * n_batches) as pbar:
+    for epoch in range(n_epochs):
+        indices = np.random.permutation(evidence.shape[0])
+        for idx in range(n_batches):
+            batch_indices = indices[idx * batch_size : (idx + 1) * batch_size]
+            batch_evidence, batch_targets = (
+                evidence[batch_indices],
+                targets[batch_indices],
+            )
+            value, opt_state = update(
+                epoch * n_batches + idx, batch_evidence, batch_targets, opt_state
+            )
+            pbar.update()
+            pbar.set_postfix(loss=value)
