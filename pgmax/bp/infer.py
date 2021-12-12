@@ -36,19 +36,20 @@ def pass_var_to_fac_messages(
     return vtof_msgs
 
 
-@functools.partial(jax.jit, static_argnames=("num_val_configs"))
+@functools.partial(jax.jit, static_argnames=("num_val_configs", "temperature"))
 def pass_fac_to_var_messages(
     vtof_msgs: jnp.ndarray,
     factor_configs_edge_states: jnp.ndarray,
     log_potentials: jnp.ndarray,
     num_val_configs: int,
+    temperature: float,
 ) -> jnp.ndarray:
 
     """Passes messages from Factors to Variables.
 
     The update is performed in two steps. First, a "summary" array is generated that has an entry for every valid
     configuration for every factor. The elements of this array are simply the sums of messages across each valid
-    config. Then, the info from edge_vals_to_config_summary_indices is used to apply the scattering operation and
+    config. Then, the info from factor_configs_edge_states is used to apply the scattering operation and
     generate a flat set of output messages.
 
     Args:
@@ -60,6 +61,8 @@ def pass_fac_to_var_messages(
         log_potentials: Array of shape (num_val_configs, ). An entry at index i is the log potential
             function value for the configuration with global factor config index i.
         num_val_configs: the total number of valid configurations for factors in the factor graph.
+        temperature: Temperature for loopy belief propagation.
+            1.0 corresponds to sum-product, 0.0 corresponds to max-product.
 
     Returns:
         Array of shape (num_edge_state,). This holds all the flattened factor to variable messages.
@@ -69,11 +72,32 @@ def pass_fac_to_var_messages(
         .at[factor_configs_edge_states[..., 0]]
         .add(vtof_msgs[factor_configs_edge_states[..., 1]])
     ) + log_potentials
-    ftov_msgs = (
+    max_factor_config_summary_for_edge_states = (
         jnp.full(shape=(vtof_msgs.shape[0],), fill_value=NEG_INF)
         .at[factor_configs_edge_states[..., 1]]
         .max(fac_config_summary_sum[factor_configs_edge_states[..., 0]])
-    ) - vtof_msgs
+    )
+    ftov_msgs = max_factor_config_summary_for_edge_states - vtof_msgs
+    if temperature != 0.0:
+        ftov_msgs = ftov_msgs + (
+            temperature
+            * jnp.log(
+                jnp.full(shape=(vtof_msgs.shape[0],), fill_value=jnp.exp(NEG_INF))
+                .at[factor_configs_edge_states[..., 1]]
+                .add(
+                    jnp.exp(
+                        (
+                            fac_config_summary_sum[factor_configs_edge_states[..., 0]]
+                            - max_factor_config_summary_for_edge_states[
+                                factor_configs_edge_states[..., 1]
+                            ]
+                        )
+                        / temperature
+                    )
+                )
+            )
+        )
+
     return ftov_msgs
 
 
