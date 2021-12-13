@@ -8,10 +8,8 @@ EXAMPLES_DIR = os.path.abspath(
     os.path.join(os.path.dirname(os.path.dirname(__file__)), "examples")
 )
 EXAMPLES = [
-    #  "heretic_example.py",
     "ising_model.py",
     #  "rbm.py",
-    "sanity_check_example.py",
 ]
 
 
