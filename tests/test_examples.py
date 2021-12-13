@@ -11,7 +11,6 @@ EXAMPLES = [
     #  "heretic_example.py",
     "ising_model.py",
     #  "rbm.py",
-    "sanity_check_example.py",
 ]
 
 
