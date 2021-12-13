@@ -135,7 +135,7 @@ fig.tight_layout()
 # %% [markdown]
 # # Train the model from scratch
 #
-# The following training loops requires a GPU with at least 11 GB of memory.
+# The following training loop requires a GPU with at least 11 GB of memory.
 
 # %%
 @jax.jit
