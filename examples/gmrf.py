@@ -6,9 +6,9 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.11.4
+#       jupytext_version: 1.13.2
 #   kernelspec:
-#     display_name: Python 3 (ipykernel)
+#     display_name: Python 3
 #     language: python
 #     name: python3
 # ---
@@ -29,10 +29,12 @@ from pgmax.fg import graph, groups
 
 # %%
 # Load test data
-data = np.load("example_data/noisy_mnist.npz")
+# !wget https://raw.githubusercontent.com/vicariousinc/query_training/master/data/noisy_mnist_8_0.2.npz
+data = np.load("noisy_mnist_8_0.2.npz")
 noisy_images = data["noisy_images_test"]
 target_images = data["images_test"]
 
+# %%
 # Load saved log potentials
 log_potentials = dict(**np.load("example_data/gmrf_log_potentials.npz"))
 n_clones = log_potentials.pop("n_clones")
