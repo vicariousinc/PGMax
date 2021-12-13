@@ -19,7 +19,7 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
-from jax.experimental import optimizers
+from jax.example_libraries import optimizers
 from tqdm.notebook import tqdm
 
 from pgmax.fg import graph, groups
