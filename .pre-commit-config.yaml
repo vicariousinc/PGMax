@@ -14,7 +14,7 @@ repos:
     rev: v4.0.1
     hooks:
     -   id: check-added-large-files
-        args: ['--maxkb=5120']
+        args: ['--maxkb=22000']
     -   id: trailing-whitespace
         files: (\.py|\.rst|\.yaml|)$
     -   id: check-merge-conflict
