@@ -6,9 +6,9 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.11.4
+#       jupytext_version: 1.13.2
 #   kernelspec:
-#     display_name: Python 3
+#     display_name: Python 3 (ipykernel)
 #     language: python
 #     name: python3
 # ---
@@ -20,6 +20,7 @@ import itertools
 import jax
 import matplotlib.pyplot as plt
 import numpy as np
+from tqdm.notebook import tqdm
 
 from pgmax.fg import graph, groups
 
@@ -40,15 +41,23 @@ fg = graph.FactorGraph(
     variables=dict(visible=visible_variables, hidden=hidden_variables),
 )
 for ii in range(nh):
+    fg.add_factor([("hidden", ii)], np.arange(2)[:, None], np.array([0, bh[ii]]))
+
+for jj in range(nv):
+    fg.add_factor([("visible", jj)], np.arange(2)[:, None], np.array([0, bv[jj]]))
+
+
+configs = np.array(list(itertools.product(np.arange(2), repeat=2)))
+for ii in tqdm(range(nh)):
     for jj in range(nv):
         fg.add_factor(
             [("hidden", ii), ("visible", jj)],
-            np.array(list(itertools.product(np.arange(2), repeat=2))),
+            configs,
             np.array([0, 0, 0, W[ii, jj]]),
         )
 
 # %%
-run_bp, _, get_beliefs = graph.BP(fg.bp_state, 100)
+run_bp, _, get_beliefs = graph.BP(fg.bp_state, 200)
 
 # %%
 # Run inference and decode using vmap
@@ -58,14 +67,14 @@ bp_arrays = jax.vmap(run_bp, in_axes=0, out_axes=0)(
         "hidden": np.stack(
             [
                 np.zeros((n_samples,) + bh.shape),
-                bh + np.random.logistic(size=(n_samples,) + bh.shape),
+                np.random.logistic(size=(n_samples,) + bh.shape),
             ],
             axis=-1,
         ),
         "visible": np.stack(
             [
                 np.zeros((n_samples,) + bv.shape),
-                bv + np.random.logistic(size=(n_samples,) + bv.shape),
+                np.random.logistic(size=(n_samples,) + bv.shape),
             ],
             axis=-1,
         ),
