@@ -118,7 +118,7 @@ class FactorGraph:
         """
         factor_group = groups.EnumerationFactorGroup(
             self._variable_group,
-            connected_variable_names=[variable_names],
+            variable_names_for_factors=[variable_names],
             factor_configs=factor_configs,
             log_potentials=log_potentials,
         )
