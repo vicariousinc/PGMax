@@ -900,8 +900,8 @@ class PairwiseFactorGroup(FactorGroup):
 
         factor_configs = (
             np.mgrid[
-                : log_potential_matrix.shape[0],
-                : log_potential_matrix.shape[1],
+                : log_potential_matrix.shape[-1],
+                : log_potential_matrix.shape[-2],
             ]
             .transpose((1, 2, 0))
             .reshape((-1, 2))
