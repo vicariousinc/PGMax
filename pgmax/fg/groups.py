@@ -560,7 +560,7 @@ class FactorGroup:
         _variables_to_factors: maps set of connected variables to the corresponding factors
 
     Raises:
-        ValueError: if variable_names is an empty list
+        ValueError: if connected_variable_names is an empty list
     """
 
     variable_group: Union[CompositeVariableGroup, VariableGroup]
@@ -671,7 +671,7 @@ class EnumerationFactorGroup(FactorGroup):
     uniform 0 unless the inheriting class includes a log_potentials argument.
 
     Args:
-        variable_names: A list of list of variable names, where each innermost element is the
+        connected_variable_names: A list of list of variable names, where each innermost element is the
             name of a variable in variable_group. Each list within the outer list is taken to contain
             the names of the variables connected to a factor.
         factor_configs: Array of shape (num_val_configs, num_variables)
@@ -682,7 +682,7 @@ class EnumerationFactorGroup(FactorGroup):
             initialized.
     """
 
-    variable_names: Sequence[List]
+    connected_variable_names: Sequence[List]
     factor_configs: np.ndarray
     log_potentials: Optional[np.ndarray] = None
 
@@ -697,7 +697,7 @@ class EnumerationFactorGroup(FactorGroup):
         Raises:
             ValueError: if the specified log_potentials is not of the right shape
         """
-        num_factors = len(self.variable_names)
+        num_factors = len(self.connected_variable_names)
         num_val_configs = self.factor_configs.shape[0]
         if self.log_potentials is None:
             log_potentials = np.zeros((num_factors, num_val_configs), dtype=float)
@@ -720,14 +720,14 @@ class EnumerationFactorGroup(FactorGroup):
         variables_to_factors = collections.OrderedDict(
             [
                 (
-                    frozenset(self.variable_names[ii]),
+                    frozenset(self.connected_variable_names[ii]),
                     nodes.EnumerationFactor(
-                        tuple(self.variable_group[self.variable_names[ii]]),
+                        tuple(self.variable_group[self.connected_variable_names[ii]]),
                         self.factor_configs,
                         log_potentials[ii],
                     ),
                 )
-                for ii in range(len(self.variable_names))
+                for ii in range(len(self.connected_variable_names))
             ]
         )
         return variables_to_factors
@@ -821,15 +821,15 @@ class PairwiseFactorGroup(FactorGroup):
     one CompositeVariableGroup.
 
     Args:
-        variable_names: A list of list of tuples, where each innermost tuple contains a
+        connected_variable_names: A list of list of tuples, where each innermost tuple contains a
             name into variable_group. Each list within the outer list is taken to contain the names of variables
             neighboring a particular factor to be added.
         log_potential_matrix: array of shape (var1.num_states, var2.num_states),
             where var1 and var2 are the 2 VariableGroups (that may refer to the same
-            VariableGroup) whose names are present in each sub-list from self.variable_names.
+            VariableGroup) whose names are present in each sub-list from self.connected_variable_names.
     """
 
-    variable_names: Sequence[List]
+    connected_variable_names: Sequence[List]
     log_potential_matrix: Optional[np.ndarray] = None
 
     def _get_variables_to_factors(
@@ -851,8 +851,8 @@ class PairwiseFactorGroup(FactorGroup):
         if self.log_potential_matrix is None:
             log_potential_matrix = np.zeros(
                 (
-                    self.variable_group[self.variable_names[0][0]].num_states,
-                    self.variable_group[self.variable_names[0][1]].num_states,
+                    self.variable_group[self.connected_variable_names[0][0]].num_states,
+                    self.variable_group[self.connected_variable_names[0][1]].num_states,
                 )
             )
         else:
@@ -866,14 +866,14 @@ class PairwiseFactorGroup(FactorGroup):
             )
 
         if log_potential_matrix.ndim == 3 and log_potential_matrix.shape[0] != len(
-            self.variable_names
+            self.connected_variable_names
         ):
             raise ValueError(
-                f"Expected log_potential_matrix for {len(self.variable_names)} factors. "
+                f"Expected log_potential_matrix for {len(self.connected_variable_names)} factors. "
                 f"Got log_potential_matrix for {log_potential_matrix.shape[0]} factors."
             )
 
-        for fac_list in self.variable_names:
+        for fac_list in self.connected_variable_names:
             if len(fac_list) != 2:
                 raise ValueError(
                     "All pairwise factors should connect to exactly 2 variables. Got a factor connecting to"
@@ -905,21 +905,21 @@ class PairwiseFactorGroup(FactorGroup):
         object.__setattr__(self, "log_potential_matrix", log_potential_matrix)
         log_potential_matrix = np.broadcast_to(
             log_potential_matrix,
-            (len(self.variable_names),) + log_potential_matrix.shape[-2:],
+            (len(self.connected_variable_names),) + log_potential_matrix.shape[-2:],
         )
         variables_to_factors = collections.OrderedDict(
             [
                 (
-                    frozenset(self.variable_names[ii]),
+                    frozenset(self.connected_variable_names[ii]),
                     nodes.EnumerationFactor(
-                        tuple(self.variable_group[self.variable_names[ii]]),
+                        tuple(self.variable_group[self.connected_variable_names[ii]]),
                         factor_configs,
                         log_potential_matrix[
                             ii, factor_configs[:, 0], factor_configs[:, 1]
                         ],
                     ),
                 )
-                for ii in range(len(self.variable_names))
+                for ii in range(len(self.connected_variable_names))
             ]
         )
         return variables_to_factors

@@ -28,17 +28,17 @@ from pgmax.fg import graph, groups
 # %%
 variables = groups.NDVariableArray(num_states=2, shape=(50, 50))
 fg = graph.FactorGraph(variables=variables)
-variable_names = []
+connected_variable_names = []
 for ii in range(50):
     for jj in range(50):
         kk = (ii + 1) % 50
         ll = (jj + 1) % 50
-        variable_names.append([(ii, jj), (kk, jj)])
-        variable_names.append([(ii, jj), (ii, ll)])
+        connected_variable_names.append([(ii, jj), (kk, jj)])
+        connected_variable_names.append([(ii, jj), (ii, ll)])
 
 fg.add_factor_group(
     factory=groups.PairwiseFactorGroup,
-    variable_names=variable_names,
+    connected_variable_names=connected_variable_names,
     log_potential_matrix=0.8 * np.array([[1.0, -1.0], [-1.0, 1.0]]),
     name="factors",
 )

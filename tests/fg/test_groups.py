@@ -158,7 +158,7 @@ def test_enumeration_factor_group():
     ):
         enumeration_factor_group = groups.EnumerationFactorGroup(
             variable_group=variable_group,
-            variable_names=[
+            connected_variable_names=[
                 [(0, 0), (0, 1), (1, 1)],
                 [(0, 1), (1, 0), (1, 1)],
             ],
@@ -168,7 +168,7 @@ def test_enumeration_factor_group():
 
     enumeration_factor_group = groups.EnumerationFactorGroup(
         variable_group=variable_group,
-        variable_names=[[(0, 0), (0, 1), (1, 1)], [(0, 1), (1, 0), (1, 1)]],
+        connected_variable_names=[[(0, 0), (0, 1), (1, 1)], [(0, 1), (1, 0), (1, 1)]],
         factor_configs=np.zeros((1, 3), dtype=int),
     )
     name = [(0, 0), (1, 1)]
