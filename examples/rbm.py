@@ -30,31 +30,69 @@ params = np.load("example_data/rbm_mnist.npz")
 bv = params["bv"]
 bh = params["bh"]
 W = params["W"]
-nv = bv.shape[0]
-nh = bh.shape[0]
 
 # %%
-# Build factor graph
-hidden_variables = groups.NDVariableArray(num_states=2, shape=(nh,))
-visible_variables = groups.NDVariableArray(num_states=2, shape=(nv,))
+# Initialize factor graph
+hidden_variables = groups.NDVariableArray(num_states=2, shape=bh.shape)
+visible_variables = groups.NDVariableArray(num_states=2, shape=bv.shape)
 fg = graph.FactorGraph(
-    variables=dict(visible=visible_variables, hidden=hidden_variables),
+    variables=dict(hidden=hidden_variables, visible=visible_variables),
 )
-for ii in range(nh):
-    fg.add_factor([("hidden", ii)], np.arange(2)[:, None], np.array([0, bh[ii]]))
 
-for jj in range(nv):
-    fg.add_factor([("visible", jj)], np.arange(2)[:, None], np.array([0, bv[jj]]))
+# %%
+# Add unary factors
+for ii in range(bh.shape[0]):
+    fg.add_factor(
+        variable_names=[("hidden", ii)],
+        factor_configs=np.arange(2)[:, None],
+        log_potentials=np.array([0, bh[ii]]),
+    )
+
+for jj in range(bv.shape[0]):
+    fg.add_factor(
+        variable_names=[("visible", jj)],
+        factor_configs=np.arange(2)[:, None],
+        log_potentials=np.array([0, bv[jj]]),
+    )
 
 
-configs = np.array(list(itertools.product(np.arange(2), repeat=2)))
-for ii in tqdm(range(nh)):
-    for jj in range(nv):
+# Add binary factors
+factor_configs = np.array(list(itertools.product(np.arange(2), repeat=2)))
+for ii in tqdm(range(bh.shape[0])):
+    for jj in range(bv.shape[0]):
         fg.add_factor(
-            [("hidden", ii), ("visible", jj)],
-            configs,
-            np.array([0, 0, 0, W[ii, jj]]),
+            variable_names=[("hidden", ii), ("visible", jj)],
+            factor_configs=factor_configs,
+            log_potentials=np.array([0, 0, 0, W[ii, jj]]),
         )
+
+# %%
+# # Add unary factors
+# fg.add_factor_group(
+#     factory=groups.EnumerationFactorGroup,
+#     variable_names_for_factors=[[("hidden", ii)] for ii in range(bh.shape[0])],
+#     factor_configs=np.arange(2)[:, None],
+#     log_potentials=np.stack([np.zeros_like(bh), bh], axis=1),
+# )
+# fg.add_factor_group(
+#     factory=groups.EnumerationFactorGroup,
+#     variable_names_for_factors=[[("visible", jj)] for jj in range(bv.shape[0])],
+#     factor_configs=np.arange(2)[:, None],
+#     log_potentials=np.stack([np.zeros_like(bv), bv], axis=1),
+# )
+#
+# # Add binary factors
+# log_potential_matrix = np.zeros(W.shape + (2, 2)).reshape((-1, 2, 2))
+# log_potential_matrix[:, 1, 1] = W.ravel()
+# fg.add_factor_group(
+#     factory=groups.PairwiseFactorGroup,
+#     variable_names_for_factors=[
+#         [("hidden", ii), ("visible", jj)]
+#         for ii in range(bh.shape[0])
+#         for jj in range(bv.shape[0])
+#     ],
+#     log_potential_matrix=log_potential_matrix,
+# )
 
 # %%
 run_bp, _, get_beliefs = graph.BP(fg.bp_state, 100)
