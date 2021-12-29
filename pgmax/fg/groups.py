@@ -355,12 +355,12 @@ class NDVariableArray(VariableGroup):
     """Subclass of VariableGroup for n-dimensional grids of variables.
 
     Args:
-        variable_size: The size of the variables in this variable group
+        num_states: The size of the variables in this variable group
         shape: a tuple specifying the size of each dimension of the grid (similar to
             the notion of a NumPy ndarray shape)
     """
 
-    variable_size: int
+    num_states: int
     shape: Tuple[int, ...]
 
     def _get_names_to_variables(
@@ -376,9 +376,9 @@ class NDVariableArray(VariableGroup):
         ] = collections.OrderedDict()
         for name in itertools.product(*[list(range(k)) for k in self.shape]):
             if len(name) == 1:
-                names_to_variables[name[0]] = nodes.Variable(self.variable_size)
+                names_to_variables[name[0]] = nodes.Variable(self.num_states)
             else:
-                names_to_variables[name] = nodes.Variable(self.variable_size)
+                names_to_variables[name] = nodes.Variable(self.num_states)
 
         return names_to_variables
 
@@ -387,7 +387,7 @@ class NDVariableArray(VariableGroup):
 
         Args:
             data: Meaningful structured data. Should be an array of shape self.shape (for e.g. MAP decodings)
-                or self.shape + (self.variable_size,) (for e.g. evidence, beliefs).
+                or self.shape + (self.num_states,) (for e.g. evidence, beliefs).
 
         Returns:
             A flat jnp.array for internal use
@@ -395,11 +395,9 @@ class NDVariableArray(VariableGroup):
         Raises:
             ValueError: If the data is not of the correct shape.
         """
-        if data.shape != self.shape and data.shape != self.shape + (
-            self.variable_size,
-        ):
+        if data.shape != self.shape and data.shape != self.shape + (self.num_states,):
             raise ValueError(
-                f"data should be of shape {self.shape} or {self.shape + (self.variable_size,)}. "
+                f"data should be of shape {self.shape} or {self.shape + (self.num_states,)}. "
                 f"Got {data.shape}."
             )
 
@@ -415,7 +413,7 @@ class NDVariableArray(VariableGroup):
 
         Returns:
             Meaningful structured data. An array of shape self.shape (for e.g. MAP decodings)
-                or an array of shape self.shape + (self.variable_size,) (for e.g. evidence, beliefs).
+                or an array of shape self.shape + (self.num_states,) (for e.g. evidence, beliefs).
 
         Raises:
             ValueError if:
@@ -429,11 +427,11 @@ class NDVariableArray(VariableGroup):
 
         if flat_data.size == np.product(self.shape):
             data = flat_data.reshape(self.shape)
-        elif flat_data.size == np.product(self.shape) * self.variable_size:
-            data = flat_data.reshape(self.shape + (self.variable_size,))
+        elif flat_data.size == np.product(self.shape) * self.num_states:
+            data = flat_data.reshape(self.shape + (self.num_states,))
         else:
             raise ValueError(
-                f"flat_data should be compatible with shape {self.shape} or {self.shape + (self.variable_size,)}. "
+                f"flat_data should be compatible with shape {self.shape} or {self.shape + (self.num_states,)}. "
                 f"Got {flat_data.shape}."
             )
 
@@ -445,12 +443,12 @@ class VariableDict(VariableGroup):
     """A variable dictionary that contains a set of variables of the same size
 
     Args:
-        variable_size: The size of the variables in this variable group
+        num_states: The size of the variables in this variable group
         variable_names: A tuple of all names of the variables in this variable group
 
     """
 
-    variable_size: int
+    num_states: int
     variable_names: Tuple[Any, ...]
 
     def _get_names_to_variables(self) -> OrderedDict[Tuple[int, ...], nodes.Variable]:
@@ -463,7 +461,7 @@ class VariableDict(VariableGroup):
             Tuple[Any, ...], nodes.Variable
         ] = collections.OrderedDict()
         for name in self.variable_names:
-            names_to_variables[name] = nodes.Variable(self.variable_size)
+            names_to_variables[name] = nodes.Variable(self.num_states)
 
         return names_to_variables
 
@@ -475,7 +473,7 @@ class VariableDict(VariableGroup):
         Args:
             data: Meaningful structured data. Should be a mapping with names from self.variable_names.
                 Each value should be an array of shape (1,) (for e.g. MAP decodings) or
-                (self.variable_size,) (for e.g. evidence, beliefs).
+                (self.num_states,) (for e.g. evidence, beliefs).
 
         Returns:
             A flat jnp.array for internal use
@@ -491,10 +489,10 @@ class VariableDict(VariableGroup):
                     f"data is referring to a non-existent variable {name}."
                 )
 
-            if data[name].shape != (self.variable_size,) and data[name].shape != (1,):
+            if data[name].shape != (self.num_states,) and data[name].shape != (1,):
                 raise ValueError(
                     f"Variable {name} expects a data array of shape "
-                    f"{(self.variable_size,)} or (1,). Got {data[name].shape}."
+                    f"{(self.num_states,)} or (1,). Got {data[name].shape}."
                 )
 
         flat_data = jnp.concatenate([data[name].flatten() for name in self.names])
@@ -511,7 +509,7 @@ class VariableDict(VariableGroup):
         Returns:
             Meaningful structured data. Should be a mapping with names from self.variable_names.
                 Each value should be an array of shape (1,) (for e.g. MAP decodings) or
-                (self.variable_size,) (for e.g. evidence, beliefs).
+                (self.num_states,) (for e.g. evidence, beliefs).
 
         Raises:
             ValueError if:
@@ -524,7 +522,7 @@ class VariableDict(VariableGroup):
             )
 
         num_variables = len(self.variable_names)
-        num_variable_states = len(self.variable_names) * self.variable_size
+        num_variable_states = len(self.variable_names) * self.num_states
         if flat_data.shape[0] == num_variables:
             use_num_states = False
         elif flat_data.shape[0] == num_variable_states:
@@ -540,8 +538,8 @@ class VariableDict(VariableGroup):
         data = {}
         for name in self.variable_names:
             if use_num_states:
-                data[name] = flat_data[start : start + self.variable_size]
-                start += self.variable_size
+                data[name] = flat_data[start : start + self.num_states]
+                start += self.num_states
             else:
                 data[name] = flat_data[np.array([start])]
                 start += 1
@@ -826,7 +824,7 @@ class PairwiseFactorGroup(FactorGroup):
         connected_variable_names: A list of list of tuples, where each innermost tuple contains a
             name into variable_group. Each list within the outer list is taken to contain the names of variables
             neighboring a particular factor to be added.
-        log_potential_matrix: array of shape (var1.variable_size, var2.variable_size),
+        log_potential_matrix: array of shape (var1.num_states, var2.num_states),
             where var1 and var2 are the 2 VariableGroups (that may refer to the same
             VariableGroup) whose names are present in each sub-list from self.connected_variable_names.
     """

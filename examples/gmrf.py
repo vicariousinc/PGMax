@@ -51,8 +51,8 @@ prototype_targets = jax.device_put(
 
 # %%
 M, N = target_images.shape[-2:]
-variable_size = np.sum(n_clones)
-variables = groups.NDVariableArray(variable_size=variable_size, shape=(M, N))
+num_states = np.sum(n_clones)
+variables = groups.NDVariableArray(num_states=num_states, shape=(M, N))
 fg = graph.FactorGraph(variables)
 
 # %%
@@ -183,10 +183,10 @@ def update(step, batch_noisy_images, batch_target_images, opt_state):
 # %%
 opt_state = init_fun(
     {
-        "top_down": np.random.randn(variable_size, variable_size),
-        "left_right": np.random.randn(variable_size, variable_size),
-        "diagonal0": np.random.randn(variable_size, variable_size),
-        "diagonal1": np.random.randn(variable_size, variable_size),
+        "top_down": np.random.randn(num_states, num_states),
+        "left_right": np.random.randn(num_states, num_states),
+        "diagonal0": np.random.randn(num_states, num_states),
+        "diagonal1": np.random.randn(num_states, num_states),
     }
 )
 

@@ -35,8 +35,8 @@ nh = bh.shape[0]
 
 # %%
 # Build factor graph
-visible_variables = groups.NDVariableArray(variable_size=2, shape=(nv,))
-hidden_variables = groups.NDVariableArray(variable_size=2, shape=(nh,))
+hidden_variables = groups.NDVariableArray(num_states=2, shape=(nh,))
+visible_variables = groups.NDVariableArray(num_states=2, shape=(nv,))
 fg = graph.FactorGraph(
     variables=dict(visible=visible_variables, hidden=hidden_variables),
 )
@@ -57,7 +57,7 @@ for ii in tqdm(range(nh)):
         )
 
 # %%
-run_bp, _, get_beliefs = graph.BP(fg.bp_state, 200)
+run_bp, _, get_beliefs = graph.BP(fg.bp_state, 100)
 
 # %%
 # Run inference and decode using vmap

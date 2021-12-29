@@ -8,7 +8,7 @@
 #       format_version: '1.3'
 #       jupytext_version: 1.13.2
 #   kernelspec:
-#     display_name: Python 3
+#     display_name: Python 3 (ipykernel)
 #     language: python
 #     name: python3
 # ---
@@ -214,7 +214,7 @@ variables_all_models = {}
 for idx in range(frcs.shape[0]):
     frc = frcs[idx]
     variables_all_models[idx] = groups.NDVariableArray(
-        variable_size=M, shape=(frc.shape[0],)
+        num_states=M, shape=(frc.shape[0],)
     )
 
 end = time.time()
@@ -447,5 +447,3 @@ for test_idx in range(20):
     ax[idx].axis("off")
 
 fig.tight_layout()
-
-# %%
