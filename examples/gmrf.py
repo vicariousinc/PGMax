@@ -59,30 +59,26 @@ fg = graph.FactorGraph(variables)
 # Add top-down factors
 fg.add_factor_group(
     factory=groups.PairwiseFactorGroup,
-    connected_variable_names=[
-        [(ii, jj), (ii + 1, jj)] for ii in range(M - 1) for jj in range(N)
-    ],
+    variable_names=[[(ii, jj), (ii + 1, jj)] for ii in range(M - 1) for jj in range(N)],
     name="top_down",
 )
 # Add left-right factors
 fg.add_factor_group(
     factory=groups.PairwiseFactorGroup,
-    connected_variable_names=[
-        [(ii, jj), (ii, jj + 1)] for ii in range(M) for jj in range(N - 1)
-    ],
+    variable_names=[[(ii, jj), (ii, jj + 1)] for ii in range(M) for jj in range(N - 1)],
     name="left_right",
 )
 # Add diagonal factors
 fg.add_factor_group(
     factory=groups.PairwiseFactorGroup,
-    connected_variable_names=[
+    variable_names=[
         [(ii, jj), (ii + 1, jj + 1)] for ii in range(M - 1) for jj in range(N - 1)
     ],
     name="diagonal0",
 )
 fg.add_factor_group(
     factory=groups.PairwiseFactorGroup,
-    connected_variable_names=[
+    variable_names=[
         [(ii, jj), (ii - 1, jj + 1)] for ii in range(1, M) for jj in range(N - 1)
     ],
     name="diagonal1",
