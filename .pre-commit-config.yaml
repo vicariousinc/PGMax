@@ -5,13 +5,13 @@ repos:
     -   id: isort
 
 -   repo: https://github.com/psf/black
-    rev:  21.11b1
+    rev:  21.12b0
     hooks:
     -   id: black
         language_version: python3.7
 
 -   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.0.1
+    rev: v4.1.0
     hooks:
     -   id: check-added-large-files
         args: ['--maxkb=5120']
@@ -28,7 +28,7 @@ repos:
         verbose: true
 
 -   repo: https://github.com/pre-commit/mirrors-mypy
-    rev: 'v0.910-1'  # Use the sha / tag you want to point at
+    rev: 'v0.930'  # Use the sha / tag you want to point at
     hooks:
     -   id: mypy
         additional_dependencies: [tokenize-rt==3.2.0]
