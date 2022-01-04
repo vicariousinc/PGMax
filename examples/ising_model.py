@@ -26,19 +26,19 @@ from pgmax.fg import graph, groups
 # ### Construct variable grid, initialize factor graph, and add factors
 
 # %%
-variables = groups.NDVariableArray(variable_size=2, shape=(50, 50))
+variables = groups.NDVariableArray(num_states=2, shape=(50, 50))
 fg = graph.FactorGraph(variables=variables)
-connected_variable_names = []
+variable_names_for_factors = []
 for ii in range(50):
     for jj in range(50):
         kk = (ii + 1) % 50
         ll = (jj + 1) % 50
-        connected_variable_names.append([(ii, jj), (kk, jj)])
-        connected_variable_names.append([(ii, jj), (ii, ll)])
+        variable_names_for_factors.append([(ii, jj), (kk, jj)])
+        variable_names_for_factors.append([(ii, jj), (ii, ll)])
 
 fg.add_factor_group(
     factory=groups.PairwiseFactorGroup,
-    connected_variable_names=connected_variable_names,
+    variable_names_for_factors=variable_names_for_factors,
     log_potential_matrix=0.8 * np.array([[1.0, -1.0], [-1.0, 1.0]]),
     name="factors",
 )

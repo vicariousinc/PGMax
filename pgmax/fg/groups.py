@@ -355,12 +355,12 @@ class NDVariableArray(VariableGroup):
     """Subclass of VariableGroup for n-dimensional grids of variables.
 
     Args:
-        variable_size: The size of the variables in this variable group
+        num_states: The size of the variables in this variable group
         shape: a tuple specifying the size of each dimension of the grid (similar to
             the notion of a NumPy ndarray shape)
     """
 
-    variable_size: int
+    num_states: int
     shape: Tuple[int, ...]
 
     def _get_names_to_variables(
@@ -376,9 +376,9 @@ class NDVariableArray(VariableGroup):
         ] = collections.OrderedDict()
         for name in itertools.product(*[list(range(k)) for k in self.shape]):
             if len(name) == 1:
-                names_to_variables[name[0]] = nodes.Variable(self.variable_size)
+                names_to_variables[name[0]] = nodes.Variable(self.num_states)
             else:
-                names_to_variables[name] = nodes.Variable(self.variable_size)
+                names_to_variables[name] = nodes.Variable(self.num_states)
 
         return names_to_variables
 
@@ -387,7 +387,7 @@ class NDVariableArray(VariableGroup):
 
         Args:
             data: Meaningful structured data. Should be an array of shape self.shape (for e.g. MAP decodings)
-                or self.shape + (self.variable_size,) (for e.g. evidence, beliefs).
+                or self.shape + (self.num_states,) (for e.g. evidence, beliefs).
 
         Returns:
             A flat jnp.array for internal use
@@ -395,11 +395,9 @@ class NDVariableArray(VariableGroup):
         Raises:
             ValueError: If the data is not of the correct shape.
         """
-        if data.shape != self.shape and data.shape != self.shape + (
-            self.variable_size,
-        ):
+        if data.shape != self.shape and data.shape != self.shape + (self.num_states,):
             raise ValueError(
-                f"data should be of shape {self.shape} or {self.shape + (self.variable_size,)}. "
+                f"data should be of shape {self.shape} or {self.shape + (self.num_states,)}. "
                 f"Got {data.shape}."
             )
 
@@ -415,7 +413,7 @@ class NDVariableArray(VariableGroup):
 
         Returns:
             Meaningful structured data. An array of shape self.shape (for e.g. MAP decodings)
-                or an array of shape self.shape + (self.variable_size,) (for e.g. evidence, beliefs).
+                or an array of shape self.shape + (self.num_states,) (for e.g. evidence, beliefs).
 
         Raises:
             ValueError if:
@@ -429,11 +427,11 @@ class NDVariableArray(VariableGroup):
 
         if flat_data.size == np.product(self.shape):
             data = flat_data.reshape(self.shape)
-        elif flat_data.size == np.product(self.shape) * self.variable_size:
-            data = flat_data.reshape(self.shape + (self.variable_size,))
+        elif flat_data.size == np.product(self.shape) * self.num_states:
+            data = flat_data.reshape(self.shape + (self.num_states,))
         else:
             raise ValueError(
-                f"flat_data should be compatible with shape {self.shape} or {self.shape + (self.variable_size,)}. "
+                f"flat_data should be compatible with shape {self.shape} or {self.shape + (self.num_states,)}. "
                 f"Got {flat_data.shape}."
             )
 
@@ -445,12 +443,12 @@ class VariableDict(VariableGroup):
     """A variable dictionary that contains a set of variables of the same size
 
     Args:
-        variable_size: The size of the variables in this variable group
+        num_states: The size of the variables in this variable group
         variable_names: A tuple of all names of the variables in this variable group
 
     """
 
-    variable_size: int
+    num_states: int
     variable_names: Tuple[Any, ...]
 
     def _get_names_to_variables(self) -> OrderedDict[Tuple[int, ...], nodes.Variable]:
@@ -463,7 +461,7 @@ class VariableDict(VariableGroup):
             Tuple[Any, ...], nodes.Variable
         ] = collections.OrderedDict()
         for name in self.variable_names:
-            names_to_variables[name] = nodes.Variable(self.variable_size)
+            names_to_variables[name] = nodes.Variable(self.num_states)
 
         return names_to_variables
 
@@ -475,7 +473,7 @@ class VariableDict(VariableGroup):
         Args:
             data: Meaningful structured data. Should be a mapping with names from self.variable_names.
                 Each value should be an array of shape (1,) (for e.g. MAP decodings) or
-                (self.variable_size,) (for e.g. evidence, beliefs).
+                (self.num_states,) (for e.g. evidence, beliefs).
 
         Returns:
             A flat jnp.array for internal use
@@ -491,10 +489,10 @@ class VariableDict(VariableGroup):
                     f"data is referring to a non-existent variable {name}."
                 )
 
-            if data[name].shape != (self.variable_size,) and data[name].shape != (1,):
+            if data[name].shape != (self.num_states,) and data[name].shape != (1,):
                 raise ValueError(
                     f"Variable {name} expects a data array of shape "
-                    f"{(self.variable_size,)} or (1,). Got {data[name].shape}."
+                    f"{(self.num_states,)} or (1,). Got {data[name].shape}."
                 )
 
         flat_data = jnp.concatenate([data[name].flatten() for name in self.names])
@@ -511,7 +509,7 @@ class VariableDict(VariableGroup):
         Returns:
             Meaningful structured data. Should be a mapping with names from self.variable_names.
                 Each value should be an array of shape (1,) (for e.g. MAP decodings) or
-                (self.variable_size,) (for e.g. evidence, beliefs).
+                (self.num_states,) (for e.g. evidence, beliefs).
 
         Raises:
             ValueError if:
@@ -524,7 +522,7 @@ class VariableDict(VariableGroup):
             )
 
         num_variables = len(self.variable_names)
-        num_variable_states = len(self.variable_names) * self.variable_size
+        num_variable_states = len(self.variable_names) * self.num_states
         if flat_data.shape[0] == num_variables:
             use_num_states = False
         elif flat_data.shape[0] == num_variable_states:
@@ -540,8 +538,8 @@ class VariableDict(VariableGroup):
         data = {}
         for name in self.variable_names:
             if use_num_states:
-                data[name] = flat_data[start : start + self.variable_size]
-                start += self.variable_size
+                data[name] = flat_data[start : start + self.num_states]
+                start += self.num_states
             else:
                 data[name] = flat_data[np.array([start])]
                 start += 1
@@ -562,7 +560,7 @@ class FactorGroup:
         _variables_to_factors: maps set of connected variables to the corresponding factors
 
     Raises:
-        ValueError: if connected_variable_names is an empty list
+        ValueError: if variable_names_for_factors is an empty list
     """
 
     variable_group: Union[CompositeVariableGroup, VariableGroup]
@@ -673,7 +671,7 @@ class EnumerationFactorGroup(FactorGroup):
     uniform 0 unless the inheriting class includes a log_potentials argument.
 
     Args:
-        connected_variable_names: A list of list of variable names, where each innermost element is the
+        variable_names_for_factors: A list of list of variable names, where each innermost element is the
             name of a variable in variable_group. Each list within the outer list is taken to contain
             the names of the variables connected to a factor.
         factor_configs: Array of shape (num_val_configs, num_variables)
@@ -684,7 +682,7 @@ class EnumerationFactorGroup(FactorGroup):
             initialized.
     """
 
-    connected_variable_names: Sequence[List]
+    variable_names_for_factors: Sequence[List]
     factor_configs: np.ndarray
     log_potentials: Optional[np.ndarray] = None
 
@@ -699,7 +697,7 @@ class EnumerationFactorGroup(FactorGroup):
         Raises:
             ValueError: if the specified log_potentials is not of the right shape
         """
-        num_factors = len(self.connected_variable_names)
+        num_factors = len(self.variable_names_for_factors)
         num_val_configs = self.factor_configs.shape[0]
         if self.log_potentials is None:
             log_potentials = np.zeros((num_factors, num_val_configs), dtype=float)
@@ -722,14 +720,14 @@ class EnumerationFactorGroup(FactorGroup):
         variables_to_factors = collections.OrderedDict(
             [
                 (
-                    frozenset(self.connected_variable_names[ii]),
+                    frozenset(self.variable_names_for_factors[ii]),
                     nodes.EnumerationFactor(
-                        tuple(self.variable_group[self.connected_variable_names[ii]]),
+                        tuple(self.variable_group[self.variable_names_for_factors[ii]]),
                         self.factor_configs,
                         log_potentials[ii],
                     ),
                 )
-                for ii in range(len(self.connected_variable_names))
+                for ii in range(len(self.variable_names_for_factors))
             ]
         )
         return variables_to_factors
@@ -823,15 +821,15 @@ class PairwiseFactorGroup(FactorGroup):
     one CompositeVariableGroup.
 
     Args:
-        connected_variable_names: A list of list of tuples, where each innermost tuple contains a
+        variable_names_for_factors: A list of list of tuples, where each innermost tuple contains a
             name into variable_group. Each list within the outer list is taken to contain the names of variables
             neighboring a particular factor to be added.
-        log_potential_matrix: array of shape (var1.variable_size, var2.variable_size),
+        log_potential_matrix: array of shape (var1.num_states, var2.num_states),
             where var1 and var2 are the 2 VariableGroups (that may refer to the same
-            VariableGroup) whose names are present in each sub-list from self.connected_variable_names.
+            VariableGroup) whose names are present in each sub-list from self.variable_names_for_factors.
     """
 
-    connected_variable_names: Sequence[List]
+    variable_names_for_factors: Sequence[List]
     log_potential_matrix: Optional[np.ndarray] = None
 
     def _get_variables_to_factors(
@@ -853,8 +851,12 @@ class PairwiseFactorGroup(FactorGroup):
         if self.log_potential_matrix is None:
             log_potential_matrix = np.zeros(
                 (
-                    self.variable_group[self.connected_variable_names[0][0]].num_states,
-                    self.variable_group[self.connected_variable_names[0][1]].num_states,
+                    self.variable_group[
+                        self.variable_names_for_factors[0][0]
+                    ].num_states,
+                    self.variable_group[
+                        self.variable_names_for_factors[0][1]
+                    ].num_states,
                 )
             )
         else:
@@ -868,14 +870,14 @@ class PairwiseFactorGroup(FactorGroup):
             )
 
         if log_potential_matrix.ndim == 3 and log_potential_matrix.shape[0] != len(
-            self.connected_variable_names
+            self.variable_names_for_factors
         ):
             raise ValueError(
-                f"Expected log_potential_matrix for {len(self.connected_variable_names)} factors. "
+                f"Expected log_potential_matrix for {len(self.variable_names_for_factors)} factors. "
                 f"Got log_potential_matrix for {log_potential_matrix.shape[0]} factors."
             )
 
-        for fac_list in self.connected_variable_names:
+        for fac_list in self.variable_names_for_factors:
             if len(fac_list) != 2:
                 raise ValueError(
                     "All pairwise factors should connect to exactly 2 variables. Got a factor connecting to"
@@ -898,8 +900,8 @@ class PairwiseFactorGroup(FactorGroup):
 
         factor_configs = (
             np.mgrid[
-                : log_potential_matrix.shape[0],
-                : log_potential_matrix.shape[1],
+                : log_potential_matrix.shape[-2],
+                : log_potential_matrix.shape[-1],
             ]
             .transpose((1, 2, 0))
             .reshape((-1, 2))
@@ -907,21 +909,21 @@ class PairwiseFactorGroup(FactorGroup):
         object.__setattr__(self, "log_potential_matrix", log_potential_matrix)
         log_potential_matrix = np.broadcast_to(
             log_potential_matrix,
-            (len(self.connected_variable_names),) + log_potential_matrix.shape[-2:],
+            (len(self.variable_names_for_factors),) + log_potential_matrix.shape[-2:],
         )
         variables_to_factors = collections.OrderedDict(
             [
                 (
-                    frozenset(self.connected_variable_names[ii]),
+                    frozenset(self.variable_names_for_factors[ii]),
                     nodes.EnumerationFactor(
-                        tuple(self.variable_group[self.connected_variable_names[ii]]),
+                        tuple(self.variable_group[self.variable_names_for_factors[ii]]),
                         factor_configs,
                         log_potential_matrix[
                             ii, factor_configs[:, 0], factor_configs[:, 1]
                         ],
                     ),
                 )
-                for ii in range(len(self.connected_variable_names))
+                for ii in range(len(self.variable_names_for_factors))
             ]
         )
         return variables_to_factors

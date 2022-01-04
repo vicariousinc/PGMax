@@ -350,14 +350,14 @@ def test_e2e_sanity_check():
     # Add the suppression factors to the graph via kwargs
     fg.add_factor_group(
         factory=groups.EnumerationFactorGroup,
-        connected_variable_names={
+        variable_names_for_factors={
             idx: names for idx, names in enumerate(vert_suppression_names)
         },
         factor_configs=valid_configs_supp,
     )
     fg.add_factor_group(
         factory=groups.EnumerationFactorGroup,
-        connected_variable_names=horz_suppression_names,
+        variable_names_for_factors=horz_suppression_names,
         factor_configs=valid_configs_supp,
         log_potentials=np.zeros(valid_configs_supp.shape[0], dtype=float),
     )
@@ -410,7 +410,7 @@ def test_e2e_heretic():
         for k_col in range(3):
             fg.add_factor_group(
                 factory=groups.PairwiseFactorGroup,
-                connected_variable_names=binary_connected_variables(
+                variable_names_for_factors=binary_connected_variables(
                     28, 28, k_row, k_col
                 ),
                 log_potential_matrix=W_pot[:, :, k_row, k_col],

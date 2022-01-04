@@ -8,7 +8,7 @@
 #       format_version: '1.3'
 #       jupytext_version: 1.13.2
 #   kernelspec:
-#     display_name: Python 3
+#     display_name: Python 3 (ipykernel)
 #     language: python
 #     name: python3
 # ---
@@ -51,15 +51,15 @@ prototype_targets = jax.device_put(
 
 # %%
 M, N = target_images.shape[-2:]
-variable_size = np.sum(n_clones)
-variables = groups.NDVariableArray(variable_size=variable_size, shape=(M, N))
+num_states = np.sum(n_clones)
+variables = groups.NDVariableArray(num_states=num_states, shape=(M, N))
 fg = graph.FactorGraph(variables)
 
 # %%
 # Add top-down factors
 fg.add_factor_group(
     factory=groups.PairwiseFactorGroup,
-    connected_variable_names=[
+    variable_names_for_factors=[
         [(ii, jj), (ii + 1, jj)] for ii in range(M - 1) for jj in range(N)
     ],
     name="top_down",
@@ -67,7 +67,7 @@ fg.add_factor_group(
 # Add left-right factors
 fg.add_factor_group(
     factory=groups.PairwiseFactorGroup,
-    connected_variable_names=[
+    variable_names_for_factors=[
         [(ii, jj), (ii, jj + 1)] for ii in range(M) for jj in range(N - 1)
     ],
     name="left_right",
@@ -75,14 +75,14 @@ fg.add_factor_group(
 # Add diagonal factors
 fg.add_factor_group(
     factory=groups.PairwiseFactorGroup,
-    connected_variable_names=[
+    variable_names_for_factors=[
         [(ii, jj), (ii + 1, jj + 1)] for ii in range(M - 1) for jj in range(N - 1)
     ],
     name="diagonal0",
 )
 fg.add_factor_group(
     factory=groups.PairwiseFactorGroup,
-    connected_variable_names=[
+    variable_names_for_factors=[
         [(ii, jj), (ii - 1, jj + 1)] for ii in range(1, M) for jj in range(N - 1)
     ],
     name="diagonal1",
@@ -127,9 +127,9 @@ for plot_idx, idx in tqdm(enumerate(indices), total=n_plots):
     ax[plot_idx, 2].imshow(pred_image)
     ax[plot_idx, 2].axis("off")
     if plot_idx == 0:
-        ax[plot_idx, 0].set_title("Input noisy image", fontsize=40)
-        ax[plot_idx, 1].set_title("Target image", fontsize=40)
-        ax[plot_idx, 2].set_title("GMRF predicted image", fontsize=40)
+        ax[plot_idx, 0].set_title("Input noisy image", fontsize=50)
+        ax[plot_idx, 1].set_title("Ground truth", fontsize=50)
+        ax[plot_idx, 2].set_title("GMRF predicted image", fontsize=50)
 
 fig.tight_layout()
 
@@ -183,10 +183,10 @@ def update(step, batch_noisy_images, batch_target_images, opt_state):
 # %%
 opt_state = init_fun(
     {
-        "top_down": np.random.randn(variable_size, variable_size),
-        "left_right": np.random.randn(variable_size, variable_size),
-        "diagonal0": np.random.randn(variable_size, variable_size),
-        "diagonal1": np.random.randn(variable_size, variable_size),
+        "top_down": np.random.randn(num_states, num_states),
+        "left_right": np.random.randn(num_states, num_states),
+        "diagonal0": np.random.randn(num_states, num_states),
+        "diagonal1": np.random.randn(num_states, num_states),
     }
 )
 

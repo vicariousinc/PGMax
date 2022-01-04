@@ -118,7 +118,7 @@ class FactorGraph:
         """
         factor_group = groups.EnumerationFactorGroup(
             self._variable_group,
-            connected_variable_names=[variable_names],
+            variable_names_for_factors=[variable_names],
             factor_configs=factor_configs,
             log_potentials=log_potentials,
         )
@@ -737,7 +737,7 @@ class Evidence:
             name: The name of a variable group or a single variable.
                 If name is the name of a variable group, updates are derived by using the variable group to
                 flatten the data.
-                If name is the name of a variable, data should be of an array shape (variable_size,)
+                If name is the name of a variable, data should be of an array shape (num_states,)
                 If name is None, updates are derived by using self.fg_state.variable_group to flatten the data.
             data: Array containing the evidence updates.
         """
