@@ -8,7 +8,7 @@
 #       format_version: '1.3'
 #       jupytext_version: 1.13.2
 #   kernelspec:
-#     display_name: Python 3
+#     display_name: Python 3 (ipykernel)
 #     language: python
 #     name: python3
 # ---
@@ -127,9 +127,9 @@ for plot_idx, idx in tqdm(enumerate(indices), total=n_plots):
     ax[plot_idx, 2].imshow(pred_image)
     ax[plot_idx, 2].axis("off")
     if plot_idx == 0:
-        ax[plot_idx, 0].set_title("Input noisy image", fontsize=40)
-        ax[plot_idx, 1].set_title("Target image", fontsize=40)
-        ax[plot_idx, 2].set_title("GMRF predicted image", fontsize=40)
+        ax[plot_idx, 0].set_title("Input noisy image", fontsize=50)
+        ax[plot_idx, 1].set_title("Ground truth", fontsize=50)
+        ax[plot_idx, 2].set_title("GMRF predicted image", fontsize=50)
 
 fig.tight_layout()
 

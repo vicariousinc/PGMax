@@ -157,7 +157,8 @@ fig, ax = plt.subplots(1, 2, figsize=(20, 10))
 
 frc, edge, train_img = frcs[img_idx], edges[img_idx], train_set[img_idx]
 ax[0].imshow(train_img[pad : 200 - pad, pad : 200 - pad], cmap="gray")
-ax[0].set_title("Sample training image", fontsize=40)
+ax[0].axis("off")
+ax[0].set_title("Example training image", fontsize=40)
 
 for e in edge:
     i1, i2, w = e  # The vertices for this edge along with the perturn radius.
@@ -173,7 +174,7 @@ for e in edge:
 
 ax[1].axis("off")
 ax[1].imshow(model_img[pad : 200 - pad, pad : 200 - pad], cmap="gray")
-ax[1].set_title("Corresponding learned rcn model", fontsize=40)
+ax[1].set_title("Corresponding RCN template", fontsize=40)
 
 fig.tight_layout()
 
@@ -229,7 +230,7 @@ print(f"Creating variables took {end-start:.3f} seconds.")
 
 # %%
 def valid_configs(r: int, hps: int, vps: int) -> np.ndarray:
-    """Returns the valid configurations for the potential matrix given the perturb radius.
+    """Returns the valid configurations for a factor given the perturb radius.
 
     Args:
         r: Peturb radius
@@ -237,12 +238,15 @@ def valid_configs(r: int, hps: int, vps: int) -> np.ndarray:
         vps: The vertical pool size.
 
     Returns:
-        A configuration matrix (shape n X 2) where n is the number of valid configurations.
+        An array of shape (num_valid_configs, 2) containing all valid configurations
     """
-
     configs = []
     for i, (r1, c1) in enumerate(
-        np.array(np.unravel_index(np.arange(M), (2 * hps + 1, 2 * vps + 1))).T
+        np.array(
+            np.unravel_index(
+                np.arange((2 * hps + 1) * (2 * vps + 1)), (2 * hps + 1, 2 * vps + 1)
+            )
+        ).T
     ):
         r2_min = max(r1 - r, 0)
         r2_max = min(r1 + r, 2 * hps)
