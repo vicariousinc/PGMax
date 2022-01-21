@@ -45,8 +45,8 @@ To cite this repository
   author = {Guangyao Zhou* and Nishanth Kumar* and Miguel L\’{a}zaro-Gredilla and Dileep George},
   title = {{PGMax}: {F}actor graph on discrete variables and hardware-accelerated differentiable loopy belief propagation in {JAX}},
   howpublished={\url{http://github.com/vicariousinc/PGMax}},
-  version = {0.2.1},
-  year = {2021},
+  version = {0.2.2},
+  year = {2022},
 }
 ```
 where * indicates equal contribution.
