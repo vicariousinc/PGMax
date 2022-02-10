@@ -13,6 +13,7 @@ See our `blog post <https://www.vicarious.com/posts/pgmax-factor-graphs-for-disc
    :caption: Getting Started:
 
    installation
+   examples
 
 .. toctree::
    :maxdepth: 1
