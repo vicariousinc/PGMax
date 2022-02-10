@@ -20,10 +20,7 @@ sys.path.insert(0, os.path.abspath("../pgmax/"))
 
 project = "PGMax"
 copyright = "2021, Vicarious FPC Inc"
-author = (
-    "Nishanth Kumar, Guangyao (Stannis) Zhou,"
-    + " Miguel Lazaro-Gredilla, Dileep George"
-)
+author = "Guangyao Zhou, Nishanth Kumar, Miguel Lazaro-Gredilla, Shrinu Kushagra, Dileep George"
 
 # The full version, including alpha/beta/rc tags
 release = "0.2.2"
