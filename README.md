@@ -6,7 +6,7 @@
 
 # PGMax
 
-PGMax implements general factor graphs for discrete probabilistic graphical models (PGMs), and hardware-accelerated differentiable loopy belief propagation (LBP) in [JAX](https://jax.readthedocs.io/en/latest/).
+PGMax implements general [factor graphs](https://en.wikipedia.org/wiki/Factor_graph) for discrete probabilistic graphical models (PGMs), and hardware-accelerated [differentiable loopy belief propagation (LBP)](https://en.wikipedia.org/wiki/Belief_propagation) in [JAX](https://jax.readthedocs.io/en/latest/).
 
 - **General factor graphs**: PGMax supports easy specification of general factor graphs with potentially complicated topology, factor definitions, and discrete variables with a varying number of states.
 - **LBP in JAX**: PGMax generates pure JAX functions implementing LBP for a given factor graph. The generated pure JAX functions run on modern accelerators (GPU/TPU), work with JAX transformations (e.g. `vmap` for processing batches of models/samples, `grad` for differentiating through the LBP iterative process), and can be easily used as part of a larger end-to-end differentiable system.
@@ -42,6 +42,8 @@ By default the above commands install JAX for CPU. If you have access to a GPU, 
 
 ## Getting Started
 
+See our [blog post](https://www.vicarious.com/posts/pgmax-factor-graphs-for-discrete-probabilistic-graphical-models-and-loopy-belief-propagation-in-jax/) and [companion paper](https://arxiv.org/abs/2202.04110) for an introduction to PGMax and comparison with existing packages.
+
 Here are a few self-contained Colab notebooks to help you get started on using PGMax:
 
 - [Tutorial on basic PGMax usage](https://colab.research.google.com/drive/1PQ9eVaOg336XzPqko-v_us3izEbjvWMW?usp=sharing)
@@ -54,12 +56,11 @@ Here are a few self-contained Colab notebooks to help you get started on using P
 
 To cite this repository
 ```
-@software{pgmax2021github,
-  author = {Guangyao Zhou* and Nishanth Kumar* and Miguel L\’{a}zaro-Gredilla and Dileep George},
-  title = {{PGMax}: {F}actor graph on discrete variables and hardware-accelerated differentiable loopy belief propagation in {JAX}},
-  howpublished={\url{http://github.com/vicariousinc/PGMax}},
-  version = {0.2.2},
-  year = {2022},
+@article{zhou2022pgmax,
+  author = {Zhou, Guangyao and Kumar, Nishanth and L{\'a}zaro-Gredilla, Miguel and Kushagra, Shrinu and George, Dileep},
+  title = {{PGMax: Factor Graphs for Discrete Probabilistic Graphical Models and Loopy Belief Propagation in JAX}},
+  journal = {arXiv preprint arXiv:2202.04110},
+  year={2022}
 }
 ```
-where * indicates equal contribution.
+First two authors contributed equally.
