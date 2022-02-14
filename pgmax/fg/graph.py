@@ -111,7 +111,7 @@ class FactorGraph:
             variable_names: A list containing the connected variable names.
             factor_configs: Array of shape (num_val_configs, num_variables)
                 An array containing explicit enumeration of all valid configurations
-            log_potentials: Optional array of shape (num_val_configs,) or (num_factors, num_val_configs).
+            log_potentials: Optional array of shape (num_val_configs,).
                 If specified, it contains the log of the potential value for every possible configuration.
                 If none, it is assumed the log potential is uniform 0 and such an array is automatically
                 initialized.
