@@ -48,12 +48,16 @@ jobs:
       #----------------------------------------------
       - name: Install dependencies
         if: ${{ steps.cached-poetry-dependencies.outputs.cache-hit != 'true' }}
-        run: poetry install --no-interaction --no-root
+        run: |
+          poetry env use ${{ matrix.python-version }}
+          poetry install --no-interaction --no-root
       #----------------------------------------------
       # install your root project, if not already done
       #----------------------------------------------
       - name: Install library
-        run: poetry install --no-interaction
+        run: |
+          poetry env use ${{ matrix.python-version }}
+          poetry install --no-interaction
       #----------------------------------------------
       #         run test suite with coverage
       #----------------------------------------------
