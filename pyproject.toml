@@ -30,7 +30,7 @@ scikit-learn = "^1.0.1"
 joblib = "^1.1.0"
 
 [tool.poetry.dev-dependencies]
-pytest = "^5.2"
+pytest = "^7.0.1"
 pre-commit = "^2.13.0"
 sphinx-rtd-theme = "^0.5.2"
 pytest-cov = "^2.12.1"
