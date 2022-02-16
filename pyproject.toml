@@ -16,7 +16,7 @@ documentation = "https://pgmax.readthedocs.io/en/latest/"
 keywords = ["PGMax", "jax"]
 
 [tool.poetry.dependencies]
-python = ">=3.7,<=3.10"
+python = ">=3.7,<3.11"
 jupyter = "^1.0.0"
 matplotlib = "^3.2.0"
 jax = "^0.2.14"
