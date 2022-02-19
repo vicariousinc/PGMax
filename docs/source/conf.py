@@ -10,12 +10,6 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 
-import os
-import sys
-
-sys.path.insert(0, os.path.abspath("../pgmax/"))
-
-
 # -- Project information -----------------------------------------------------
 
 project = "PGMax"
@@ -23,7 +17,7 @@ copyright = "2021, Vicarious FPC Inc"
 author = "Guangyao Zhou, Nishanth Kumar, Miguel Lazaro-Gredilla, Shrinu Kushagra, Dileep George"
 
 # The full version, including alpha/beta/rc tags
-release = "0.2.2"
+release = "0.2.3"
 
 
 # -- General configuration ---------------------------------------------------

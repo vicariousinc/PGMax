@@ -14,8 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.7]
-        poetry-version: [1.1.8]
+        python-version: [3.7, 3.8, 3.9, '3.10']
+        poetry-version: [1.1.13]
     steps:
       #----------------------------------------------
       #       cancel any pending actions
@@ -38,7 +38,7 @@ jobs:
       #       install & configure poetry
       #----------------------------------------------
       - name: Install Poetry
-        uses: snok/install-poetry@v1.1.6
+        uses: snok/install-poetry@v1
         with:
           virtualenvs-create: true
           virtualenvs-in-project: true
@@ -56,12 +56,16 @@ jobs:
       #----------------------------------------------
       - name: Install dependencies
         if: ${{ steps.cached-poetry-dependencies.outputs.cache-hit != 'true' }}
-        run: poetry install --no-interaction --no-root
+        run: |
+          poetry env use ${{ matrix.python-version }}
+          poetry install --no-interaction --no-root
       #----------------------------------------------
       # install your root project, if not already done
       #----------------------------------------------
       - name: Install library
-        run: poetry install --no-interaction
+        run: |
+          poetry env use ${{ matrix.python-version }}
+          poetry install --no-interaction
       #----------------------------------------------
       #         run test suite with coverage
       #----------------------------------------------
