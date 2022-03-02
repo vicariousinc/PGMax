@@ -97,7 +97,6 @@ def pass_fac_to_var_messages(
                 )
             )
         )
-
     return ftov_msgs
 
 
@@ -186,7 +185,7 @@ def pass_OR_fac_to_var_messages(
     has_single_parents = (first_argmaxes == second_argmaxes).astype(jnp.float32)
     top_msgs = top_msgs.at[first_argmaxes].set(
         (1 - has_single_parents) * top_msgs[first_argmaxes]
-        + has_single_parents * bottom_tof_msgs[first_argmaxes]
+        + has_single_parents * bottom_tof_msgs
     )
 
     # Outgoing messages to bottom variables
