@@ -101,6 +101,112 @@ def pass_fac_to_var_messages(
     return ftov_msgs
 
 
+@jax.jit
+def pass_OR_fac_to_var_messages(
+    vtof_msgs: jnp.ndarray,
+    parents_states: jnp.ndarray,
+    children_states: jnp.ndarray,
+) -> jnp.ndarray:
+
+    """Passes messages from OR Factors to Variables.
+
+    Args:
+        vtof_msgs: Array of shape (num_edge_states,).
+            This holds all the flattened (binary) variables to factor messages.
+        parents_states: Array of shape (num_parents, 2)
+            parents_states[ii, 0] contains the global factor index
+            parents_states[ii, 1] contains the message index of the parent variable's state 0.
+            The parent variable's state 1 is parents_states[ii, 2] + 1
+        children_states: Array of shape (num_factors, 2)
+            children_states[ii, 0] contains the global factor index
+            children_states[ii, 1] contains the message index of the child variable's state 0
+            The child variable's state 1 is children_states[ii, 1] + 1
+
+    Returns:
+        Array of shape (num_edge_states,). This holds all the flattened factor to variable messages.
+    """
+    num_top_vars = parents_states.shape[0]
+    num_factors = children_states.shape[0]
+
+    factor_indices = parents_states[..., 0]
+    top_tof_msgs = (
+        vtof_msgs[parents_states[..., 1] + 1] - vtof_msgs[parents_states[..., 1]]
+    )
+    bottom_tof_msgs = (
+        vtof_msgs[children_states[..., 1] + 1] - vtof_msgs[children_states[..., 1]]
+    )
+
+    def _get_argmaxes(top_tof_msgs, factor_indices):
+        maxes = (
+            jnp.full(shape=num_factors, fill_value=-jnp.inf)
+            .at[factor_indices]
+            .max(top_tof_msgs)
+        )
+        only_maxes_pos = jnp.arange(num_top_vars) - num_top_vars * (
+            top_tof_msgs != maxes[factor_indices]
+        )
+        argmaxes = (
+            jnp.full(shape=num_factors, fill_value=-jnp.inf)
+            .at[factor_indices]
+            .max(only_maxes_pos)
+            .astype(jnp.int32)
+        )
+        return argmaxes
+
+    # Get top incoming argmaxes for each factor
+    first_argmaxes = _get_argmaxes(top_tof_msgs, factor_indices)
+    second_argmaxes = _get_argmaxes(
+        top_tof_msgs.at[first_argmaxes].set(-jnp.inf), factor_indices
+    )
+
+    top_tof_msgs_pos = jnp.maximum(0.0, top_tof_msgs)
+    sum_top_tof_msgs_pos_inc = (
+        jnp.full(shape=num_factors, fill_value=0.0)
+        .at[factor_indices]
+        .add(top_tof_msgs_pos)
+    )
+
+    # Outgoing messages to top variables
+    top_msgs = jnp.minimum(
+        bottom_tof_msgs[factor_indices]
+        + sum_top_tof_msgs_pos_inc[factor_indices]
+        - top_tof_msgs_pos,
+        jnp.maximum(0.0, -top_tof_msgs[first_argmaxes][factor_indices]),
+    )
+    top_msgs = top_msgs.at[first_argmaxes].set(
+        jnp.minimum(
+            bottom_tof_msgs
+            + sum_top_tof_msgs_pos_inc
+            - top_tof_msgs_pos[first_argmaxes],
+            jnp.maximum(0.0, -top_tof_msgs[second_argmaxes]),
+        )
+    )
+
+    # Special case for factor with single parents
+    has_single_parents = (first_argmaxes == second_argmaxes).astype(jnp.float32)
+    top_msgs = top_msgs.at[first_argmaxes].set(
+        (1 - has_single_parents) * top_msgs[first_argmaxes]
+        + has_single_parents * bottom_tof_msgs[first_argmaxes]
+    )
+
+    # Outgoing messages to bottom variables
+    bottom_msgs = sum_top_tof_msgs_pos_inc + jnp.minimum(
+        0.0, top_tof_msgs[first_argmaxes]
+    )
+
+    bottom_tov0_msgs = jnp.minimum(0.0, -bottom_msgs)
+    bottom_tov1_msgs = jnp.minimum(0.0, bottom_msgs)
+    top_tov0_msgs = jnp.minimum(0.0, -top_msgs)
+    top_tov1_msgs = jnp.minimum(0.0, top_msgs)
+
+    ftov_msgs = jnp.full(shape=(vtof_msgs.shape[0],), fill_value=-jnp.inf)
+    ftov_msgs = ftov_msgs.at[children_states[..., 1]].set(bottom_tov0_msgs)
+    ftov_msgs = ftov_msgs.at[children_states[..., 1] + 1].set(bottom_tov1_msgs)
+    ftov_msgs = ftov_msgs.at[parents_states[..., 1]].set(top_tov0_msgs)
+    ftov_msgs = ftov_msgs.at[parents_states[..., 1] + 1].set(top_tov1_msgs)
+    return ftov_msgs
+
+
 @functools.partial(jax.jit, static_argnames=("max_msg_size"))
 def normalize_and_clip_msgs(
     msgs: jnp.ndarray,
