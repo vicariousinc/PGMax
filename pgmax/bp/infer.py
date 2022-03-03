@@ -100,7 +100,7 @@ def pass_fac_to_var_messages(
     return ftov_msgs
 
 
-# @jax.jit
+@jax.jit
 def pass_OR_fac_to_var_messages(
     vtof_msgs: jnp.ndarray,
     parents_states: jnp.ndarray,
@@ -123,10 +123,6 @@ def pass_OR_fac_to_var_messages(
     Returns:
         Array of shape (num_edge_state,). This holds all the flattened factor to variable messages.
     """
-    vtof_msgs = jnp.asarray(vtof_msgs)
-    parents_states = jnp.asarray(parents_states)
-    children_states = jnp.asarray(children_states)
-
     num_factors = children_states.shape[0]
 
     factor_indices = parents_states[..., 0]
@@ -135,7 +131,7 @@ def pass_OR_fac_to_var_messages(
     )
     children_tof_msgs = vtof_msgs[children_states + 1] - vtof_msgs[children_states]
 
-    # Get parents incoming argmaxes for each factor
+    # Get the first and second argmaxes for the parents messages of each factor
     _, first_parents_argmaxes = bp_utils.get_maxes_and_argmaxes(
         parents_tof_msgs, factor_indices, num_factors
     )
@@ -153,6 +149,7 @@ def pass_OR_fac_to_var_messages(
     )
 
     # Outgoing messages to parents variables
+    # See https://arxiv.org/pdf/2111.02458.pdf, Appendix C.3
     parents_msgs = jnp.minimum(
         children_tof_msgs[factor_indices]
         + sum_parents_tof_msgs_pos[factor_indices]

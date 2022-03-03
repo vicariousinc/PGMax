@@ -75,9 +75,7 @@ def test_pass_fac_to_var_messages():
             this_parents_states = np.vstack(
                 [np.full(parents_positions.shape[0], factor_idx), parents_positions]
             ).T
-            this_children_states = np.array(
-                [[factor_idx, edge_state_start + 2 * this_num_parents]]
-            )
+            this_children_states = np.array([edge_state_start + 2 * this_num_parents])
 
             if parents_states is None:
                 parents_states = this_parents_states
