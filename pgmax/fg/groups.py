@@ -558,15 +558,12 @@ class FactorGroup:
 
     Attributes:
         _variables_to_factors: maps set of connected variables to the corresponding factors
-
-    Raises:
-        ValueError: if variable_names_for_factors is an empty list
     """
 
     variable_group: Union[CompositeVariableGroup, VariableGroup]
-    _variables_to_factors: Mapping[FrozenSet, nodes.EnumerationFactor] = field(
-        init=False
-    )
+    _variables_to_factors: Mapping[
+        FrozenSet, Union[nodes.EnumerationFactor, nodes.ORFactor]
+    ] = field(init=False)
 
     def __post_init__(self) -> None:
         """Initializes a tuple of all the factors contained within this FactorGroup."""
@@ -579,7 +576,7 @@ class FactorGroup:
     def __getitem__(
         self,
         variables: Union[Sequence, Collection],
-    ) -> nodes.EnumerationFactor:
+    ) -> Union[nodes.EnumerationFactor, nodes.ORFactor]:
         """Function to query individual factors in the factor group
 
         Args:
@@ -600,19 +597,9 @@ class FactorGroup:
 
         return self._variables_to_factors[variables]
 
-    @cached_property
-    def factor_group_log_potentials(self) -> np.ndarray:
-        """Function to compile potential array for the factor group
-
-        Returns:
-            a jnp array representing the log of the potential function for
-            the factor group
-        """
-        return np.concatenate([factor.log_potentials for factor in self.factors])
-
     def _get_variables_to_factors(
         self,
-    ) -> OrderedDict[FrozenSet, nodes.EnumerationFactor]:
+    ) -> OrderedDict[FrozenSet, Any]:
         """Function that generates a dictionary mapping names to factors.
 
         Returns:
@@ -623,7 +610,7 @@ class FactorGroup:
         )
 
     @cached_property
-    def factors(self) -> Tuple[nodes.EnumerationFactor, ...]:
+    def factors(self) -> Tuple[Union[nodes.EnumerationFactor, nodes.ORFactor], ...]:
         """Returns all factors in the factor group."""
         return tuple(self._variables_to_factors.values())
 
@@ -731,6 +718,16 @@ class EnumerationFactorGroup(FactorGroup):
             ]
         )
         return variables_to_factors
+
+    @cached_property
+    def factor_group_log_potentials(self) -> np.ndarray:
+        """Function to compile potential array for the factor group
+
+        Returns:
+            a jnp array representing the log of the potential function for
+            the factor group
+        """
+        return np.concatenate([factor.log_potentials for factor in self.factors])
 
     def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
         """Function that turns meaningful structured data into a flat data array for internal use.
@@ -928,6 +925,16 @@ class PairwiseFactorGroup(FactorGroup):
         )
         return variables_to_factors
 
+    @cached_property
+    def factor_group_log_potentials(self) -> np.ndarray:
+        """Function to compile potential array for the factor group
+
+        Returns:
+            a jnp array representing the log of the potential function for
+            the factor group
+        """
+        return np.concatenate([factor.log_potentials for factor in self.factors])
+
     def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
         """Function that turns meaningful structured data into a flat data array for internal use.
 
@@ -1006,3 +1013,65 @@ class PairwiseFactorGroup(FactorGroup):
             )
 
         return data
+
+
+@dataclass(frozen=True, eq=False)
+class ORFactorGroup(FactorGroup):
+    """Class to represent a group of OR factors.
+
+    Args:
+        parents_names_for_factors: A list of list of parents variable names for the OR factors,
+            where each innermost element is the name of a variable in variable_group.
+            Each list within the outer list is taken to contain the names of the variables connected to a same OR factor.
+        children_names_for_factors: TODO
+    """
+
+    parents_names_for_factors: Sequence[List]
+    children_names_for_factors: Sequence[Hashable]
+
+    def _get_variables_to_factors(
+        self,
+    ) -> OrderedDict[FrozenSet, nodes.ORFactor]:
+        """Function that generates a dictionary mapping set of connected variables to factors.
+
+        Returns:
+            a dictionary mapping all possible set of connected variables to different factors.
+
+        Raises:
+            ValueError if:
+                (1) flat_data is not a 1D array
+                (2) flat_data is not of the right shape
+        """
+        if len(self.parents_names_for_factors) != len(self.children_names_for_factors):
+            raise ValueError(
+                "The parents factors list and the children factors list must be of the same length"
+            )
+
+        if (
+            min(
+                [len(parents_names) for parents_names in self.parents_names_for_factors]
+            )
+            == 0
+        ):
+            raise ValueError("All OR factor must have at least one parent")
+
+        variables_to_factors = collections.OrderedDict(
+            [
+                (
+                    frozenset(
+                        self.parents_names_for_factors[ii]
+                        + [self.children_names_for_factors[ii]]
+                    ),
+                    nodes.ORFactor(
+                        parents_variables=tuple(
+                            self.variable_group[self.parents_names_for_factors[ii]]
+                        ),
+                        child_variable=self.variable_group[
+                            self.children_names_for_factors[ii]
+                        ],
+                    ),
+                )
+                for ii in range(len(self.parents_names_for_factors))
+            ]
+        )
+        return variables_to_factors

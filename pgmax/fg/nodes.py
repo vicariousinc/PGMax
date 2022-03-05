@@ -174,3 +174,46 @@ class EnumerationFactor:
             var_states_for_edges=var_states_for_edges,
             factor_configs_edge_states=self.factor_configs_edge_states,
         )
+
+
+@dataclass(frozen=True, eq=False)
+class ORFactor:
+    """An OR factor
+
+    Args:
+        parents_variables: List of parents variables
+        child_variable: Child variable
+
+    Raises:
+        ValueError: If:
+            (1) The parents variables are not all binary
+            (2) The child variable is not binary
+            (3) The list of parent variables is empty
+    """
+
+    parents_variables: Tuple[Variable, ...]
+    child_variable: Variable
+
+    def __post_init__(self):
+        if not np.all(
+            [variable.num_states == 2 for variable in self.parents_variables]
+        ):
+            raise ValueError("Parents variables should all be binary")
+
+        if not self.child_variable.num_states == 2:
+            raise ValueError("Child variables should be binary")
+
+        if len(self.parents_variables) == 0:
+            raise ValueError("At least one parent variable is required")
+
+        object.__setattr__(self, "num_parents", len(self.parents_variables))
+
+    @utils.cached_property
+    def edges_num_states(self) -> np.ndarray:
+        """Number of states for the variables connected to each edge
+
+        Returns:
+            Array of shape (num_edges,)
+            Number of states for the variables connected to each edge
+        """
+        return np.array([2] * (len(self.parents_variables) + 1))
