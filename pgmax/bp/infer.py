@@ -4,10 +4,9 @@ import functools
 
 import jax
 import jax.numpy as jnp
+from jax.nn import log_sigmoid, sigmoid
 
 import pgmax.bp.bp_utils as bp_utils
-
-NEG_INF = -100000.0  # A large negative value to use as -inf to avoid NaN's
 
 
 @jax.jit
@@ -73,7 +72,7 @@ def pass_fac_to_var_messages(
         .add(vtof_msgs[factor_configs_edge_states[..., 1]])
     ) + log_potentials
     max_factor_config_summary_for_edge_states = (
-        jnp.full(shape=(vtof_msgs.shape[0],), fill_value=NEG_INF)
+        jnp.full(shape=(vtof_msgs.shape[0],), fill_value=bp_utils.NEG_INF)
         .at[factor_configs_edge_states[..., 1]]
         .max(fac_config_summary_sum[factor_configs_edge_states[..., 0]])
     )
@@ -82,7 +81,9 @@ def pass_fac_to_var_messages(
         ftov_msgs = ftov_msgs + (
             temperature
             * jnp.log(
-                jnp.full(shape=(vtof_msgs.shape[0],), fill_value=jnp.exp(NEG_INF))
+                jnp.full(
+                    shape=(vtof_msgs.shape[0],), fill_value=jnp.exp(bp_utils.NEG_INF)
+                )
                 .at[factor_configs_edge_states[..., 1]]
                 .add(
                     jnp.exp(
@@ -100,11 +101,12 @@ def pass_fac_to_var_messages(
     return ftov_msgs
 
 
-@jax.jit
+@functools.partial(jax.jit, static_argnames=("temperature"))
 def pass_OR_fac_to_var_messages(
     vtof_msgs: jnp.ndarray,
     parents_states: jnp.ndarray,
     children_states: jnp.ndarray,
+    temperature: float,
 ) -> jnp.ndarray:
 
     """Passes messages from OR Factors to Variables.
@@ -119,69 +121,108 @@ def pass_OR_fac_to_var_messages(
         children_states: Array of shape (num_factors,)
             children_states[ii] contains the message index of the child variable's state 0
             The child variable's state 1 is children_states[ii, 1] + 1
+        temperature: Temperature for loopy belief propagation.
+            1.0 corresponds to sum-product, 0.0 corresponds to max-product.
 
     Returns:
         Array of shape (num_edge_state,). This holds all the flattened factor to variable messages.
     """
+    vtof_msgs = jnp.asarray(vtof_msgs)
+    parents_states = jnp.asarray(parents_states)
+    children_states = jnp.asarray(children_states)
+
     num_factors = children_states.shape[0]
 
     factor_indices = parents_states[..., 0]
+    num_parents = jnp.bincount(factor_indices)
+    _, first_elements = jnp.unique(factor_indices, return_index=True)
+
     parents_tof_msgs = (
         vtof_msgs[parents_states[..., 1] + 1] - vtof_msgs[parents_states[..., 1]]
     )
     children_tof_msgs = vtof_msgs[children_states + 1] - vtof_msgs[children_states]
 
-    # Get the first and second argmaxes for the parents messages of each factor
-    _, first_parents_argmaxes = bp_utils.get_maxes_and_argmaxes(
-        parents_tof_msgs, factor_indices, num_factors
-    )
-    _, second_parents_argmaxes = bp_utils.get_maxes_and_argmaxes(
-        parents_tof_msgs.at[first_parents_argmaxes].set(-jnp.inf),
-        factor_indices,
-        num_factors,
-    )
-
-    parents_tof_msgs_pos = jnp.maximum(0.0, parents_tof_msgs)
-    sum_parents_tof_msgs_pos = (
-        jnp.full(shape=(num_factors,), fill_value=0.0)
-        .at[factor_indices]
-        .add(parents_tof_msgs_pos)
-    )
-
-    # Outgoing messages to parents variables
-    # See https://arxiv.org/pdf/2111.02458.pdf, Appendix C.3
-    parents_msgs = jnp.minimum(
-        children_tof_msgs[factor_indices]
-        + sum_parents_tof_msgs_pos[factor_indices]
-        - parents_tof_msgs_pos,
-        jnp.maximum(0.0, -parents_tof_msgs[first_parents_argmaxes][factor_indices]),
-    )
-    parents_msgs = parents_msgs.at[first_parents_argmaxes].set(
-        jnp.minimum(
-            children_tof_msgs
-            + sum_parents_tof_msgs_pos
-            - parents_tof_msgs_pos[first_parents_argmaxes],
-            jnp.maximum(0.0, -parents_tof_msgs[second_parents_argmaxes]),
+    # We treat the max-product case separately.
+    if temperature == 0.0:
+        # Get the first and second argmaxes for the parents messages of each factor
+        _, first_parents_argmaxes = bp_utils.get_maxes_and_argmaxes(
+            parents_tof_msgs, factor_indices, num_factors
         )
-    )
+        _, second_parents_argmaxes = bp_utils.get_maxes_and_argmaxes(
+            parents_tof_msgs.at[first_parents_argmaxes].set(bp_utils.NEG_INF),
+            factor_indices,
+            num_factors,
+        )
+
+        parents_tof_msgs_pos = jnp.maximum(0.0, parents_tof_msgs)
+        sum_parents_tof_msgs_pos = (
+            jnp.full(shape=(num_factors,), fill_value=0.0)
+            .at[factor_indices]
+            .add(parents_tof_msgs_pos)
+        )
+
+        # Outgoing messages to parents variables
+        # See https://arxiv.org/pdf/2111.02458.pdf, Appendix C.3
+        parents_msgs = jnp.minimum(
+            children_tof_msgs[factor_indices]
+            + sum_parents_tof_msgs_pos[factor_indices]
+            - parents_tof_msgs_pos,
+            jnp.maximum(0.0, -parents_tof_msgs[first_parents_argmaxes][factor_indices]),
+        )
+        parents_msgs = parents_msgs.at[first_parents_argmaxes].set(
+            jnp.minimum(
+                children_tof_msgs
+                + sum_parents_tof_msgs_pos
+                - parents_tof_msgs_pos[first_parents_argmaxes],
+                jnp.maximum(0.0, -parents_tof_msgs[second_parents_argmaxes]),
+            )
+        )
+
+        # Outgoing messages to children variables
+        children_msgs = sum_parents_tof_msgs_pos + jnp.minimum(
+            0.0, parents_tof_msgs[first_parents_argmaxes]
+        )
+    else:
+
+        def g(x):
+            # assert jnp.all(x >= 0)
+            return jnp.where(
+                x == 0.0,
+                0.0,
+                x + temperature * jnp.log(1.0 - jnp.exp(-x / temperature)),
+            )
+
+        log_sig_parents_tof_msgs = -temperature * log_sigmoid(
+            -parents_tof_msgs / temperature
+        )
+        sum_log_sig_parents_tof_msgs = (
+            jnp.full(shape=(num_factors,), fill_value=0.0)
+            .at[factor_indices]
+            .add(log_sig_parents_tof_msgs)
+        )
+        g_sum_log_sig_parents_minus_id = g(
+            sum_log_sig_parents_tof_msgs[factor_indices] - log_sig_parents_tof_msgs
+        )
+
+        # Outgoing messages to parents variables
+        parents_msgs = -temperature * jnp.log(
+            sigmoid(g_sum_log_sig_parents_minus_id / temperature)
+            + sigmoid(-g_sum_log_sig_parents_minus_id / temperature)
+            * jnp.exp(-children_tof_msgs[factor_indices] / temperature)
+        )
+
+        # Outgoing messages to children variables
+        children_msgs = g(sum_log_sig_parents_tof_msgs)
 
     # Special case: factors with a single parent
-    has_single_parents = (first_parents_argmaxes == second_parents_argmaxes).astype(
-        jnp.float32
+    parents_msgs = parents_msgs.at[first_elements].set(
+        jnp.where(num_parents == 1, children_tof_msgs, parents_msgs[first_elements]),
     )
-    parents_msgs = parents_msgs.at[first_parents_argmaxes].set(
-        (1 - has_single_parents) * parents_msgs[first_parents_argmaxes]
-        + has_single_parents * children_tof_msgs
-    )
-
-    # Outgoing messages to children variables
-    children_msgs = sum_parents_tof_msgs_pos + jnp.minimum(
-        0.0, parents_tof_msgs[first_parents_argmaxes]
-    )
+    # parents_msgs = parents_msgs.at[first_elements].set(parents_msgs[first_elements])
 
     ftov_msgs = jnp.zeros_like(vtof_msgs)
-    ftov_msgs = ftov_msgs.at[children_states + 1].set(children_msgs)
     ftov_msgs = ftov_msgs.at[parents_states[..., 1] + 1].set(parents_msgs)
+    ftov_msgs = ftov_msgs.at[children_states + 1].set(children_msgs)
     return ftov_msgs
 
 

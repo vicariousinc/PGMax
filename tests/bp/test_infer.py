@@ -17,11 +17,16 @@ def test_pass_fac_to_var_messages():
         np.random.seed(idx)
 
         # Define OR factor and incoming messages
-        num_factors = np.random.randint(3, 6)
+        num_factors = np.random.randint(3, 8)
         num_parents = np.random.randint(1, 6, num_factors)
         vtof_msgs = np.random.normal(
             0, 1, size=(2 * (sum(num_parents) + len(num_parents)))
         )
+        if idx % 2 == 0:
+            # Max-product
+            temperature = 0.0
+        else:
+            temperature = np.random.uniform(low=0.5, high=1.0)
 
         # Support for pass_fac_to_var_messages
         factor_configs_edge_states = None
@@ -91,27 +96,29 @@ def test_pass_fac_to_var_messages():
 
         # With pass_fac_to_var_messages
         ftov_msgs1 = infer.pass_fac_to_var_messages(
-            vtof_msgs, factor_configs_edge_states, log_potentials, num_val_configs, 0.0
+            vtof_msgs,
+            factor_configs_edge_states,
+            log_potentials,
+            num_val_configs,
+            temperature,
         )
         ftoparents_msgs1 = (
             ftov_msgs1[parents_states[..., 1] + 1] - ftov_msgs1[parents_states[..., 1]]
         )
         ftochildren_msgs1 = (
-            ftov_msgs1[children_states[..., 1] + 1]
-            - ftov_msgs1[children_states[..., 1]]
+            ftov_msgs1[children_states + 1] - ftov_msgs1[children_states]
         )
 
         # With pass_OR_fac_to_var_messages
         ftov_msgs2 = infer.pass_OR_fac_to_var_messages(
-            vtof_msgs, parents_states, children_states
+            vtof_msgs, parents_states, children_states, temperature
         )
         ftoparents_msgs2 = (
             ftov_msgs2[parents_states[..., 1] + 1] - ftov_msgs2[parents_states[..., 1]]
         )
         ftochildren_msgs2 = (
-            ftov_msgs2[children_states[..., 1] + 1]
-            - ftov_msgs2[children_states[..., 1]]
+            ftov_msgs2[children_states + 1] - ftov_msgs2[children_states]
         )
 
-        assert np.allclose(ftochildren_msgs1, ftochildren_msgs2, atol=1e-5)
-        assert np.allclose(ftoparents_msgs1, ftoparents_msgs2, atol=1e-5)
+        assert np.allclose(ftochildren_msgs1, ftochildren_msgs2, atol=1e-4)
+        assert np.allclose(ftoparents_msgs1, ftoparents_msgs2, atol=1e-4)
