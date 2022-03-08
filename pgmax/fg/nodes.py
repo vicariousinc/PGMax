@@ -176,6 +176,44 @@ class EnumerationFactor:
         )
 
 
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True, eq=False)
+class ORWiring:
+    """Wiring for OR factors.
+
+    Args:
+        parents_var_states_for_edges: Array of shape (2 * num_parents,)
+            Global parent variable state indices for each edge state
+        child_var_states_for_edges: Array of shape (2,)
+            Global child variable state indices for each edge state
+        parents_states: Array of shape (num_parents, 2)
+            parents_states[ii, 0] contains the global factor index
+            parents_states[ii, 1] contains the message index of the parent variable's state 0.
+            The parent variable's state 1 is parents_states[ii, 2] + 1
+        children_states: Array of shape (num_factors,)
+            children_states[ii] contains the message index of the child variable's state 0
+            The child variable's state 1 is children_states[ii, 1] + 1
+    """
+
+    # TODO: is it needed?
+    parents_var_states_for_edges: Union[np.ndarray, jnp.ndarray]
+    child_var_states_for_edges: Union[np.ndarray, jnp.ndarray]
+    parents_states: Union[np.ndarray, jnp.ndarray]
+    children_states: Union[np.ndarray, jnp.ndarray]
+
+    def __post_init__(self):
+        for field in self.__dataclass_fields__:
+            if isinstance(getattr(self, field), np.ndarray):
+                getattr(self, field).flags.writeable = False
+
+    def tree_flatten(self):
+        return jax.tree_util.tree_flatten(asdict(self))
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        return cls(**aux_data.unflatten(children))
+
+
 @dataclass(frozen=True, eq=False)
 class ORFactor:
     """An OR factor
@@ -193,6 +231,7 @@ class ORFactor:
 
     parents_variables: Tuple[Variable, ...]
     child_variable: Variable
+    log_potentials: None
 
     def __post_init__(self):
         if not np.all(
@@ -217,3 +256,38 @@ class ORFactor:
             Number of states for the variables connected to each edge
         """
         return np.array([2] * (len(self.parents_variables) + 1))
+
+    def compile_wiring(self, vars_to_starts: Mapping[Variable, int]) -> ORWiring:
+        """Compile enumeration wiring for the OR factor
+
+        Args:
+            vars_to_starts: A dictionary that maps variables to their global starting indices
+                For an n-state variable, a global start index of m means the global indices
+                of its n variable states are m, m + 1, ..., m + n - 1
+
+        Returns:
+            Enumeration wiring for the enumeration factor
+        """
+        num_parents = len(self.parents_variables)
+        parents_states = np.vstack(
+            [np.zeros(num_parents), np.arange(0, 2 * num_parents, 2)]
+        ).T
+        child_state = np.array([[2 * len(self.parents_variables)]])
+
+        parents_var_states_for_edges = np.concatenate(
+            [
+                np.arange(variable.num_states) + vars_to_starts[variable]
+                for variable in self.parents_variables
+            ]
+        )
+        child_var_states_for_edges = (
+            np.arange(self.child_variable.num_states)
+            + vars_to_starts[self.child_variable]
+        )
+
+        return ORWiring(
+            parents_states=parents_states,
+            children_states=child_state,
+            parents_var_states_for_edges=parents_var_states_for_edges,
+            child_var_states_for_edges=child_var_states_for_edges,
+        )

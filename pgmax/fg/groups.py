@@ -622,6 +622,23 @@ class FactorGroup:
         )
         return factor_num_states
 
+    @cached_property
+    def factor_group_log_potentials(self) -> np.ndarray:
+        """Function to compile potential array for the factor group
+
+        Returns
+            a jnp array representing the log of the potential function for
+            the factor group
+        """
+        if np.any([factor.log_potentials is None for factor in self.factors]):
+            if not np.all([factor.log_potentials is None for factor in self.factors]):
+                raise ValueError(
+                    "All the factors must have empty or non-empty log potentials"
+                )
+            return None
+
+        return np.concatenate([factor.log_potentials for factor in self.factors])
+
     def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
         """Function that turns meaningful structured data into a flat data array for internal use.
 
@@ -718,16 +735,6 @@ class EnumerationFactorGroup(FactorGroup):
             ]
         )
         return variables_to_factors
-
-    @cached_property
-    def factor_group_log_potentials(self) -> np.ndarray:
-        """Function to compile potential array for the factor group
-
-        Returns:
-            a jnp array representing the log of the potential function for
-            the factor group
-        """
-        return np.concatenate([factor.log_potentials for factor in self.factors])
 
     def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
         """Function that turns meaningful structured data into a flat data array for internal use.
@@ -925,16 +932,6 @@ class PairwiseFactorGroup(FactorGroup):
         )
         return variables_to_factors
 
-    @cached_property
-    def factor_group_log_potentials(self) -> np.ndarray:
-        """Function to compile potential array for the factor group
-
-        Returns:
-            a jnp array representing the log of the potential function for
-            the factor group
-        """
-        return np.concatenate([factor.log_potentials for factor in self.factors])
-
     def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
         """Function that turns meaningful structured data into a flat data array for internal use.
 
@@ -1069,6 +1066,7 @@ class ORFactorGroup(FactorGroup):
                         child_variable=self.variable_group[
                             self.children_names_for_factors[ii]
                         ],
+                        log_potentials=None,
                     ),
                 )
                 for ii in range(len(self.parents_names_for_factors))

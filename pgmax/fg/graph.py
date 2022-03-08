@@ -76,7 +76,7 @@ class FactorGraph:
         )
         self._named_factor_groups: Dict[Hashable, groups.FactorGroup] = {}
         self._variables_to_factors: OrderedDict[
-            FrozenSet, nodes.EnumerationFactor
+            FrozenSet, Union[nodes.EnumerationFactor, nodes.ORFactor]
         ] = collections.OrderedDict()
         # For ftov messages
         self._total_factor_num_states: int = 0
@@ -84,15 +84,16 @@ class FactorGraph:
             groups.FactorGroup, int
         ] = collections.OrderedDict()
         self._factor_to_msgs_starts: OrderedDict[
-            nodes.EnumerationFactor, int
+            Union[nodes.EnumerationFactor, nodes.ORFactor], int
         ] = collections.OrderedDict()
+
         # For log potentials
         self._total_factor_num_configs: int = 0
         self._factor_group_to_potentials_starts: OrderedDict[
             groups.FactorGroup, int
         ] = collections.OrderedDict()
-        self._factor_to_potentials_starts: OrderedDict[
-            nodes.EnumerationFactor, int
+        self._factor_to_potentials_starts: Optional[
+            OrderedDict[nodes.EnumerationFactor, int]
         ] = collections.OrderedDict()
 
     def __hash__(self) -> int:
@@ -161,13 +162,15 @@ class FactorGraph:
             )
 
         self._factor_group_to_msgs_starts[factor_group] = self._total_factor_num_states
-        self._factor_group_to_potentials_starts[
-            factor_group
-        ] = self._total_factor_num_configs
         factor_num_states_cumsum = np.insert(
             factor_group.factor_num_states.cumsum(), 0, 0
         )
-        factor_group_num_configs = 0
+        if not isinstance(factor_group, groups.ORFactorGroup):
+            self._factor_group_to_potentials_starts[
+                factor_group
+            ] = self._total_factor_num_configs
+            factor_group_num_configs = 0
+
         for vv, variables in enumerate(factor_group._variables_to_factors):
             if variables in self._variables_to_factors:
                 raise ValueError(
@@ -180,31 +183,66 @@ class FactorGraph:
                 self._factor_group_to_msgs_starts[factor_group]
                 + factor_num_states_cumsum[vv]
             )
-            self._factor_to_potentials_starts[factor] = (
-                self._factor_group_to_potentials_starts[factor_group]
-                + vv * factor.log_potentials.shape[0]
-            )
-            factor_group_num_configs += factor.log_potentials.shape[0]
+
+            if not isinstance(factor_group, groups.ORFactorGroup):
+                self._factor_to_potentials_starts[factor] = (
+                    self._factor_group_to_potentials_starts[factor_group]
+                    + vv * factor.log_potentials.shape[0]
+                )
+                factor_group_num_configs += factor.log_potentials.shape[0]
 
         self._total_factor_num_states += factor_num_states_cumsum[-1]
-        self._total_factor_num_configs += factor_group_num_configs
         if name is not None:
             self._named_factor_groups[name] = factor_group
 
+        if not isinstance(factor_group, groups.ORFactorGroup):
+            self._total_factor_num_configs += factor_group_num_configs
+
     @cached_property
-    def wiring(self) -> nodes.EnumerationWiring:
+    def enum_wiring(self) -> None or nodes.EnumerationWiring:
         """Function to compile wiring for belief propagation.
 
         If wiring has already beeen compiled, do nothing.
 
         Returns:
             Compiled wiring from individual factors.
+            None if the graph only has OR factors.
         """
-        wirings = [
-            factor.compile_wiring(self._vars_to_starts) for factor in self.factors
+        if np.all([isinstance(factor, nodes.ORFactor) for factor in self.factors]):
+            return None
+
+        enum_wirings = [
+            factor.compile_wiring(self._vars_to_starts)
+            for factor in self.factors
+            if isinstance(factor, nodes.EnumerationFactor)
         ]
-        wiring = fg_utils.concatenate_enumeration_wirings(wirings)
-        return wiring
+        enum_wiring = fg_utils.concatenate_enumeration_wirings(enum_wirings)
+        return enum_wiring
+
+    @cached_property
+    def or_wiring(self) -> None or nodes.ORWiring:
+        """Function to compile OR wiring for belief propagation.
+
+        If wiring has already beeen compiled, do nothing.
+
+        Returns:
+            Compiled wiring from individual factors.
+            None if the graph only has Enumeration factors.
+        """
+        if np.all(
+            [
+                isinstance(factor_group, nodes.EnumerationFactor)
+                for factor_group in self.factor_groups
+            ]
+        ):
+            return None
+
+        # or_wirings = [
+        #     factor.compile_wiring(self._vars_to_starts) for factor in self.factors if isinstance(factor, nodes.ORFactor)
+        # ]
+        # or_wiring = fg_utils.concatenate_or_wirings(or_wirings)
+        or_wiring = None
+        return or_wiring
 
     @cached_property
     def log_potentials(self) -> np.ndarray:
@@ -216,15 +254,24 @@ class FactorGraph:
             A jnp array representing the log of the potential function for each
                 valid configuration
         """
+        if np.all(
+            [
+                isinstance(factor_group, groups.ORFactorGroup)
+                for factor_group in self.factor_groups
+            ]
+        ):
+            return None
+
         return np.concatenate(
             [
                 factor_group.factor_group_log_potentials
                 for factor_group in self.factor_groups
+                if not isinstance(factor_group, groups.ORFactorGroup)
             ]
         )
 
     @cached_property
-    def factors(self) -> Tuple[nodes.EnumerationFactor, ...]:
+    def factors(self) -> Tuple[Union[nodes.EnumerationFactor, nodes.ORFactor], ...]:
         """Tuple of individual factors in the factor graph"""
         return tuple(self._variables_to_factors.values())
 
@@ -249,7 +296,8 @@ class FactorGraph:
             factor_to_potentials_starts=copy.copy(self._factor_to_potentials_starts),
             factor_to_msgs_starts=copy.copy(self._factor_to_msgs_starts),
             log_potentials=self.log_potentials,
-            wiring=self.wiring,
+            enum_wiring=self.enum_wiring,
+            or_wiring=self.or_wiring,
         )
 
     @property
@@ -280,20 +328,26 @@ class FactorGraphState:
         factor_to_potentials_starts: Maps factors to their starting indices in the flat log potentials.
         factor_to_msgs_starts: Maps factors to their starting indices in the flat ftov messages.
         log_potentials: Flat log potentials array.
-        wiring: Wiring derived from the current set of factors.
+        enum_wiring: Enumeration wiring derived from the current set of enumeration factors.
+        or_wiring: OR wiring derived from the current set of OR factors.
     """
 
     variable_group: groups.VariableGroup
     vars_to_starts: Mapping[nodes.Variable, int]
     num_var_states: int
     total_factor_num_states: int
-    variables_to_factors: Mapping[FrozenSet, nodes.EnumerationFactor]
+    variables_to_factors: Mapping[
+        FrozenSet, Union[nodes.EnumerationFactor, nodes.ORFactor]
+    ]
     named_factor_groups: Mapping[Hashable, groups.FactorGroup]
     factor_group_to_potentials_starts: Mapping[groups.FactorGroup, int]
-    factor_to_potentials_starts: Mapping[nodes.EnumerationFactor, int]
-    factor_to_msgs_starts: Mapping[nodes.EnumerationFactor, int]
+    factor_to_potentials_starts: Mapping[
+        Union[nodes.EnumerationFactor, nodes.ORFactor], int
+    ]
+    factor_to_msgs_starts: Mapping[Union[nodes.EnumerationFactor, nodes.ORFactor], int]
     log_potentials: np.ndarray
-    wiring: nodes.EnumerationWiring
+    enum_wiring: nodes.EnumerationWiring
+    or_wiring: nodes.ORWiring
 
     def __post_init__(self):
         for field in self.__dataclass_fields__:
@@ -831,7 +885,8 @@ def BP(
         Returns:
             A BPArrays containing the updated log_potentials, ftov_msgs and evidence.
         """
-        wiring = bp_state.fg_state.wiring
+        wiring = bp_state.fg_state.enum_wiring
+        # TODO
         log_potentials = bp_state.log_potentials.value
         if log_potentials_updates is not None:
             log_potentials = update_log_potentials(

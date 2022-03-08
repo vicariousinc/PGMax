@@ -4,7 +4,7 @@ from typing import Sequence
 
 import numpy as np
 
-from pgmax.fg.nodes import EnumerationWiring
+from pgmax.fg.nodes import EnumerationWiring, ORWiring
 
 
 def concatenate_enumeration_wirings(
@@ -48,3 +48,9 @@ def concatenate_enumeration_wirings(
         ),
         factor_configs_edge_states=np.concatenate(factor_configs_edge_states, axis=0),
     )
+
+
+def concatenate_or_wirings(
+    wirings: Sequence[ORWiring],
+) -> ORWiring:
+    pass
