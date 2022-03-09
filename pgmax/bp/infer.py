@@ -134,8 +134,6 @@ def pass_OR_fac_to_var_messages(
     num_factors = children_states.shape[0]
 
     factor_indices = parents_states[..., 0]
-    num_parents = jnp.bincount(factor_indices)
-    _, first_elements = jnp.unique(factor_indices, return_index=True)
 
     parents_tof_msgs = (
         vtof_msgs[parents_states[..., 1] + 1] - vtof_msgs[parents_states[..., 1]]
@@ -215,10 +213,13 @@ def pass_OR_fac_to_var_messages(
         children_msgs = g(sum_log_sig_parents_tof_msgs)
 
     # Special case: factors with a single parent
+    num_parents = jnp.bincount(factor_indices, length=num_factors)
+    first_elements = jnp.concatenate(
+        [jnp.zeros(1, dtype=int), jnp.cumsum(num_parents)]
+    )[:-1]
     parents_msgs = parents_msgs.at[first_elements].set(
         jnp.where(num_parents == 1, children_tof_msgs, parents_msgs[first_elements]),
     )
-    # parents_msgs = parents_msgs.at[first_elements].set(parents_msgs[first_elements])
 
     ftov_msgs = jnp.zeros_like(vtof_msgs)
     ftov_msgs = ftov_msgs.at[parents_states[..., 1] + 1].set(parents_msgs)
