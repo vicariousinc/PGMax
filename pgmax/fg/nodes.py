@@ -256,6 +256,14 @@ class ORFactor:
         """
         return np.full((len(self.parents_variables) + 1,), fill_value=2, dtype=int)
 
+    @utils.cached_property
+    def variables(self) -> np.ndarray:
+        """
+        Returns:
+            All the variables of the OR factor
+        """
+        return self.parents_variables + (self.child_variable,)
+
     def compile_wiring(self, vars_to_starts: Mapping[Variable, int]) -> ORWiring:
         """Compile enumeration wiring for the OR factor
 
@@ -274,7 +282,7 @@ class ORFactor:
                 np.arange(0, 2 * num_parents, 2, dtype=int),
             ],
         ).T
-        child_edge_state = np.array([[2 * len(self.parents_variables)]], dtype=int)
+        child_edge_state = np.array([2 * len(self.parents_variables)], dtype=int)
 
         parents_var_states_for_edges = np.concatenate(
             [

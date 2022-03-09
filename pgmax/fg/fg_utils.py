@@ -1,6 +1,6 @@
 """A module containing helper functions for constructing Factor Graphs."""
 
-from typing import Sequence
+from typing import Sequence, Union
 
 import numpy as np
 
@@ -8,8 +8,8 @@ from pgmax.fg.nodes import EnumerationWiring, ORWiring
 
 
 def concatenate_enumeration_wirings(
-    enum_wirings: Sequence[EnumerationWiring], start_edge_states: Sequence[int]
-) -> None or EnumerationWiring:
+    enum_wirings: Sequence[EnumerationWiring], start_edge_states: np.ndarray
+) -> Union[None, EnumerationWiring]:
     """Concatenate a list of enumeration wirings from individual enumeration factors
 
     Args:
@@ -56,8 +56,8 @@ def concatenate_enumeration_wirings(
 
 
 def concatenate_or_wirings(
-    or_wirings: Sequence[ORWiring], start_edge_states: Sequence[int]
-) -> ORWiring:
+    or_wirings: Sequence[ORWiring], start_edge_states: np.ndarray
+) -> Union[None, ORWiring]:
     """Concatenate a list of OR wirings from individual OR factors
 
     Args:
