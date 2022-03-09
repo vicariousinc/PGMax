@@ -35,14 +35,51 @@ class EnumerationWiring:
         var_states_for_edges: Array of shape (num_edge_states,)
             Global variable state indices for each edge state
         factor_configs_edge_states: Array of shape (num_factor_configs, 2)
-            factor_configs_edge_states[ii] contains a pair of global factor_config and edge_state indices
-            factor_configs_edge_states[ii, 0] contains the global factor config index
+            factor_configs_edge_states[ii] contains a pair of global enumeration factor_config and global edge_state indices
+            factor_configs_edge_states[ii, 0] contains the global enumeration factor config index
             factor_configs_edge_states[ii, 1] contains the corresponding global edge_state index
     """
 
     edges_num_states: Union[np.ndarray, jnp.ndarray]
     var_states_for_edges: Union[np.ndarray, jnp.ndarray]
     factor_configs_edge_states: Union[np.ndarray, jnp.ndarray]
+
+    def __post_init__(self):
+        for field in self.__dataclass_fields__:
+            if isinstance(getattr(self, field), np.ndarray):
+                getattr(self, field).flags.writeable = False
+
+    def tree_flatten(self):
+        return jax.tree_util.tree_flatten(asdict(self))
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        return cls(**aux_data.unflatten(children))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True, eq=False)
+class ORWiring:
+    """Wiring for OR factors.
+
+    Args:
+        edges_num_states: Array of shape (2 * num_parents,)
+            Number of states for the variables connected to each edge
+        var_states_for_edges:  Array of shape (2 * (num_parents + num_children),)
+            Global parent and children variable state indices for each edge state
+        parents_states: Array of shape (num_parents, 2)
+            parents_states[ii, 0] contains the global OR factor index
+            parents_states[ii, 1] contains the message index of the parent variable's state 0.
+            The parent variable's state 1 is parents_states[ii, 2] + 1
+        children_states: Array of shape (num_factors,)
+            children_states[ii] contains the message index of the child variable's state 0
+            The child variable's state 1 is children_states[ii, 1] + 1
+    """
+
+    edges_num_states: Union[np.ndarray, jnp.ndarray]
+    var_states_for_edges: Union[np.ndarray, jnp.ndarray]
+    parents_edge_states: Union[np.ndarray, jnp.ndarray]
+    children_edge_states: Union[np.ndarray, jnp.ndarray]
 
     def __post_init__(self):
         for field in self.__dataclass_fields__:
@@ -176,44 +213,6 @@ class EnumerationFactor:
         )
 
 
-@jax.tree_util.register_pytree_node_class
-@dataclass(frozen=True, eq=False)
-class ORWiring:
-    """Wiring for OR factors.
-
-    Args:
-        parents_var_states_for_edges: Array of shape (2 * num_parents,)
-            Global parent variable state indices for each edge state
-        child_var_states_for_edges: Array of shape (2,)
-            Global child variable state indices for each edge state
-        parents_states: Array of shape (num_parents, 2)
-            parents_states[ii, 0] contains the global factor index
-            parents_states[ii, 1] contains the message index of the parent variable's state 0.
-            The parent variable's state 1 is parents_states[ii, 2] + 1
-        children_states: Array of shape (num_factors,)
-            children_states[ii] contains the message index of the child variable's state 0
-            The child variable's state 1 is children_states[ii, 1] + 1
-    """
-
-    # TODO: is it needed?
-    parents_var_states_for_edges: Union[np.ndarray, jnp.ndarray]
-    child_var_states_for_edges: Union[np.ndarray, jnp.ndarray]
-    parents_states: Union[np.ndarray, jnp.ndarray]
-    children_states: Union[np.ndarray, jnp.ndarray]
-
-    def __post_init__(self):
-        for field in self.__dataclass_fields__:
-            if isinstance(getattr(self, field), np.ndarray):
-                getattr(self, field).flags.writeable = False
-
-    def tree_flatten(self):
-        return jax.tree_util.tree_flatten(asdict(self))
-
-    @classmethod
-    def tree_unflatten(cls, aux_data, children):
-        return cls(**aux_data.unflatten(children))
-
-
 @dataclass(frozen=True, eq=False)
 class ORFactor:
     """An OR factor
@@ -255,7 +254,7 @@ class ORFactor:
             Array of shape (num_edges,)
             Number of states for the variables connected to each edge
         """
-        return np.array([2] * (len(self.parents_variables) + 1))
+        return np.full((len(self.parents_variables) + 1,), fill_value=2, dtype=int)
 
     def compile_wiring(self, vars_to_starts: Mapping[Variable, int]) -> ORWiring:
         """Compile enumeration wiring for the OR factor
@@ -269,10 +268,13 @@ class ORFactor:
             Enumeration wiring for the enumeration factor
         """
         num_parents = len(self.parents_variables)
-        parents_states = np.vstack(
-            [np.zeros(num_parents), np.arange(0, 2 * num_parents, 2)]
+        parents_edge_states = np.vstack(
+            [
+                np.zeros(num_parents, dtype=int),
+                np.arange(0, 2 * num_parents, 2, dtype=int),
+            ],
         ).T
-        child_state = np.array([[2 * len(self.parents_variables)]])
+        child_edge_state = np.array([[2 * len(self.parents_variables)]], dtype=int)
 
         parents_var_states_for_edges = np.concatenate(
             [
@@ -285,9 +287,13 @@ class ORFactor:
             + vars_to_starts[self.child_variable]
         )
 
+        var_states_for_edges = np.concatenate(
+            [parents_var_states_for_edges, child_var_states_for_edges]
+        )
+
         return ORWiring(
-            parents_states=parents_states,
-            children_states=child_state,
-            parents_var_states_for_edges=parents_var_states_for_edges,
-            child_var_states_for_edges=child_var_states_for_edges,
+            edges_num_states=self.edges_num_states,
+            var_states_for_edges=var_states_for_edges,
+            parents_edge_states=parents_edge_states,
+            children_edge_states=child_edge_state,
         )
