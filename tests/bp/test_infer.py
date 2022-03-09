@@ -4,8 +4,6 @@ import numpy as np
 
 from pgmax.bp import infer
 
-print("We assume that factor_id is increasing and take values in 0,..., n_factors")
-
 
 def test_pass_fac_to_var_messages():
     """
