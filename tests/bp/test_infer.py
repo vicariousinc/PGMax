@@ -22,7 +22,6 @@ def test_pass_fac_to_var_messages():
         num_factors = np.random.randint(3, 8)
         num_parents = np.random.randint(1, 6, num_factors)
         num_parents_cumsum = np.insert(np.cumsum(num_parents), 0, 0)
-        num_variables_cumsum = np.insert(np.cumsum(num_parents + 1), 0, 0)
 
         # Setting the temperature
         if idx % 2 == 0:
@@ -36,9 +35,6 @@ def test_pass_fac_to_var_messages():
             num_states=2, shape=(num_parents.sum(),)
         )
         children_variable1 = groups.NDVariableArray(num_states=2, shape=(num_factors,))
-        variables = groups.NDVariableArray(
-            num_states=2, shape=(num_parents.sum() + num_factors,)
-        )
         fg1 = graph.FactorGraph(
             variables=dict(parents=parents_variables1, children=children_variable1)
         )
