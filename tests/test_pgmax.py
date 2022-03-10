@@ -6,7 +6,7 @@ import numpy as np
 from numpy.random import default_rng
 from scipy.ndimage import gaussian_filter
 
-from pgmax.fg import graph, groups, nodes
+from pgmax.fg import graph, groups
 
 # Set random seed for rng
 rng = default_rng(23)
