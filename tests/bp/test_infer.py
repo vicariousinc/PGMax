@@ -3,12 +3,15 @@ from itertools import product
 import numpy as np
 
 from pgmax.bp import infer
+from pgmax.fg import graph, groups
 
 
 def test_pass_fac_to_var_messages():
     """
-    Compares the specialized pass_OR_fac_to_var_messages implementation which passes messages from OR Factors to Variables
-    to the alternative pass_fac_to_var_messages which enumerates all the possible configurations.
+    Tests the support of OR factor in a factor graph and the specialized inference by comparing two approaches:
+    (1) Defining the equivalent EnumerationFactor of ORFactor (by listing all the valid configurations) and
+    running inference with pass_fac_to_var_messages - which passes messages from enumeration factors to variables
+    (2) Explicitly defining the ORFactor with and running the specialized pass_OR_fac_to_var_messages inference.
     """
 
     for idx in range(10):
@@ -17,6 +20,9 @@ def test_pass_fac_to_var_messages():
         # Define OR factor and incoming messages
         num_factors = np.random.randint(3, 8)
         num_parents = np.random.randint(1, 6, num_factors)
+        num_parents_cumsum = np.insert(np.cumsum(num_parents), 0, 0)
+        num_variables_cumsum = np.insert(np.cumsum(num_parents + 1), 0, 0)
+
         vtof_msgs = np.random.normal(
             0, 1, size=(2 * (sum(num_parents) + len(num_parents)))
         )
@@ -26,73 +32,45 @@ def test_pass_fac_to_var_messages():
         else:
             temperature = np.random.uniform(low=0.5, high=1.0)
 
-        # Support for pass_fac_to_var_messages
-        factor_configs_edge_states = None
-        factor_config_start = 0
-        edge_state_start = 0
-        for this_num_parents in num_parents:
-            configs = np.array(
-                list(product([0, 1], repeat=this_num_parents + 1))
-            ).astype(float)
+        # Option 1: Defining OR factors as Enumeration Factor and running pass_fac_to_var_messages
+        variables = groups.NDVariableArray(
+            num_states=2, shape=(num_parents.sum() + num_factors,)
+        )
+        fg1 = graph.FactorGraph(variables=dict(variables=variables))
+
+        for factor_idx in range(num_factors):
+            this_num_parents = num_parents[factor_idx]
+            variable_names = [
+                ("variables", idx)
+                for idx in range(
+                    num_variables_cumsum[factor_idx],
+                    num_variables_cumsum[factor_idx + 1],
+                )
+            ]
+
+            configs = np.array(list(product([0, 1], repeat=this_num_parents + 1)))
             # Children state is last
             valid_ON_configs = configs[
                 np.logical_and(configs[:, :-1].sum(axis=1) >= 1, configs[:, -1] == 1)
             ]
             valid_configs = np.concatenate(
-                [np.zeros((1, this_num_parents + 1)), valid_ON_configs], axis=0
+                [np.zeros((1, this_num_parents + 1), dtype=int), valid_ON_configs],
+                axis=0,
             )
             assert valid_configs.shape[0] == 2 ** this_num_parents
 
-            positions = np.arange(
-                edge_state_start, edge_state_start + 2 * (this_num_parents + 1), 2
-            )
-            edge_states = positions + valid_configs
-            factor_config = np.arange(
-                factor_config_start, factor_config_start + edge_states.shape[0]
-            ).reshape(-1, 1) @ np.ones((1, this_num_parents + 1))
-            this_factor_configs_edge_states = np.concatenate(
-                [factor_config.reshape(-1, 1), edge_states.reshape(-1, 1)], axis=1
+            fg1.add_factor(
+                variable_names=variable_names,
+                factor_configs=valid_configs,
+                log_potentials=np.zeros(valid_configs.shape[0]),
             )
 
-            if factor_configs_edge_states is None:
-                factor_configs_edge_states = this_factor_configs_edge_states
-            else:
-                factor_configs_edge_states = np.concatenate(
-                    [factor_configs_edge_states, this_factor_configs_edge_states],
-                    axis=0,
-                )
-            factor_config_start += 2 ** this_num_parents
-            edge_state_start += 2 * (this_num_parents + 1)
+        factor_configs_edge_states = (
+            fg1.fg_state.wiring.enum_wiring.factor_configs_edge_states
+        )
+        log_potentials = fg1.fg_state.log_potentials
+        num_val_configs = int(factor_configs_edge_states[-1, 0]) + 1
 
-        factor_configs_edge_states = factor_configs_edge_states.astype(np.int32)
-        num_val_configs = factor_config_start
-        log_potentials = np.zeros(num_val_configs)
-
-        # Support for pass_OR_fac_to_var_messages
-        parents_states = None
-        edge_state_start = 0
-        for factor_idx, this_num_parents in enumerate(num_parents):
-            parents_positions = np.arange(
-                edge_state_start, edge_state_start + 2 * this_num_parents, 2
-            )
-            this_parents_states = np.vstack(
-                [np.full(parents_positions.shape[0], factor_idx), parents_positions]
-            ).T
-            this_children_states = np.array([edge_state_start + 2 * this_num_parents])
-
-            if parents_states is None:
-                parents_states = this_parents_states
-                children_states = this_children_states
-            else:
-                parents_states = np.concatenate(
-                    [parents_states, this_parents_states], axis=0
-                )
-                children_states = np.concatenate(
-                    [children_states, this_children_states], axis=0
-                )
-            edge_state_start += 2 * (this_num_parents + 1)
-
-        # With pass_fac_to_var_messages
         ftov_msgs1 = infer.pass_fac_to_var_messages(
             vtof_msgs,
             factor_configs_edge_states,
@@ -100,22 +78,58 @@ def test_pass_fac_to_var_messages():
             num_val_configs,
             temperature,
         )
-        ftoparents_msgs1 = (
-            ftov_msgs1[parents_states[..., 1] + 1] - ftov_msgs1[parents_states[..., 1]]
+
+        # Option 2: Explicitly defining OR factors and running pass_OR_fac_to_var_messages
+        parents_variables = groups.NDVariableArray(
+            num_states=2, shape=(num_parents.sum(),)
         )
-        ftochildren_msgs1 = (
-            ftov_msgs1[children_states + 1] - ftov_msgs1[children_states]
+        children_variable = groups.NDVariableArray(num_states=2, shape=(num_factors,))
+        fg2 = graph.FactorGraph(
+            variables=dict(parents=parents_variables, children=children_variable)
         )
 
-        # With pass_OR_fac_to_var_messages
+        num_parents_cumsum = np.insert(np.cumsum(num_parents), 0, 0)
+        parents_names_for_factors = []
+        children_names_for_factors = []
+
+        for factor_idx in range(num_factors):
+            children_names_for_factors.append(("children", factor_idx))
+            parents_names_for_factors.append(
+                [
+                    ("parents", idx)
+                    for idx in range(
+                        num_parents_cumsum[factor_idx],
+                        num_parents_cumsum[factor_idx + 1],
+                    )
+                ]
+            )
+
+        fg2.add_factor_group(
+            factory=groups.ORFactorGroup,
+            parents_names_for_factors=parents_names_for_factors,
+            children_names_for_factors=children_names_for_factors,
+        )
+        parents_edge_states = fg2.fg_state.wiring.or_wiring.parents_edge_states
+        children_edge_states = fg2.fg_state.wiring.or_wiring.children_edge_states
+
         ftov_msgs2 = infer.pass_OR_fac_to_var_messages(
-            vtof_msgs, parents_states, children_states, temperature
+            vtof_msgs, parents_edge_states, children_edge_states, temperature
+        )
+
+        # Comparing both approaches
+        ftoparents_msgs1 = (
+            ftov_msgs1[parents_edge_states[..., 1] + 1]
+            - ftov_msgs1[parents_edge_states[..., 1]]
+        )
+        ftochildren_msgs1 = (
+            ftov_msgs1[children_edge_states + 1] - ftov_msgs1[children_edge_states]
         )
         ftoparents_msgs2 = (
-            ftov_msgs2[parents_states[..., 1] + 1] - ftov_msgs2[parents_states[..., 1]]
+            ftov_msgs2[parents_edge_states[..., 1] + 1]
+            - ftov_msgs2[parents_edge_states[..., 1]]
         )
         ftochildren_msgs2 = (
-            ftov_msgs2[children_states + 1] - ftov_msgs2[children_states]
+            ftov_msgs2[children_edge_states + 1] - ftov_msgs2[children_edge_states]
         )
 
         assert np.allclose(ftochildren_msgs1, ftochildren_msgs2, atol=1e-4)

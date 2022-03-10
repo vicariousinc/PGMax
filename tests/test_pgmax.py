@@ -365,7 +365,7 @@ def test_e2e_sanity_check():
     # Run BP
     # Set the evidence
     bp_state = fg.bp_state
-    assert isinstance(jax.device_put(fg.fg_state.wiring), nodes.EnumerationWiring)
+    assert isinstance(jax.device_put(fg.fg_state.wiring), graph.GraphWiring)
     bp_state.evidence["grid_vars"] = grid_evidence_arr
     bp_state.evidence["additional_vars"] = additional_vars_evidence_dict
     run_bp, _, get_beliefs = graph.BP(bp_state, 100)

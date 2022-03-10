@@ -393,14 +393,17 @@ class GraphWiring:
     enum_wiring: Optional[nodes.EnumerationWiring]
 
     def __post_init__(self):
-        factor_indices = self.or_wiring.parents_edge_states[:, 0]
-        num_or_factors = self.children_edge_states.shape[0]
+        if self.or_wiring is not None:
+            factor_indices = self.or_wiring.parents_edge_states[:, 0]
+            num_or_factors = self.or_wiring.children_edge_states.shape[0]
 
-        if factor_indices.max() >= num_or_factors:
-            raise ValueError("Highest label must be num_or_factors - 1")
+            if factor_indices.max() >= num_or_factors:
+                raise ValueError("Highest label must be num_or_factors - 1")
 
-        if np.unique(factor_indices).shape[0] != num_or_factors:
-            raise ValueError("There must be num_or_factors different factor indices")
+            if np.unique(factor_indices).shape[0] != num_or_factors:
+                raise ValueError(
+                    "There must be num_or_factors different factor indices"
+                )
 
 
 @dataclass(frozen=True, eq=False)
