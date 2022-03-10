@@ -33,28 +33,6 @@ from pgmax.fg import fg_utils, groups, nodes
 from pgmax.utils import cached_property
 
 
-@dataclass(frozen=True, eq=False)
-class A:
-    x: int
-
-
-@dataclass(frozen=True, eq=False)
-class B(A):
-    y: int
-
-
-@dataclass(frozen=True, eq=False)
-class C(A):
-    z: int
-
-
-D = C(x=0, z=0)
-if isinstance(D, B):
-    print(D.z)
-elif isinstance(D, C):
-    print(D.z)
-
-
 @dataclass
 class FactorGraph:
     """Class for representing a factor graph
@@ -232,8 +210,7 @@ class FactorGraph:
         If wiring has already beeen compiled, do nothing.
 
         Returns:
-            Compiled wiring from individual factors.
-            None if the graph only has OR factors.
+            Compiled graph wiring from individual factors.
         """
         is_enum_factor = np.array(
             [
@@ -270,11 +247,6 @@ class FactorGraph:
         or_wiring = fg_utils.concatenate_or_wirings(
             or_wirings, num_edge_states_cumsum[is_or_factor]
         )
-        for oo in or_wirings:
-            print(oo)
-
-        print("\n\n")
-        print(or_wiring)
 
         return GraphWiring(
             edges_num_states=np.concatenate(
@@ -374,7 +346,7 @@ class FactorGraphState:
         named_factor_groups: Maps the names of named factor groups to the corresponding factor groups.
         factor_group_to_potentials_starts: Maps factor groups to their starting indices in the flat log potentials.
         factor_to_potentials_starts: Maps factors to their starting indices in the flat log potentials.
-        factor_to_msgs_starts: Maps enumeration factors to their starting indices in the flat ftov messages.
+        factor_to_msgs_starts: Maps factors to their starting indices in the flat ftov messages.
         log_potentials: Flat log potentials array.
         wiring: Wiring derived from the current set of factors.
     """
@@ -419,6 +391,16 @@ class GraphWiring:
     var_states_for_edges: Union[np.ndarray, jnp.ndarray]
     or_wiring: Optional[nodes.ORWiring]
     enum_wiring: Optional[nodes.EnumerationWiring]
+
+    def __post_init__(self):
+        factor_indices = self.or_wiring.parents_edge_states[:, 0]
+        num_or_factors = self.children_edge_states.shape[0]
+
+        if factor_indices.max() >= num_or_factors:
+            raise ValueError("Highest label must be num_or_factors - 1")
+
+        if np.unique(factor_indices).shape[0] != num_or_factors:
+            raise ValueError("There must be num_or_factors different factor indices")
 
 
 @dataclass(frozen=True, eq=False)
@@ -499,9 +481,7 @@ def update_log_potentials(
         elif frozenset(name) in fg_state.variables_to_factors:
             factor = fg_state.variables_to_factors[frozenset(name)]
             if not isinstance(factor, nodes.EnumerationFactor):
-                raise ValueError(
-                    "The factor {factor.name} does not have log potentials"
-                )
+                raise ValueError(f"The factor {name} does not have log potentials")
 
             if data.shape != factor.log_potentials.shape:
                 raise ValueError(
@@ -577,9 +557,7 @@ class LogPotentials:
         elif frozenset(name) in self.fg_state.variables_to_factors:
             factor = self.fg_state.variables_to_factors[frozenset(name)]
             if not isinstance(factor, nodes.EnumerationFactor):
-                raise ValueError(
-                    "The factor {factor.name} does not have log potentials"
-                )
+                raise ValueError(f"The factor {name} does not have log potentials")
 
             start = self.fg_state.factor_to_potentials_starts[factor]
             log_potentials = value[start : start + factor.log_potentials.shape[0]]
@@ -1001,7 +979,6 @@ def BP(
         ftov_msgs = infer.normalize_and_clip_msgs(
             ftov_msgs, wiring.edges_num_states, max_msg_size
         )
-        print(wiring.or_wiring)
 
         @jax.checkpoint
         def update(msgs: jnp.ndarray, _) -> Tuple[jnp.ndarray, None]:

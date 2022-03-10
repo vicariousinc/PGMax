@@ -55,9 +55,10 @@ def pass_fac_to_var_messages(
         vtof_msgs: Array of shape (num_edge_state,). This holds all the flattened variable to factor messages.
         factor_configs_edge_states: Array of shape (num_factor_configs, 2)
             factor_configs_edge_states[ii] contains a pair of global factor_config and edge_state indices
-            factor_configs_edge_states[ii, 0] contains the global factor config index
+            factor_configs_edge_states[ii, 0] contains the global factor config index,
+                which takes into account all the enumeration factors
             factor_configs_edge_states[ii, 1] contains the corresponding global edge_state index,
-                taking into account the other OR factors
+                which takes into account all the enumeration and OR factors
         log_potentials: Array of shape (num_val_configs, ). An entry at index i is the log potential
             function value for the configuration with global factor config index i.
         num_val_configs: the total number of valid configurations for factors in the factor graph.
@@ -105,8 +106,8 @@ def pass_fac_to_var_messages(
 @functools.partial(jax.jit, static_argnames=("temperature"))
 def pass_OR_fac_to_var_messages(
     vtof_msgs: jnp.ndarray,
-    parents_states: jnp.ndarray,
-    children_states: jnp.ndarray,
+    parents_edge_states: jnp.ndarray,
+    children_edge_states: jnp.ndarray,
     temperature: float,
 ) -> jnp.ndarray:
 
@@ -115,33 +116,37 @@ def pass_OR_fac_to_var_messages(
     Args:
         vtof_msgs: Array of shape (num_edge_state,).
             This holds all the flattened (binary) variables to factor messages.
-        parents_states: Array of shape (num_parents, 2)
-            parents_states[ii, 0] contains the global factor index
-            parents_states[ii, 1] contains the message index of the parent variable's state 0,
-                taking into account the other enumerate factors.
-            The parent variable's state 1 is parents_states[ii, 2] + 1
-        children_states: Array of shape (num_factors,)
-            children_states[ii] contains the message index of the child variable's state 0,
-                taking into account the other enumerate factors.
-            The child variable's state 1 is children_states[ii, 1] + 1
+        parents_edge_states: Array of shape (num_parents, 2)
+            parents_edge_states[ii, 0] contains the global factor index,
+                which takes into account all the OR factors
+            parents_edge_states[ii, 1] contains the message index of the parent variable's state 0,
+                which takes into account all the enumeration and OR factors
+            The parent variable's state 1 is parents_edge_states[ii, 2] + 1
+        children_edge_states: Array of shape (num_factors,)
+            children_edge_states[ii] contains the message index of the child variable's state 0,
+                which takes into account all the enumeration and OR factors
+            The child variable's state 1 is children_edge_states[ii, 1] + 1
         temperature: Temperature for loopy belief propagation.
             1.0 corresponds to sum-product, 0.0 corresponds to max-product.
 
     Returns:
         Array of shape (num_edge_state,). This holds all the flattened factor to variable messages.
     """
-    num_factors = children_states.shape[0]
+    num_factors = children_edge_states.shape[0]
 
-    factor_indices = parents_states[..., 0]
+    factor_indices = parents_edge_states[..., 0]
 
     parents_tof_msgs = (
-        vtof_msgs[parents_states[..., 1] + 1] - vtof_msgs[parents_states[..., 1]]
+        vtof_msgs[parents_edge_states[..., 1] + 1]
+        - vtof_msgs[parents_edge_states[..., 1]]
     )
-    children_tof_msgs = vtof_msgs[children_states + 1] - vtof_msgs[children_states]
+    children_tof_msgs = (
+        vtof_msgs[children_edge_states + 1] - vtof_msgs[children_edge_states]
+    )
 
     # We treat the max-product case separately.
     if temperature == 0.0:
-        # Get the first and second argmaxes for the parents messages of each factor
+        # Get the first and second argmaxes for the incoming parents messages of each factor
         _, first_parents_argmaxes = bp_utils.get_maxes_and_argmaxes(
             parents_tof_msgs, factor_indices, num_factors
         )
@@ -221,8 +226,8 @@ def pass_OR_fac_to_var_messages(
     )
 
     ftov_msgs = jnp.zeros_like(vtof_msgs)
-    ftov_msgs = ftov_msgs.at[parents_states[..., 1] + 1].set(parents_msgs)
-    ftov_msgs = ftov_msgs.at[children_states + 1].set(children_msgs)
+    ftov_msgs = ftov_msgs.at[parents_edge_states[..., 1] + 1].set(parents_msgs)
+    ftov_msgs = ftov_msgs.at[children_edge_states + 1].set(children_msgs)
     return ftov_msgs
 
 

@@ -65,13 +65,14 @@ def get_maxes_and_argmaxes(
         data: Array of shape (a_len,) where a_len is an arbitrary integer.
         labels: Label array of shape (a_len,), assigning a label to each entry.
             Labels must be 0,..., num_labels - 1.#
-        num_labels: Number of differenr labels.
+        num_labels: Number of different labels.
 
     Returns:
         Maxes and argmaxes arrays
     """
     if data.shape[0] != labels.shape[0]:
         raise ValueError("Data and labels arrays must have the same size")
+
     num_obs = data.shape[0]
 
     maxes = jnp.full(shape=num_labels, fill_value=NEG_INF).at[labels].max(data)

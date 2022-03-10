@@ -603,7 +603,7 @@ class FactorGroup:
         """Function that generates a dictionary mapping names to factors.
 
         Returns:
-            a dictionary mapping all possible names to different factors.
+            A dictionary mapping all possible names to different factors.
         """
         raise NotImplementedError(
             "Please subclass the FactorGroup class and override this method"
@@ -1032,12 +1032,12 @@ class ORFactorGroup(FactorGroup):
         """Function that generates a dictionary mapping set of connected variables to factors.
 
         Returns:
-            a dictionary mapping all possible set of connected variables to different factors.
+            A dictionary mapping all possible set of connected variables to different factors.
 
         Raises:
             ValueError if:
-                (1) flat_data is not a 1D array
-                (2) flat_data is not of the right shape
+                (1) The length of parents_names_for_factors and children_names_for_factors are not the same
+                (2) One of the parents_names_for_factors list is empty
         """
         if len(self.parents_names_for_factors) != len(self.children_names_for_factors):
             raise ValueError(

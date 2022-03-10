@@ -67,13 +67,16 @@ class ORWiring:
             Number of states for the variables connected to each edge
         var_states_for_edges:  Array of shape (2 * (num_parents + num_children),)
             Global parent and children variable state indices for each edge state
-        parents_states: Array of shape (num_parents, 2)
-            parents_states[ii, 0] contains the global OR factor index
-            parents_states[ii, 1] contains the message index of the parent variable's state 0.
-            The parent variable's state 1 is parents_states[ii, 2] + 1
-        children_states: Array of shape (num_factors,)
-            children_states[ii] contains the message index of the child variable's state 0
-            The child variable's state 1 is children_states[ii, 1] + 1
+        parents_edge_states: Array of shape (num_parents, 2)
+            parents_edge_states[ii, 0] contains the global factor index,
+                which takes into account all the OR factors
+            parents_edge_states[ii, 1] contains the message index of the parent variable's state 0,
+                which takes into account all the enumeration and OR factors
+            The parent variable's state 1 is parents_edge_states[ii, 2] + 1
+        children_edge_states: Array of shape (num_factors,)
+            children_edge_states[ii] contains the message index of the child variable's state 0,
+                which takes into account all the enumeration and OR factors
+            The child variable's state 1 is children_edge_states[ii, 1] + 1
     """
 
     edges_num_states: Union[np.ndarray, jnp.ndarray]
@@ -174,8 +177,10 @@ class EnumerationFactor:
         Returns:
             Array of shape (num_factor_configs, 2)
             factor_configs_edge_states[ii] contains a pair of global factor_config and edge_state indices
-            factor_configs_edge_states[ii, 0] contains the global factor config index
-            factor_configs_edge_states[ii, 1] contains the corresponding global edge_state index
+            factor_configs_edge_states[ii, 0] contains the global factor config index,
+                which takes into account all the enumeration factors
+            factor_configs_edge_states[ii, 1] contains the corresponding global edge_state index,
+                which takes into account all the enumeration and OR factors
         """
         edges_starts = np.insert(self.edges_num_states.cumsum(), 0, 0)[:-1]
         factor_configs_edge_states = np.stack(
@@ -273,7 +278,7 @@ class ORFactor:
                 of its n variable states are m, m + 1, ..., m + n - 1
 
         Returns:
-            Enumeration wiring for the enumeration factor
+            OR wiring for the enumeration factor
         """
         num_parents = len(self.parents_variables)
         parents_edge_states = np.vstack(
