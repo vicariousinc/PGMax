@@ -806,11 +806,11 @@ def update_evidence(
             evidence = evidence.at[start_index : start_index + flat_data.shape[0]].set(
                 flat_data
             )
+            print(variable_group, start_index, start_index + flat_data.shape[0])
         else:
             var = fg_state.variable_group[name]
             start_index = fg_state.vars_to_starts[var]
             evidence = evidence.at[start_index : start_index + var.num_states].set(data)
-
     return evidence
 
 

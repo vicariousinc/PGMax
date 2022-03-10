@@ -56,9 +56,9 @@ def pass_fac_to_var_messages(
         factor_configs_edge_states: Array of shape (num_factor_configs, 2)
             factor_configs_edge_states[ii] contains a pair of global factor_config and edge_state indices
             factor_configs_edge_states[ii, 0] contains the global factor config index,
-                which takes into account all the enumeration factors
+            which takes into account all the enumeration factors
             factor_configs_edge_states[ii, 1] contains the corresponding global edge_state index,
-                which takes into account all the enumeration and OR factors
+            which takes into account all the enumeration and OR factors
         log_potentials: Array of shape (num_val_configs, ). An entry at index i is the log potential
             function value for the configuration with global factor config index i.
         num_val_configs: the total number of valid configurations for factors in the factor graph.
@@ -118,13 +118,13 @@ def pass_OR_fac_to_var_messages(
             This holds all the flattened (binary) variables to factor messages.
         parents_edge_states: Array of shape (num_parents, 2)
             parents_edge_states[ii, 0] contains the global factor index,
-                which takes into account all the OR factors
+            which takes into account all the OR factors
             parents_edge_states[ii, 1] contains the message index of the parent variable's state 0,
-                which takes into account all the enumeration and OR factors
+            which takes into account all the enumeration and OR factors
             The parent variable's state 1 is parents_edge_states[ii, 2] + 1
         children_edge_states: Array of shape (num_factors,)
             children_edge_states[ii] contains the message index of the child variable's state 0,
-                which takes into account all the enumeration and OR factors
+            which takes into account all the enumeration and OR factors
             The child variable's state 1 is children_edge_states[ii, 1] + 1
         temperature: Temperature for loopy belief propagation.
             1.0 corresponds to sum-product, 0.0 corresponds to max-product.

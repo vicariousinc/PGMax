@@ -1,5 +1,6 @@
 from itertools import product
 
+import jax
 import numpy as np
 
 from pgmax.bp import infer
@@ -23,30 +24,34 @@ def test_pass_fac_to_var_messages():
         num_parents_cumsum = np.insert(np.cumsum(num_parents), 0, 0)
         num_variables_cumsum = np.insert(np.cumsum(num_parents + 1), 0, 0)
 
-        vtof_msgs = np.random.normal(
-            0, 1, size=(2 * (sum(num_parents) + len(num_parents)))
-        )
+        # Setting the temperature
         if idx % 2 == 0:
             # Max-product
             temperature = 0.0
         else:
             temperature = np.random.uniform(low=0.5, high=1.0)
 
-        # Option 1: Defining OR factors as Enumeration Factor and running pass_fac_to_var_messages
+        # Graph 1: Defining OR factors as Enumeration Factor
+        parents_variables1 = groups.NDVariableArray(
+            num_states=2, shape=(num_parents.sum(),)
+        )
+        children_variable1 = groups.NDVariableArray(num_states=2, shape=(num_factors,))
         variables = groups.NDVariableArray(
             num_states=2, shape=(num_parents.sum() + num_factors,)
         )
-        fg1 = graph.FactorGraph(variables=dict(variables=variables))
+        fg1 = graph.FactorGraph(
+            variables=dict(parents=parents_variables1, children=children_variable1)
+        )
 
         for factor_idx in range(num_factors):
             this_num_parents = num_parents[factor_idx]
             variable_names = [
-                ("variables", idx)
+                ("parents", idx)
                 for idx in range(
-                    num_variables_cumsum[factor_idx],
-                    num_variables_cumsum[factor_idx + 1],
+                    num_parents_cumsum[factor_idx],
+                    num_parents_cumsum[factor_idx + 1],
                 )
-            ]
+            ] + [("children", factor_idx)]
 
             configs = np.array(list(product([0, 1], repeat=this_num_parents + 1)))
             # Children state is last
@@ -65,27 +70,13 @@ def test_pass_fac_to_var_messages():
                 log_potentials=np.zeros(valid_configs.shape[0]),
             )
 
-        factor_configs_edge_states = (
-            fg1.fg_state.wiring.enum_wiring.factor_configs_edge_states
-        )
-        log_potentials = fg1.fg_state.log_potentials
-        num_val_configs = int(factor_configs_edge_states[-1, 0]) + 1
-
-        ftov_msgs1 = infer.pass_fac_to_var_messages(
-            vtof_msgs,
-            factor_configs_edge_states,
-            log_potentials,
-            num_val_configs,
-            temperature,
-        )
-
-        # Option 2: Explicitly defining OR factors and running pass_OR_fac_to_var_messages
-        parents_variables = groups.NDVariableArray(
+        # Graph 2: Explicitly defining OR factors
+        parents_variables2 = groups.NDVariableArray(
             num_states=2, shape=(num_parents.sum(),)
         )
-        children_variable = groups.NDVariableArray(num_states=2, shape=(num_factors,))
+        children_variable2 = groups.NDVariableArray(num_states=2, shape=(num_factors,))
         fg2 = graph.FactorGraph(
-            variables=dict(parents=parents_variables, children=children_variable)
+            variables=dict(parents=parents_variables2, children=children_variable2)
         )
 
         num_parents_cumsum = np.insert(np.cumsum(num_parents), 0, 0)
@@ -109,14 +100,32 @@ def test_pass_fac_to_var_messages():
             parents_names_for_factors=parents_names_for_factors,
             children_names_for_factors=children_names_for_factors,
         )
+
+        # Test 1: Comparing both specialized inference functions
+        vtof_msgs = np.random.normal(
+            0, 1, size=(2 * (sum(num_parents) + len(num_parents)))
+        )
+        factor_configs_edge_states = (
+            fg1.fg_state.wiring.enum_wiring.factor_configs_edge_states
+        )
+        log_potentials = fg1.fg_state.log_potentials
+        num_val_configs = int(factor_configs_edge_states[-1, 0]) + 1
+
+        ftov_msgs1 = infer.pass_fac_to_var_messages(
+            vtof_msgs,
+            factor_configs_edge_states,
+            log_potentials,
+            num_val_configs,
+            temperature,
+        )
+
         parents_edge_states = fg2.fg_state.wiring.or_wiring.parents_edge_states
         children_edge_states = fg2.fg_state.wiring.or_wiring.children_edge_states
 
         ftov_msgs2 = infer.pass_OR_fac_to_var_messages(
             vtof_msgs, parents_edge_states, children_edge_states, temperature
         )
-
-        # Comparing both approaches
+        # Note: ftov_msgs1 and ftov_msgs2 are not normalized
         ftoparents_msgs1 = (
             ftov_msgs1[parents_edge_states[..., 1] + 1]
             - ftov_msgs1[parents_edge_states[..., 1]]
@@ -134,3 +143,16 @@ def test_pass_fac_to_var_messages():
 
         assert np.allclose(ftochildren_msgs1, ftochildren_msgs2, atol=1e-4)
         assert np.allclose(ftoparents_msgs1, ftoparents_msgs2, atol=1e-4)
+
+        # Test 2: Running inference with graph.BP
+        run_bp1, _, _ = graph.BP(fg1.bp_state, 1)
+        run_bp2, _, _ = graph.BP(fg2.bp_state, 1)
+
+        evidence_updates = {
+            "parents": jax.device_put(np.random.gumbel(size=(sum(num_parents), 2))),
+            "children": jax.device_put(np.random.gumbel(size=(num_factors, 2))),
+        }
+
+        bp_arrays1 = run_bp1(evidence_updates=evidence_updates)
+        bp_arrays2 = run_bp2(evidence_updates=evidence_updates)
+        assert np.allclose(bp_arrays1.ftov_msgs, bp_arrays2.ftov_msgs, atol=1e-4)
