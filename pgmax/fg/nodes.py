@@ -59,8 +59,8 @@ class EnumerationWiring:
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True, eq=False)
-class ORWiring:
-    """Wiring for OR factors.
+class LogicalWiring:
+    """Wiring for logical factors.
 
     Args:
         edges_num_states: Array of shape (2 * num_parents,)
@@ -69,13 +69,13 @@ class ORWiring:
             Global parent and children variable state indices for each edge state
         parents_edge_states: Array of shape (num_parents, 2)
             parents_edge_states[ii, 0] contains the global factor index,
-                which takes into account all the OR factors
+            which takes into account all the logical factors
             parents_edge_states[ii, 1] contains the message index of the parent variable's state 0,
-                which takes into account all the enumeration and OR factors
+            which takes into account all the enumeration and logical factors
             The parent variable's state 1 is parents_edge_states[ii, 2] + 1
         children_edge_states: Array of shape (num_factors,)
             children_edge_states[ii] contains the message index of the child variable's state 0,
-                which takes into account all the enumeration and OR factors
+            which takes into account all the enumeration and logical factors
             The child variable's state 1 is children_edge_states[ii, 1] + 1
     """
 
@@ -95,6 +95,12 @@ class ORWiring:
     @classmethod
     def tree_unflatten(cls, aux_data, children):
         return cls(**aux_data.unflatten(children))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True, eq=False)
+class ORWiring(LogicalWiring):
+    pass
 
 
 @dataclass(frozen=True, eq=False)
@@ -178,9 +184,9 @@ class EnumerationFactor:
             Array of shape (num_factor_configs, 2)
             factor_configs_edge_states[ii] contains a pair of global factor_config and edge_state indices
             factor_configs_edge_states[ii, 0] contains the global factor config index,
-                which takes into account all the enumeration factors
+            which takes into account all the enumeration factors
             factor_configs_edge_states[ii, 1] contains the corresponding global edge_state index,
-                which takes into account all the enumeration and OR factors
+            which takes into account all the enumeration and logical factors
         """
         edges_starts = np.insert(self.edges_num_states.cumsum(), 0, 0)[:-1]
         factor_configs_edge_states = np.stack(
@@ -219,8 +225,8 @@ class EnumerationFactor:
 
 
 @dataclass(frozen=True, eq=False)
-class ORFactor:
-    """An OR factor
+class LogicalFactor:
+    """A logical OR/AND factor
 
     Args:
         parents_variables: List of parents variables
@@ -265,12 +271,12 @@ class ORFactor:
     def variables(self) -> np.ndarray:
         """
         Returns:
-            All the variables of the OR factor
+            All the variables of the logical factor
         """
         return self.parents_variables + (self.child_variable,)
 
     def compile_wiring(self, vars_to_starts: Mapping[Variable, int]) -> ORWiring:
-        """Compile enumeration wiring for the OR factor
+        """Compile enumeration wiring for the logical factor
 
         Args:
             vars_to_starts: A dictionary that maps variables to their global starting indices
@@ -278,7 +284,7 @@ class ORFactor:
                 of its n variable states are m, m + 1, ..., m + n - 1
 
         Returns:
-            OR wiring for the enumeration factor
+            Logical wiring for the logical factor
         """
         num_parents = len(self.parents_variables)
         parents_edge_states = np.vstack(
@@ -310,3 +316,8 @@ class ORFactor:
             parents_edge_states=parents_edge_states,
             children_edge_states=child_edge_state,
         )
+
+
+@dataclass(frozen=True, eq=False)
+class ORFactor(LogicalFactor):
+    pass

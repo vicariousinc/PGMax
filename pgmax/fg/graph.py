@@ -76,7 +76,7 @@ class FactorGraph:
         )
         self._named_factor_groups: Dict[Hashable, groups.FactorGroup] = {}
         self._variables_to_factors: OrderedDict[
-            FrozenSet, Union[nodes.EnumerationFactor, nodes.ORFactor]
+            FrozenSet, Union[nodes.EnumerationFactor, nodes.LogicalFactor]
         ] = collections.OrderedDict()
         # For ftov messages
         self._total_factor_num_states: int = 0
@@ -84,10 +84,10 @@ class FactorGraph:
             groups.FactorGroup, int
         ] = collections.OrderedDict()
         self._factor_to_msgs_starts: OrderedDict[
-            Union[nodes.EnumerationFactor, nodes.ORFactor], int
+            Union[nodes.EnumerationFactor, nodes.LogicalFactor], int
         ] = collections.OrderedDict()
 
-        # For log potentials
+        # Only enumeration and pairwise factors have log potentials
         self._total_factor_num_configs: int = 0
         self._factor_group_to_potentials_starts: OrderedDict[
             groups.FactorGroup, int
@@ -292,7 +292,9 @@ class FactorGraph:
         )
 
     @cached_property
-    def factors(self) -> Tuple[Union[nodes.EnumerationFactor, nodes.ORFactor], ...]:
+    def factors(
+        self,
+    ) -> Tuple[Union[nodes.EnumerationFactor, nodes.LogicalFactor], ...]:
         """Tuple of individual factors in the factor graph"""
         return tuple(self._variables_to_factors.values())
 
@@ -356,11 +358,11 @@ class FactorGraphState:
     num_var_states: int
     total_factor_num_states: int
     variables_to_factors: Mapping[
-        FrozenSet, Union[nodes.EnumerationFactor, nodes.ORFactor]
+        FrozenSet, Union[nodes.EnumerationFactor, nodes.LogicalFactor]
     ]
     named_factor_groups: Mapping[Hashable, groups.FactorGroup]
     factor_to_msgs_starts: OrderedDict[
-        Union[nodes.EnumerationFactor, nodes.ORFactor], int
+        Union[nodes.EnumerationFactor, nodes.LogicalFactor], int
     ]
     log_potentials: np.ndarray
     factor_group_to_potentials_starts: Mapping[groups.FactorGroup, int]
@@ -389,8 +391,8 @@ class GraphWiring:
 
     edges_num_states: Union[np.ndarray, jnp.ndarray]
     var_states_for_edges: Union[np.ndarray, jnp.ndarray]
-    or_wiring: Optional[nodes.ORWiring]
     enum_wiring: Optional[nodes.EnumerationWiring]
+    or_wiring: Optional[nodes.ORWiring]
 
     def __post_init__(self):
         if self.or_wiring is not None:

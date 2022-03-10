@@ -7,14 +7,13 @@ from pgmax.bp import infer
 from pgmax.fg import graph, groups
 
 
-def test_pass_fac_to_var_messages():
+def test_run_bp_with_OR_factors():
     """
     Tests the support of OR factor in a factor graph and the specialized inference by comparing two approaches:
-    (1) Defining the equivalent EnumerationFactor of ORFactor (by listing all the valid configurations) and
-    running inference with pass_fac_to_var_messages - which passes messages from enumeration factors to variables
+    (1) Defining the equivalent enumeration factors of the OR factors (by listing all the valid configurations)
+    and running inference with pass_fac_to_var_messages - which passes messages from enumeration factors to variables
     (2) Explicitly defining the ORFactor with and running the specialized pass_OR_fac_to_var_messages inference.
     """
-
     for idx in range(10):
         np.random.seed(idx)
 
