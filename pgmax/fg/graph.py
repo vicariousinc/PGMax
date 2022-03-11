@@ -78,6 +78,7 @@ class FactorGraph:
         self._variables_to_factors: OrderedDict[
             FrozenSet, Union[nodes.EnumerationFactor, nodes.LogicalFactor]
         ] = collections.OrderedDict()
+
         # For ftov messages
         self._total_factor_num_states: int = 0
         self._factor_group_to_msgs_starts: OrderedDict[
@@ -212,49 +213,37 @@ class FactorGraph:
         Returns:
             Compiled graph wiring from individual factors.
         """
-        is_enum_factor = np.array(
-            [
-                isinstance(factor_group, nodes.EnumerationFactor)
-                for factor_group in self.factors
-            ]
-        )
-        is_or_factor = np.array(
-            [isinstance(factor_group, nodes.ORFactor) for factor_group in self.factors]
-        )
+        enum_wirings = []
+        or_wirings = []
+        enum_factor_to_msgs_starts = []
+        or_factor_to_msgs_starts = []
+        edges_num_states = []
+        var_states_for_edges = []
 
-        enum_wirings = [
-            factor.compile_wiring(self._vars_to_starts)
-            for idx, factor in enumerate(self.factors)
-            if is_enum_factor[idx]
-        ]
+        for factor in self.factors:
+            factor_to_msgs_starts = self._factor_to_msgs_starts[factor]
+            wiring = factor.compile_wiring(self._vars_to_starts)
 
-        or_wirings = [
-            factor.compile_wiring(self._vars_to_starts)
-            for idx, factor in enumerate(self.factors)
-            if is_or_factor[idx]
-        ]
-        wirings = enum_wirings + or_wirings
+            edges_num_states.append(wiring.edges_num_states)
+            var_states_for_edges.append(wiring.var_states_for_edges)
 
-        num_edge_states_cumsum = np.insert(
-            np.array([wiring.edges_num_states.sum() for wiring in wirings]).cumsum(),
-            0,
-            0,
-        )[:-1]
+            if isinstance(factor, nodes.EnumerationFactor):
+                enum_wirings.append(wiring)
+                enum_factor_to_msgs_starts.append(factor_to_msgs_starts)
+            elif isinstance(factor, nodes.ORFactor):
+                or_wirings.append(wiring)
+                or_factor_to_msgs_starts.append(factor_to_msgs_starts)
 
         enum_wiring = fg_utils.concatenate_enumeration_wirings(
-            enum_wirings, num_edge_states_cumsum[is_enum_factor]
+            enum_wirings, enum_factor_to_msgs_starts
         )
         or_wiring = fg_utils.concatenate_or_wirings(
-            or_wirings, num_edge_states_cumsum[is_or_factor]
+            or_wirings, or_factor_to_msgs_starts
         )
 
         return GraphWiring(
-            edges_num_states=np.concatenate(
-                [wiring.edges_num_states for wiring in wirings]
-            ),
-            var_states_for_edges=np.concatenate(
-                [wiring.var_states_for_edges for wiring in wirings]
-            ),
+            edges_num_states=np.concatenate(edges_num_states),
+            var_states_for_edges=np.concatenate(var_states_for_edges),
             enum_wiring=enum_wiring,
             or_wiring=or_wiring,
         )
@@ -383,10 +372,10 @@ class GraphWiring:
     """Container class for the wiring of a factor graph
 
     Args:
-        log_potentials: log potentials of the model
-        ftov_msgs: factor to variable messages
-        evidence: evidence (unary log potentials) for variables.
-
+        edges_num_states: Array of the total number of edge states for all factors in the factor group.
+        var_states_for_edges: Array of the glocal variable state indices for each edge state.
+        enum_wiring: Enumeration wiring for all the enumeration factors.
+        or_wiring: OR wiring for all the OR factors.
     """
 
     edges_num_states: Union[np.ndarray, jnp.ndarray]
@@ -808,7 +797,6 @@ def update_evidence(
             evidence = evidence.at[start_index : start_index + flat_data.shape[0]].set(
                 flat_data
             )
-            print(variable_group, start_index, start_index + flat_data.shape[0])
         else:
             var = fg_state.variable_group[name]
             start_index = fg_state.vars_to_starts[var]
