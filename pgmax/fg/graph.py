@@ -240,7 +240,8 @@ class FactorGraph:
         or_wiring = fg_utils.concatenate_logical_wirings(
             or_wirings, or_factor_to_msgs_starts
         )
-        assert isinstance(or_wiring, nodes.ORWiring)
+        if or_wiring is not None:
+            assert isinstance(or_wiring, nodes.ORWiring)
 
         return GraphWiring(
             edges_num_states=np.concatenate(edges_num_states),
