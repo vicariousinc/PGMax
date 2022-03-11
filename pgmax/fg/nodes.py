@@ -327,7 +327,7 @@ class LogicalFactor:
         return var_states_for_edges
 
     def compile_wiring(self, vars_to_starts: Mapping[Variable, int]) -> LogicalWiring:
-        """Compile enumeration wiring for the logical factor
+        """Compile logical wiring for the logical factor
 
         Args:
             vars_to_starts: A dictionary that maps variables to their global starting indices
@@ -338,14 +338,14 @@ class LogicalFactor:
             Logical wiring for the logical factor
         """
         raise NotImplementedError(
-            "Please subclass the VariableGroup class and override this method"
+            "Please subclass the LogicalFactor class and override this method"
         )
 
 
 @dataclass(frozen=True, eq=False)
 class ORFactor(LogicalFactor):
     def compile_wiring(self, vars_to_starts: Mapping[Variable, int]) -> ORWiring:
-        """Compile enumeration wiring for the logical factor
+        """Compile OR wiring for the OR factor
 
         Args:
             vars_to_starts: A dictionary that maps variables to their global starting indices
@@ -353,7 +353,7 @@ class ORFactor(LogicalFactor):
                 of its n variable states are m, m + 1, ..., m + n - 1
 
         Returns:
-            Logical wiring for the OR factor
+            OR wiring for the OR factor
         """
         var_states_for_edges = self.get_var_states_for_edges(vars_to_starts)
 

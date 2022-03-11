@@ -375,7 +375,7 @@ class GraphWiring:
 
     Args:
         edges_num_states: Array of the total number of edge states for all factors in the factor group.
-        var_states_for_edges: Array of the glocal variable state indices for each edge state.
+        var_states_for_edges: Array of the global variable state indices for each edge state.
         enum_wiring: Enumeration wiring for all the enumeration factors.
         or_wiring: OR wiring for all the OR factors.
     """
@@ -392,12 +392,12 @@ class GraphWiring:
 
             if factor_indices.max() >= num_OR_factors:
                 raise ValueError(
-                    "The highest OR factor index must be num_OR_factors - 1"
+                    f"The highest OR factor index must be {num_OR_factors - 1}"
                 )
 
             if np.unique(factor_indices).shape[0] != num_OR_factors:
                 raise ValueError(
-                    "There must be num_OR_factors different OR factor indices"
+                    f"There must be {num_OR_factors} different OR factor indices"
                 )
 
 
