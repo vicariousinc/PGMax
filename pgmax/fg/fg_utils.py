@@ -14,9 +14,8 @@ def concatenate_enumeration_wirings(
 
     Args:
         enum_wirings: A list of enumeration wirings, one for each individual enumeration factor
-        enum_factor_to_msgs_starts: List of offsets indices for the edge_states indices of each
-            enumeration factor. The offsets take into account all the different types of factors
-            in the graph.
+        enum_factor_to_msgs_starts: List of offsets indices for the edge_states of each enumeration factor.
+            The offsets take into account all the factors in the graph.
 
     Returns:
         Concatenated enumeration wiring
@@ -56,12 +55,12 @@ def concatenate_enumeration_wirings(
 def concatenate_or_wirings(
     or_wirings: Sequence[ORWiring], or_factor_to_msgs_starts: np.ndarray
 ) -> Union[None, ORWiring]:
-    """Concatenate a list of logical wirings from individual logical factors
+    """Concatenate a list of OR wirings from individual OR factors
 
     Args:
-        wirings: A list of logical wirings, one for each individual logical factor
-        or_factor_to_msgs_starts: List of offsets indices for the edge_states indices of each
-            OR factor. The offsets take into account all the different types of factors in the graph.
+        or_wirings: A list of OR wirings, one for each individual OR factor
+        or_factor_to_msgs_starts: List of offsets indices for the edge_states of each OR factor.
+            The offsets take into account all the factors in the graph.
 
     Returns:
         Concatenated OR wiring

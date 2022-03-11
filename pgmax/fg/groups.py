@@ -562,7 +562,7 @@ class FactorGroup:
 
     variable_group: Union[CompositeVariableGroup, VariableGroup]
     _variables_to_factors: Mapping[
-        FrozenSet, Union[nodes.EnumerationFactor, nodes.ORFactor]
+        FrozenSet, Union[nodes.EnumerationFactor, nodes.LogicalFactor]
     ] = field(init=False)
 
     def __post_init__(self) -> None:
@@ -576,7 +576,7 @@ class FactorGroup:
     def __getitem__(
         self,
         variables: Union[Sequence, Collection],
-    ) -> Union[nodes.EnumerationFactor, nodes.ORFactor]:
+    ) -> Union[nodes.EnumerationFactor, nodes.LogicalFactor]:
         """Function to query individual factors in the factor group
 
         Args:
@@ -610,7 +610,9 @@ class FactorGroup:
         )
 
     @cached_property
-    def factors(self) -> Tuple[Union[nodes.EnumerationFactor, nodes.ORFactor], ...]:
+    def factors(
+        self,
+    ) -> Tuple[Union[nodes.EnumerationFactor, nodes.LogicalFactor], ...]:
         """Returns all factors in the factor group."""
         return tuple(self._variables_to_factors.values())
 

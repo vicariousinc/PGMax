@@ -255,8 +255,6 @@ class LogicalFactor:
         if len(self.parents_variables) == 0:
             raise ValueError("At least one parent variable is required")
 
-        object.__setattr__(self, "num_parents", len(self.parents_variables))
-
     @utils.cached_property
     def edges_num_states(self) -> np.ndarray:
         """Number of states for the variables connected to each edge
@@ -275,8 +273,34 @@ class LogicalFactor:
         """
         return self.parents_variables + (self.child_variable,)
 
-    def compile_wiring(self, vars_to_starts: Mapping[Variable, int]) -> ORWiring:
-        """Compile enumeration wiring for the logical factor
+    @utils.cached_property
+    def parents_edge_states(self) -> np.ndarray:
+        """
+        Returns:
+            The parents variables edge states.
+        """
+        num_parents = len(self.parents_variables)
+
+        parents_edge_states = np.vstack(
+            [
+                np.zeros(num_parents, dtype=int),
+                np.arange(0, 2 * num_parents, 2, dtype=int),
+            ],
+        ).T
+        return parents_edge_states
+
+    @utils.cached_property
+    def child_edge_state(self) -> np.ndarray:
+        """
+        Returns:
+            The child variable edge states.
+        """
+        return np.array([2 * len(self.parents_variables)], dtype=int)
+
+    def get_var_states_for_edges(
+        self, vars_to_starts: Mapping[Variable, int]
+    ) -> np.ndarray:
+        """Compile the array of variable states for edges
 
         Args:
             vars_to_starts: A dictionary that maps variables to their global starting indices
@@ -284,17 +308,8 @@ class LogicalFactor:
                 of its n variable states are m, m + 1, ..., m + n - 1
 
         Returns:
-            Logical wiring for the logical factor
+            Variable states for edges array
         """
-        num_parents = len(self.parents_variables)
-        parents_edge_states = np.vstack(
-            [
-                np.zeros(num_parents, dtype=int),
-                np.arange(0, 2 * num_parents, 2, dtype=int),
-            ],
-        ).T
-        child_edge_state = np.array([2 * len(self.parents_variables)], dtype=int)
-
         parents_var_states_for_edges = np.concatenate(
             [
                 np.arange(variable.num_states) + vars_to_starts[variable]
@@ -309,15 +324,42 @@ class LogicalFactor:
         var_states_for_edges = np.concatenate(
             [parents_var_states_for_edges, child_var_states_for_edges]
         )
+        return var_states_for_edges
 
-        return ORWiring(
-            edges_num_states=self.edges_num_states,
-            var_states_for_edges=var_states_for_edges,
-            parents_edge_states=parents_edge_states,
-            children_edge_states=child_edge_state,
+    def compile_wiring(self, vars_to_starts: Mapping[Variable, int]) -> LogicalWiring:
+        """Compile enumeration wiring for the logical factor
+
+        Args:
+            vars_to_starts: A dictionary that maps variables to their global starting indices
+                For an n-state variable, a global start index of m means the global indices
+                of its n variable states are m, m + 1, ..., m + n - 1
+
+        Returns:
+            Logical wiring for the logical factor
+        """
+        raise NotImplementedError(
+            "Please subclass the VariableGroup class and override this method"
         )
 
 
 @dataclass(frozen=True, eq=False)
 class ORFactor(LogicalFactor):
-    pass
+    def compile_wiring(self, vars_to_starts: Mapping[Variable, int]) -> ORWiring:
+        """Compile enumeration wiring for the logical factor
+
+        Args:
+            vars_to_starts: A dictionary that maps variables to their global starting indices
+                For an n-state variable, a global start index of m means the global indices
+                of its n variable states are m, m + 1, ..., m + n - 1
+
+        Returns:
+            Logical wiring for the OR factor
+        """
+        var_states_for_edges = self.get_var_states_for_edges(vars_to_starts)
+
+        return ORWiring(
+            edges_num_states=self.edges_num_states,
+            var_states_for_edges=var_states_for_edges,
+            parents_edge_states=self.parents_edge_states,
+            children_edge_states=self.child_edge_state,
+        )
