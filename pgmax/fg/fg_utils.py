@@ -4,7 +4,7 @@ from typing import Sequence, Union
 
 import numpy as np
 
-from pgmax.fg.nodes import EnumerationWiring, ORWiring
+from pgmax.fg.nodes import EnumerationWiring, LogicalWiring, ORWiring
 
 
 def concatenate_enumeration_wirings(
@@ -52,36 +52,43 @@ def concatenate_enumeration_wirings(
     )
 
 
-def concatenate_or_wirings(
-    or_wirings: Sequence[ORWiring], or_factor_to_msgs_starts: np.ndarray
-) -> Union[None, ORWiring]:
-    """Concatenate a list of OR wirings from individual OR factors
+def concatenate_logical_wirings(
+    logical_wirings: Sequence[Union[LogicalWiring, ORWiring]],
+    logical_factor_to_msgs_starts: np.ndarray,
+) -> Union[None, LogicalWiring, ORWiring]:
+    """Concatenate a list of logical wirings from individual logical factors
 
     Args:
-        or_wirings: A list of OR wirings, one for each individual OR factor
-        or_factor_to_msgs_starts: List of offsets indices for the edge_states of each OR factor.
-            The offsets take into account all the factors in the graph.
+        logical_wirings: A list of logical wirings, one for each individual logical factor.
+            All these wirings must have the same type, which is a subclass of nodes.LogicalWiring
+        logical_factor_to_msgs_starts: List of offsets indices for the edge_states of each logical factor.
+            The offsets take into account all the enumeration and logical factors in the graph.
 
     Returns:
-        Concatenated OR wiring
+        Concatenated logical wiring.
     """
-    assert len(or_wirings) == len(or_factor_to_msgs_starts)
-    if len(or_wirings) == 0:
+    assert len(logical_wirings) == len(logical_factor_to_msgs_starts)
+    if len(logical_wirings) == 0:
         return None
+
+    logical_type = type(logical_wirings[0])
+    for wiring_idx in range(1, len(logical_wirings)):
+        if not isinstance(logical_wirings[wiring_idx], logical_type):
+            raise ValueError(f"Wiring {wiring_idx} is not of type {logical_type}")
 
     parents_edge_states = []
     children_edge_states = []
-    for ww, or_wiring in enumerate(or_wirings):
-        offsets = np.array([[ww, or_factor_to_msgs_starts[ww]]], dtype=int)
+    for ww, or_wiring in enumerate(logical_wirings):
+        offsets = np.array([[ww, logical_factor_to_msgs_starts[ww]]], dtype=int)
         parents_edge_states.append(or_wiring.parents_edge_states + offsets)
         children_edge_states.append(or_wiring.children_edge_states + offsets[:, 1])
 
-    return ORWiring(
+    return logical_type(
         edges_num_states=np.concatenate(
-            [wiring.edges_num_states for wiring in or_wirings]
+            [wiring.edges_num_states for wiring in logical_wirings]
         ),
         var_states_for_edges=np.concatenate(
-            [wiring.var_states_for_edges for wiring in or_wirings]
+            [wiring.var_states_for_edges for wiring in logical_wirings]
         ),
         parents_edge_states=np.concatenate(parents_edge_states, axis=0),
         children_edge_states=np.concatenate(children_edge_states, axis=0),

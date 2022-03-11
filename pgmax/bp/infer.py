@@ -36,7 +36,7 @@ def pass_var_to_fac_messages(
 
 
 @functools.partial(jax.jit, static_argnames=("num_val_configs", "temperature"))
-def pass_fac_to_var_messages(
+def pass_enum_fac_to_var_messages(
     vtof_msgs: jnp.ndarray,
     factor_configs_edge_states: jnp.ndarray,
     log_potentials: jnp.ndarray,
@@ -44,29 +44,31 @@ def pass_fac_to_var_messages(
     temperature: float,
 ) -> jnp.ndarray:
 
-    """Passes messages from Factors to Variables.
+    """Passes messages from Enumeration Factors to Variables.
 
     The update is performed in two steps. First, a "summary" array is generated that has an entry for every valid
-    configuration for every factor. The elements of this array are simply the sums of messages across each valid
-    config. Then, the info from factor_configs_edge_states is used to apply the scattering operation and
+    configuration for every enumeration factor. The elements of this array are simply the sums of messages across
+    each valid config. Then, the info from factor_configs_edge_states is used to apply the scattering operation and
     generate a flat set of output messages.
 
     Args:
-        vtof_msgs: Array of shape (num_edge_state,). This holds all the flattened variable to factor messages.
+        vtof_msgs: Array of shape (num_edge_state,). This holds all the flattened variable to all the factor messages,
+            taking into account enumeration and logical factors.
         factor_configs_edge_states: Array of shape (num_factor_configs, 2)
             factor_configs_edge_states[ii] contains a pair of global factor_config and edge_state indices
-            factor_configs_edge_states[ii, 0] contains the global factor config index,
-            which takes into account all the enumeration factors
+            factor_configs_edge_states[ii, 0] contains the global enumeration factor config index,
+            which only takes into account the enumeration factors
             factor_configs_edge_states[ii, 1] contains the corresponding global edge_state index,
             which takes into account all the enumeration and logical factors
         log_potentials: Array of shape (num_val_configs, ). An entry at index i is the log potential
-            function value for the configuration with global factor config index i.
-        num_val_configs: the total number of valid configurations for factors in the factor graph.
+            function value for the configuration with global enumeration factor config index i.
+        num_val_configs: the total number of valid configurations for all the enumeration factors
+            in the factor graph.
         temperature: Temperature for loopy belief propagation.
             1.0 corresponds to sum-product, 0.0 corresponds to max-product.
 
     Returns:
-        Array of shape (num_edge_state,). This holds all the flattened factor to variable messages.
+        Array of shape (num_edge_state,). This holds all the flattened factor to all the variable messages.
     """
     fac_config_summary_sum = (
         jnp.zeros(shape=(num_val_configs,))
@@ -114,11 +116,11 @@ def pass_OR_fac_to_var_messages(
     """Passes messages from OR Factors to Variables.
 
     Args:
-        vtof_msgs: Array of shape (num_edge_state,).
-            This holds all the flattened (binary) variables to factor messages.
+        vtof_msgs: Array of shape (num_edge_state,). This holds all the flattened variable to all the factor messages,
+            taking into account all the enumeration and logical factors.
         parents_edge_states: Array of shape (num_parents, 2)
-            parents_edge_states[ii, 0] contains the global factor index,
-            which takes into account all the OR factors
+            parents_edge_states[ii, 0] contains the global OR factor index,
+            which only takes into account all the OR factors
             parents_edge_states[ii, 1] contains the message index of the parent variable's state 0,
             which takes into account all the enumeration and logical factors
             The parent variable's state 1 is parents_edge_states[ii, 2] + 1

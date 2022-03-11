@@ -237,9 +237,10 @@ class FactorGraph:
         enum_wiring = fg_utils.concatenate_enumeration_wirings(
             enum_wirings, enum_factor_to_msgs_starts
         )
-        or_wiring = fg_utils.concatenate_or_wirings(
+        or_wiring = fg_utils.concatenate_logical_wirings(
             or_wirings, or_factor_to_msgs_starts
         )
+        assert isinstance(or_wiring, nodes.ORWiring)
 
         return GraphWiring(
             edges_num_states=np.concatenate(edges_num_states),
@@ -986,7 +987,7 @@ def BP(
             ftov_msgs = vtof_msgs
             # Compute new factor to variable messages by message passing
             if wiring.enum_wiring is not None:
-                ftov_msgs = infer.pass_fac_to_var_messages(
+                ftov_msgs = infer.pass_enum_fac_to_var_messages(
                     ftov_msgs,
                     wiring.enum_wiring.factor_configs_edge_states,
                     log_potentials,

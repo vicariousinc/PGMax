@@ -106,7 +106,7 @@ def test_run_bp_with_OR_factors():
         log_potentials = fg1.fg_state.log_potentials
         num_val_configs = int(factor_configs_edge_states[-1, 0]) + 1
 
-        ftov_msgs1 = infer.pass_fac_to_var_messages(
+        ftov_msgs1 = infer.pass_enum_fac_to_var_messages(
             vtof_msgs,
             factor_configs_edge_states,
             log_potentials,
