@@ -1,6 +1,6 @@
 """Defines an enumeration factor"""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Mapping, Tuple, Union
 
 import jax
@@ -19,10 +19,6 @@ class LogicalWiring(nodes.Wiring):
     """Wiring for LogicalFactors.
 
     Args:
-        edges_num_states: Array of shape (num_edges,)
-            Number of states for the variables connected to each edge
-        var_states_for_edges: Array of shape (num_edge_states,)
-            Global variable state indices for each edge state
         parents_edge_states: Array of shape (num_parents, 2)
             parents_edge_states[ii, 0] contains the global factor index,
             which takes into account all the LogicalFactors of the same subtype (AND / OR).
@@ -35,8 +31,6 @@ class LogicalWiring(nodes.Wiring):
             The child variable's state 1 is children_edge_states[ii, 1] + 1.
     """
 
-    edges_num_states: Union[np.ndarray, jnp.ndarray]
-    var_states_for_edges: Union[np.ndarray, jnp.ndarray]
     parents_edge_states: Union[np.ndarray, jnp.ndarray]
     children_edge_states: Union[np.ndarray, jnp.ndarray]
 
@@ -55,9 +49,8 @@ class LogicalFactor(nodes.Factor):
             (2) There are less than 2 variables
     """
 
-    variables: Tuple[nodes.Variable, ...]
     logical_type: str
-    log_potentials: None
+    log_potentials: field(init=False, default=None)
 
     def __post_init__(self):
         if self.logical_type not in ALLOWED_LOGICAL_TYPES:

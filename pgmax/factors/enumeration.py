@@ -17,10 +17,6 @@ class EnumerationWiring(nodes.Wiring):
     """Wiring for EnumerationFactors.
 
     Args:
-        edges_num_states: Array of shape (num_edges,)
-            Number of states for the variables connected to each edge
-        var_states_for_edges: Array of shape (num_edge_states,)
-            Global variable state indices for each edge state
         factor_configs_edge_states: Array of shape (num_factor_configs, 2)
             factor_configs_edge_states[ii] contains a pair of global enumeration factor_config and global edge_state indices
             factor_configs_edge_states[ii, 0] contains the global EnumerationFactor config index,
@@ -29,8 +25,6 @@ class EnumerationWiring(nodes.Wiring):
             which takes into account all the EnumerationFactors.
     """
 
-    edges_num_states: Union[np.ndarray, jnp.ndarray]
-    var_states_for_edges: Union[np.ndarray, jnp.ndarray]
     factor_configs_edge_states: Union[np.ndarray, jnp.ndarray]
 
 
@@ -39,7 +33,6 @@ class EnumerationFactor(nodes.Factor):
     """An enumeration factor
 
     Args:
-        variables: List of connected variables
         configs: Array of shape (num_val_configs, num_variables)
             An array containing an explicit enumeration of all valid configurations
         log_potentials: Array of shape (num_val_configs,). An array containing
@@ -54,7 +47,6 @@ class EnumerationFactor(nodes.Factor):
             (5) The configs array contains invalid values
     """
 
-    variables: Tuple[nodes.Variable, ...]
     configs: np.ndarray
     log_potentials: np.ndarray
 

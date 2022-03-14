@@ -87,5 +87,5 @@ class Factor:
             a dictionary mapping all possible names to different variables.
         """
         raise NotImplementedError(
-            "Please subclass the VariableGroup class and override this method"
+            "Please subclass the Factor class and override this method"
         )
