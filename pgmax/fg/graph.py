@@ -32,6 +32,11 @@ from pgmax.bp import infer
 from pgmax.fg import fg_utils, groups, nodes
 from pgmax.utils import cached_property
 
+CONCATENATE_WIRING = {
+    "EnumerationFactor": fg_utils.concatenate_enumeration_wirings,
+    "ORFactor": fg_utils.concatenate_logical_wirings,
+}
+
 
 @dataclass
 class FactorGraph:
@@ -77,6 +82,9 @@ class FactorGraph:
         self._named_factor_groups: Dict[Hashable, groups.FactorGroup] = {}
         self._variables_to_factors: OrderedDict[
             FrozenSet, Union[nodes.EnumerationFactor, nodes.LogicalFactor]
+        ] = collections.OrderedDict()
+        self._factors_to_types: OrderedDict[
+            Union[nodes.EnumerationFactor, nodes.LogicalFactor], str
         ] = collections.OrderedDict()
 
         # For ftov messages
@@ -183,6 +191,7 @@ class FactorGraph:
 
             factor = factor_group._variables_to_factors[variables]
             self._variables_to_factors[variables] = factor
+            self._factors_to_types[factor] = type(factor)
             self._factor_to_msgs_starts[factor] = (
                 self._factor_group_to_msgs_starts[factor_group]
                 + factor_num_states_cumsum[vv]
@@ -213,42 +222,42 @@ class FactorGraph:
         Returns:
             Compiled graph wiring from individual factors.
         """
-        enum_wirings = []
-        or_wirings = []
-        enum_factor_to_msgs_starts = []
-        or_factor_to_msgs_starts = []
+        wiring_by_type = collections.OrderedDict()
+        factor_to_msgs_starts_by_type = collections.OrderedDict()
+        wiring_list_by_type = collections.OrderedDict()
+
         edges_num_states = []
         var_states_for_edges = []
 
         for factor in self.factors:
-            factor_to_msgs_starts = self._factor_to_msgs_starts[factor]
+            factor_type = self._factors_to_types[factor].__name__
             wiring = factor.compile_wiring(self._vars_to_starts)
+            factor_to_msgs_starts = self._factor_to_msgs_starts[factor]
 
+            if factor_type not in wiring_list_by_type:
+                wiring_list_by_type[factor_type] = [wiring]
+                factor_to_msgs_starts_by_type[factor_type] = [factor_to_msgs_starts]
+            else:
+                wiring_list_by_type[factor_type].append(wiring)
+                factor_to_msgs_starts_by_type[factor_type].append(factor_to_msgs_starts)
+
+            # Add elements to edges_num_states and var_states_for_edge in the same order than _factor_to_msgs_starts
             edges_num_states.append(wiring.edges_num_states)
             var_states_for_edges.append(wiring.var_states_for_edges)
 
-            if isinstance(factor, nodes.EnumerationFactor):
-                enum_wirings.append(wiring)
-                enum_factor_to_msgs_starts.append(factor_to_msgs_starts)
-            elif isinstance(factor, nodes.ORFactor):
-                or_wirings.append(wiring)
-                or_factor_to_msgs_starts.append(factor_to_msgs_starts)
+        for factor_type in wiring_list_by_type:
+            concatenated_wiring_by_type = CONCATENATE_WIRING[factor_type](
+                wiring_list_by_type[factor_type],
+                factor_to_msgs_starts_by_type[factor_type],
+            )
+            wiring_by_type[factor_type] = concatenated_wiring_by_type
 
-        enum_wiring = fg_utils.concatenate_enumeration_wirings(
-            enum_wirings, enum_factor_to_msgs_starts
-        )
-        or_wiring = fg_utils.concatenate_logical_wirings(
-            or_wirings, or_factor_to_msgs_starts
-        )
-        if or_wiring is not None:
-            assert isinstance(or_wiring, nodes.ORWiring)
-
-        return GraphWiring(
+        graph_wiring = GraphWiring(
             edges_num_states=np.concatenate(edges_num_states),
             var_states_for_edges=np.concatenate(var_states_for_edges),
-            enum_wiring=enum_wiring,
-            or_wiring=or_wiring,
+            wiring_by_type=wiring_by_type,
         )
+        return graph_wiring
 
     @cached_property
     def log_potentials(self) -> np.ndarray:
@@ -376,29 +385,30 @@ class GraphWiring:
     Args:
         edges_num_states: Array of the total number of edge states for all factors in the factor group.
         var_states_for_edges: Array of the global variable state indices for each edge state.
-        enum_wiring: Enumeration wiring for all the enumeration factors.
-        or_wiring: OR wiring for all the OR factors.
+        wiring_by_type: Wiring for all the enumeration factors.
     """
 
     edges_num_states: Union[np.ndarray, jnp.ndarray]
     var_states_for_edges: Union[np.ndarray, jnp.ndarray]
-    enum_wiring: Optional[nodes.EnumerationWiring]
-    or_wiring: Optional[nodes.ORWiring]
+    wiring_by_type: OrderedDict[
+        FrozenSet, Union[nodes.EnumerationWiring, nodes.LogicalWiring]
+    ]
 
     def __post_init__(self):
-        if self.or_wiring is not None:
-            factor_indices = self.or_wiring.parents_edge_states[:, 0]
-            num_OR_factors = self.or_wiring.children_edge_states.shape[0]
+        for wiring in self.wiring_by_type.values():
+            if isinstance(wiring, nodes.LogicalWiring):
+                factor_indices = wiring.parents_edge_states[:, 0]
+                num_OR_factors = wiring.children_edge_states.shape[0]
 
-            if factor_indices.max() >= num_OR_factors:
-                raise ValueError(
-                    f"The highest OR factor index must be {num_OR_factors - 1}"
-                )
+                if factor_indices.max() >= num_OR_factors:
+                    raise ValueError(
+                        f"The highest OR factor index must be {num_OR_factors - 1}"
+                    )
 
-            if np.unique(factor_indices).shape[0] != num_OR_factors:
-                raise ValueError(
-                    f"There must be {num_OR_factors} different OR factor indices"
-                )
+                if np.unique(factor_indices).shape[0] != num_OR_factors:
+                    raise ValueError(
+                        f"There must be {num_OR_factors} different OR factor indices"
+                    )
 
 
 @dataclass(frozen=True, eq=False)
@@ -924,15 +934,14 @@ def BP(
         \tget_bp_state: Function to reconstruct the BPState from BPArrays.\n
         \tget_beliefs: Function to calculate beliefs from BPArrays.\n
     """
-    max_msg_size = int(np.max(bp_state.fg_state.wiring.edges_num_states))
+    wiring = bp_state.fg_state.wiring
+    max_msg_size = int(np.max(wiring.edges_num_states))
 
-    if bp_state.fg_state.wiring.enum_wiring is not None:
+    num_val_configs = 0
+    if "EnumerationWiring" in wiring.wiring_by_type:
         num_val_configs = (
-            int(bp_state.fg_state.wiring.enum_wiring.factor_configs_edge_states[-1, 0])
-            + 1
+            int(wiring["EnumerationWiring"].factor_configs_edge_states[-1, 0]) + 1
         )
-    else:
-        num_val_configs = 0
 
     def run_bp(
         log_potentials_updates: Optional[Dict[Any, jnp.ndarray]] = None,
@@ -954,8 +963,6 @@ def BP(
         Returns:
             A BPArrays containing the updated log_potentials, ftov_msgs and evidence.
         """
-        wiring = bp_state.fg_state.wiring
-
         log_potentials = bp_state.log_potentials.value
         if log_potentials_updates is not None:
             log_potentials = update_log_potentials(
@@ -987,19 +994,21 @@ def BP(
             )
             ftov_msgs = vtof_msgs
             # Compute new factor to variable messages by message passing
-            if wiring.enum_wiring is not None:
+            if "EnumerationWiring" in wiring.wiring_by_type:
                 ftov_msgs = infer.pass_enum_fac_to_var_messages(
                     ftov_msgs,
-                    wiring.enum_wiring.factor_configs_edge_states,
+                    wiring.wiring_by_type[
+                        "EnumerationWiring"
+                    ].factor_configs_edge_states,
                     log_potentials,
                     num_val_configs,
                     temperature,
                 )
-            if wiring.or_wiring is not None:
+            if "ORWiring" in wiring.wiring_by_type:
                 ftov_msgs = infer.pass_OR_fac_to_var_messages(
                     ftov_msgs,
-                    wiring.or_wiring.parents_edge_states,
-                    wiring.or_wiring.children_edge_states,
+                    wiring.wiring_by_type["ORWiring"].parents_edge_states,
+                    wiring.wiring_by_type["ORWiring"].children_edge_states,
                     temperature,
                 )
             # Use the results of message passing to perform damping and

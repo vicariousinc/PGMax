@@ -28,7 +28,6 @@ def segment_max_opt(
     Returns:
         An array of shape (num_segments,) that contains the maximum value from data of
             every segment sepcified by segments_lengths
-
     """
 
     @functools.partial(jax.vmap, in_axes=(None, 0, 0), out_axes=0)
@@ -69,19 +68,22 @@ def get_maxes_and_argmaxes(
 
     Returns:
         Maxes and argmaxes arrays
+
+    Raises:
+        ValueError if the data and labels arrays do not have the same size.
     """
     if data.shape[0] != labels.shape[0]:
         raise ValueError("Data and labels arrays must have the same size")
 
     num_obs = data.shape[0]
 
-    maxes = jnp.full(shape=num_labels, fill_value=NEG_INF).at[labels].max(data)
+    maxes = jnp.full(shape=(num_labels,), fill_value=NEG_INF).at[labels].max(data)
     only_maxes_pos = jnp.arange(num_obs) - num_obs * jnp.where(
         data != maxes[labels], 1, 0
     )
 
     argmaxes = (
-        jnp.full(shape=num_labels, fill_value=NEG_INF, dtype=jnp.int32)
+        jnp.full(shape=(num_labels,), fill_value=NEG_INF, dtype=jnp.int32)
         .at[labels]
         .max(only_maxes_pos)
     )

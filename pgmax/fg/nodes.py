@@ -60,7 +60,7 @@ class EnumerationWiring:
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True, eq=False)
 class LogicalWiring:
-    """Wiring for logical factors.
+    """Wiring for LogicalFactors.
 
     Args:
         edges_num_states: Array of shape (2 * num_parents,)
