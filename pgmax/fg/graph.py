@@ -33,9 +33,14 @@ from pgmax.fg import fg_utils, groups, nodes
 from pgmax.utils import cached_property
 
 CONCATENATE_WIRING = {
-    "EnumerationFactor": fg_utils.concatenate_enumeration_wirings,
-    "ORFactor": fg_utils.concatenate_logical_wirings,
+    nodes.EnumerationFactor: fg_utils.concatenate_enumeration_wirings,
+    nodes.ORFactor: fg_utils.concatenate_logical_wirings,
 }
+
+# CONCATENATE_WIRING = {
+#     "EnumerationFactor": fg_utils.concatenate_enumeration_wirings,
+#     "ORFactor": fg_utils.concatenate_logical_wirings,
+# }
 
 
 @dataclass
@@ -84,7 +89,7 @@ class FactorGraph:
             FrozenSet, Union[nodes.EnumerationFactor, nodes.LogicalFactor]
         ] = collections.OrderedDict()
         self._factors_to_types: OrderedDict[
-            Union[nodes.EnumerationFactor, nodes.LogicalFactor], str
+            Union[nodes.EnumerationFactor, nodes.LogicalFactor], type
         ] = collections.OrderedDict()
 
         # For ftov messages
@@ -230,7 +235,7 @@ class FactorGraph:
         var_states_for_edges = []
 
         for factor in self.factors:
-            factor_type = self._factors_to_types[factor].__name__
+            factor_type = self._factors_to_types[factor]
             wiring = factor.compile_wiring(self._vars_to_starts)
             factor_to_msgs_starts = self._factor_to_msgs_starts[factor]
 
@@ -391,7 +396,7 @@ class GraphWiring:
     edges_num_states: Union[np.ndarray, jnp.ndarray]
     var_states_for_edges: Union[np.ndarray, jnp.ndarray]
     wiring_by_type: OrderedDict[
-        FrozenSet, Union[nodes.EnumerationWiring, nodes.LogicalWiring]
+        type, Union[None, nodes.EnumerationWiring, nodes.LogicalWiring]
     ]
 
     def __post_init__(self):
@@ -939,8 +944,16 @@ def BP(
 
     num_val_configs = 0
     if "EnumerationWiring" in wiring.wiring_by_type:
+        assert isinstance(
+            wiring.wiring_by_type["EnumerationWiring"], nodes.EnumerationWiring
+        )
         num_val_configs = (
-            int(wiring["EnumerationWiring"].factor_configs_edge_states[-1, 0]) + 1
+            int(
+                wiring.wiring_by_type["EnumerationWiring"].factor_configs_edge_states[
+                    -1, 0
+                ]
+            )
+            + 1
         )
 
     def run_bp(
@@ -994,21 +1007,21 @@ def BP(
             )
             ftov_msgs = vtof_msgs
             # Compute new factor to variable messages by message passing
-            if "EnumerationWiring" in wiring.wiring_by_type:
+            if nodes.EnumerationWiring in wiring.wiring_by_type:
                 ftov_msgs = infer.pass_enum_fac_to_var_messages(
                     ftov_msgs,
                     wiring.wiring_by_type[
-                        "EnumerationWiring"
+                        nodes.EnumerationWiring
                     ].factor_configs_edge_states,
                     log_potentials,
                     num_val_configs,
                     temperature,
                 )
-            if "ORWiring" in wiring.wiring_by_type:
+            if nodes.ORWiring in wiring.wiring_by_type:
                 ftov_msgs = infer.pass_OR_fac_to_var_messages(
                     ftov_msgs,
-                    wiring.wiring_by_type["ORWiring"].parents_edge_states,
-                    wiring.wiring_by_type["ORWiring"].children_edge_states,
+                    wiring.wiring_by_type[nodes.ORWiring].parents_edge_states,
+                    wiring.wiring_by_type[nodes.ORWiring].children_edge_states,
                     temperature,
                 )
             # Use the results of message passing to perform damping and

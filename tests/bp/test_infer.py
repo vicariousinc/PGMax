@@ -4,7 +4,7 @@ import jax
 import numpy as np
 
 from pgmax.bp import infer
-from pgmax.fg import graph, groups
+from pgmax.fg import graph, groups, nodes
 
 
 def test_run_bp_with_OR_factors():
@@ -100,9 +100,9 @@ def test_run_bp_with_OR_factors():
         vtof_msgs = np.random.normal(
             0, 1, size=(2 * (sum(num_parents) + len(num_parents)))
         )
-        factor_configs_edge_states = (
-            fg1.fg_state.wiring.enum_wiring.factor_configs_edge_states
-        )
+        factor_configs_edge_states = fg1.fg_state.wiring.wiring_by_type[
+            nodes.EnumerationFactor
+        ].factor_configs_edge_states
         log_potentials = fg1.fg_state.log_potentials
         num_val_configs = int(factor_configs_edge_states[-1, 0]) + 1
 
@@ -114,8 +114,12 @@ def test_run_bp_with_OR_factors():
             temperature,
         )
 
-        parents_edge_states = fg2.fg_state.wiring.or_wiring.parents_edge_states
-        children_edge_states = fg2.fg_state.wiring.or_wiring.children_edge_states
+        parents_edge_states = fg2.fg_state.wiring.wiring_by_type[
+            nodes.ORFactor
+        ].parents_edge_states
+        children_edge_states = fg2.fg_state.wiring.wiring_by_type[
+            nodes.ORFactor
+        ].children_edge_states
 
         ftov_msgs2 = infer.pass_OR_fac_to_var_messages(
             vtof_msgs, parents_edge_states, children_edge_states, temperature
