@@ -4,7 +4,8 @@ from typing import Sequence, Union
 
 import numpy as np
 
-from pgmax.fg.nodes import EnumerationWiring, LogicalWiring, ORWiring
+from pgmax.factors.enumeration import EnumerationWiring
+from pgmax.factors.logical import LogicalWiring
 
 
 def concatenate_enumeration_wirings(
@@ -53,9 +54,9 @@ def concatenate_enumeration_wirings(
 
 
 def concatenate_logical_wirings(
-    logical_wirings: Sequence[Union[LogicalWiring, ORWiring]],
+    logical_wirings: Sequence[LogicalWiring],
     logical_factor_to_msgs_starts: np.ndarray,
-) -> Union[None, LogicalWiring, ORWiring]:
+) -> Union[None, LogicalWiring]:
     """Concatenate a list of logical wirings from individual logical factors
 
     Args:
@@ -71,11 +72,6 @@ def concatenate_logical_wirings(
     if len(logical_wirings) == 0:
         return None
 
-    logical_type = type(logical_wirings[0])
-    for wiring_idx in range(1, len(logical_wirings)):
-        if not isinstance(logical_wirings[wiring_idx], logical_type):
-            raise ValueError(f"Wiring {wiring_idx} is not of type {logical_type}")
-
     parents_edge_states = []
     children_edge_states = []
     for ww, or_wiring in enumerate(logical_wirings):
@@ -83,7 +79,7 @@ def concatenate_logical_wirings(
         parents_edge_states.append(or_wiring.parents_edge_states + offsets)
         children_edge_states.append(or_wiring.children_edge_states + offsets[:, 1])
 
-    return logical_type(
+    return LogicalWiring(
         edges_num_states=np.concatenate(
             [wiring.edges_num_states for wiring in logical_wirings]
         ),

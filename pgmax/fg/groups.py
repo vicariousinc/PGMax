@@ -25,6 +25,7 @@ import jax.numpy as jnp
 import numpy as np
 
 import pgmax.fg.nodes as nodes
+from pgmax.factors import enumeration, logical
 from pgmax.utils import cached_property
 
 
@@ -561,9 +562,7 @@ class FactorGroup:
     """
 
     variable_group: Union[CompositeVariableGroup, VariableGroup]
-    _variables_to_factors: Mapping[
-        FrozenSet, Union[nodes.EnumerationFactor, nodes.LogicalFactor]
-    ] = field(init=False)
+    _variables_to_factors: Mapping[FrozenSet, nodes.Factor] = field(init=False)
 
     def __post_init__(self) -> None:
         """Initializes a tuple of all the factors contained within this FactorGroup."""
@@ -573,10 +572,7 @@ class FactorGroup:
             MappingProxyType(self._get_variables_to_factors()),
         )
 
-    def __getitem__(
-        self,
-        variables: Union[Sequence, Collection],
-    ) -> Union[nodes.EnumerationFactor, nodes.LogicalFactor]:
+    def __getitem__(self, variables: Union[Sequence, Collection]) -> nodes.Factor:
         """Function to query individual factors in the factor group
 
         Args:
@@ -612,7 +608,7 @@ class FactorGroup:
     @cached_property
     def factors(
         self,
-    ) -> Tuple[Union[nodes.EnumerationFactor, nodes.LogicalFactor], ...]:
+    ) -> Tuple[nodes.Factor, ...]:
         """Returns all factors in the factor group."""
         return tuple(self._variables_to_factors.values())
 
@@ -694,7 +690,7 @@ class EnumerationFactorGroup(FactorGroup):
 
     def _get_variables_to_factors(
         self,
-    ) -> OrderedDict[FrozenSet, nodes.EnumerationFactor]:
+    ) -> OrderedDict[FrozenSet, enumeration.EnumerationFactor]:
         """Function that generates a dictionary mapping set of connected variables to factors.
 
         Returns:
@@ -727,7 +723,7 @@ class EnumerationFactorGroup(FactorGroup):
             [
                 (
                     frozenset(self.variable_names_for_factors[ii]),
-                    nodes.EnumerationFactor(
+                    enumeration.EnumerationFactor(
                         tuple(self.variable_group[self.variable_names_for_factors[ii]]),
                         self.factor_configs,
                         log_potentials[ii],
@@ -840,7 +836,7 @@ class PairwiseFactorGroup(FactorGroup):
 
     def _get_variables_to_factors(
         self,
-    ) -> OrderedDict[FrozenSet, nodes.EnumerationFactor]:
+    ) -> OrderedDict[FrozenSet, enumeration.EnumerationFactor]:
         """Function that generates a dictionary mapping set of connected variables to factors.
 
         Returns:
@@ -921,7 +917,7 @@ class PairwiseFactorGroup(FactorGroup):
             [
                 (
                     frozenset(self.variable_names_for_factors[ii]),
-                    nodes.EnumerationFactor(
+                    enumeration.EnumerationFactor(
                         tuple(self.variable_group[self.variable_names_for_factors[ii]]),
                         factor_configs,
                         log_potential_matrix[
@@ -1015,63 +1011,38 @@ class PairwiseFactorGroup(FactorGroup):
 
 
 @dataclass(frozen=True, eq=False)
-class ORFactorGroup(FactorGroup):
-    """Class to represent a group of OR factors.
+class LogicalFactorGroup(FactorGroup):
+    """Class to represent a group of LogicalFactors.
 
     Args:
-        parents_names_for_factors: A list of list of parents variable names for the OR factors,
-            where each innermost element is the name of a variable in variable_group.
-            Each list within the outer list is taken to contain the names of the variables connected to a same OR factor.
-        children_names_for_factors: TODO
+        variable_names_for_factors: A list of list of tuples, where each innermost tuple contains a
+            name into variable_group. Each list within the outer list is taken to contain the names of variables
+            neighboring a particular LogicalFactor to be added.
     """
 
-    parents_names_for_factors: Sequence[List]
-    children_names_for_factors: Sequence[Hashable]
+    variable_names_for_factors: Sequence[List]
+    logical_type: str
 
     def _get_variables_to_factors(
         self,
-    ) -> OrderedDict[FrozenSet, nodes.ORFactor]:
-        """Function that generates a dictionary mapping set of connected variables to factors.
+    ) -> OrderedDict[FrozenSet, logical.LogicalFactor]:
+        """Function that generates a dictionary mapping set of connected variables to LogicalFactors.
 
         Returns:
             A dictionary mapping all possible set of connected variables to different factors.
-
-        Raises:
-            ValueError if:
-                (1) The length of parents_names_for_factors and children_names_for_factors are not the same
-                (2) One of the parents_names_for_factors list is empty
         """
-        if len(self.parents_names_for_factors) != len(self.children_names_for_factors):
-            raise ValueError(
-                "The parents factors list and the children factors list must be of the same length"
-            )
-
-        if (
-            min(
-                [len(parents_names) for parents_names in self.parents_names_for_factors]
-            )
-            == 0
-        ):
-            raise ValueError("All OR factor must have at least one parent")
 
         variables_to_factors = collections.OrderedDict(
             [
                 (
-                    frozenset(
-                        self.parents_names_for_factors[ii]
-                        + [self.children_names_for_factors[ii]]
-                    ),
-                    nodes.ORFactor(
-                        parents_variables=tuple(
-                            self.variable_group[self.parents_names_for_factors[ii]]
-                        ),
-                        child_variable=self.variable_group[
-                            self.children_names_for_factors[ii]
-                        ],
+                    frozenset(self.variable_names_for_factors[ii]),
+                    logical.LogicalFactor(
+                        tuple(self.variable_group[self.variable_names_for_factors[ii]]),
+                        logical_type=self.logical_type,
                         log_potentials=None,
                     ),
                 )
-                for ii in range(len(self.parents_names_for_factors))
+                for ii in range(len(self.variable_names_for_factors))
             ]
         )
         return variables_to_factors

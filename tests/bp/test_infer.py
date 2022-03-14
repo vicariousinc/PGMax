@@ -4,7 +4,7 @@ import jax
 import numpy as np
 
 from pgmax.bp import infer
-from pgmax.fg import graph, groups, nodes
+from pgmax.fg import graph, groups
 
 
 def test_run_bp_with_OR_factors():
@@ -73,27 +73,23 @@ def test_run_bp_with_OR_factors():
         fg2 = graph.FactorGraph(
             variables=dict(parents=parents_variables2, children=children_variable2)
         )
-
         num_parents_cumsum = np.insert(np.cumsum(num_parents), 0, 0)
-        parents_names_for_factors = []
-        children_names_for_factors = []
+        variables_names_for_OR_factors = []
 
         for factor_idx in range(num_factors):
-            children_names_for_factors.append(("children", factor_idx))
-            parents_names_for_factors.append(
-                [
-                    ("parents", idx)
-                    for idx in range(
-                        num_parents_cumsum[factor_idx],
-                        num_parents_cumsum[factor_idx + 1],
-                    )
-                ]
-            )
+            variables_names_for_OR_factor = [
+                ("parents", idx)
+                for idx in range(
+                    num_parents_cumsum[factor_idx],
+                    num_parents_cumsum[factor_idx + 1],
+                )
+            ] + [("children", factor_idx)]
+            variables_names_for_OR_factors.append(variables_names_for_OR_factor)
 
         fg2.add_factor_group(
-            factory=groups.ORFactorGroup,
-            parents_names_for_factors=parents_names_for_factors,
-            children_names_for_factors=children_names_for_factors,
+            factory=groups.LogicalFactorGroup,
+            variable_names_for_factors=variables_names_for_OR_factors,
+            logical_type="OR",
         )
 
         # Test 1: Comparing both specialized inference functions
@@ -101,7 +97,7 @@ def test_run_bp_with_OR_factors():
             0, 1, size=(2 * (sum(num_parents) + len(num_parents)))
         )
         factor_configs_edge_states = fg1.fg_state.wiring.wiring_by_type[
-            nodes.EnumerationFactor
+            "EnumerationFactor"
         ].factor_configs_edge_states
         log_potentials = fg1.fg_state.log_potentials
         num_val_configs = int(factor_configs_edge_states[-1, 0]) + 1
@@ -115,10 +111,10 @@ def test_run_bp_with_OR_factors():
         )
 
         parents_edge_states = fg2.fg_state.wiring.wiring_by_type[
-            nodes.ORFactor
+            "LogicalFactor"
         ].parents_edge_states
         children_edge_states = fg2.fg_state.wiring.wiring_by_type[
-            nodes.ORFactor
+            "LogicalFactor"
         ].children_edge_states
 
         ftov_msgs2 = infer.pass_OR_fac_to_var_messages(

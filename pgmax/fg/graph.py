@@ -29,18 +29,19 @@ import numpy as np
 from jax.scipy.special import logsumexp
 
 from pgmax.bp import infer
+from pgmax.factors import enumeration, logical
 from pgmax.fg import fg_utils, groups, nodes
 from pgmax.utils import cached_property
 
-CONCATENATE_WIRING = {
-    nodes.EnumerationFactor: fg_utils.concatenate_enumeration_wirings,
-    nodes.ORFactor: fg_utils.concatenate_logical_wirings,
-}
-
 # CONCATENATE_WIRING = {
-#     "EnumerationFactor": fg_utils.concatenate_enumeration_wirings,
-#     "ORFactor": fg_utils.concatenate_logical_wirings,
+#     enumeration.EnumerationFactor: fg_utils.concatenate_enumeration_wirings,
+#     logical.LogicalFactor: fg_utils.concatenate_logical_wirings,
 # }
+
+CONCATENATE_WIRING = {
+    "EnumerationFactor": fg_utils.concatenate_enumeration_wirings,
+    "LogicalFactor": fg_utils.concatenate_logical_wirings,
+}
 
 
 @dataclass
@@ -86,10 +87,10 @@ class FactorGraph:
         )
         self._named_factor_groups: Dict[Hashable, groups.FactorGroup] = {}
         self._variables_to_factors: OrderedDict[
-            FrozenSet, Union[nodes.EnumerationFactor, nodes.LogicalFactor]
+            FrozenSet, Union[enumeration.EnumerationFactor, logical.LogicalFactor]
         ] = collections.OrderedDict()
         self._factors_to_types: OrderedDict[
-            Union[nodes.EnumerationFactor, nodes.LogicalFactor], type
+            Union[enumeration.EnumerationFactor, logical.LogicalFactor], type
         ] = collections.OrderedDict()
 
         # For ftov messages
@@ -98,7 +99,7 @@ class FactorGraph:
             groups.FactorGroup, int
         ] = collections.OrderedDict()
         self._factor_to_msgs_starts: OrderedDict[
-            Union[nodes.EnumerationFactor, nodes.LogicalFactor], int
+            Union[enumeration.EnumerationFactor, logical.LogicalFactor], int
         ] = collections.OrderedDict()
 
         # Only enumeration and pairwise factors have log potentials
@@ -107,7 +108,7 @@ class FactorGraph:
             groups.FactorGroup, int
         ] = collections.OrderedDict()
         self._factor_to_potentials_starts: OrderedDict[
-            nodes.EnumerationFactor, int
+            enumeration.EnumerationFactor, int
         ] = collections.OrderedDict()
 
     def __hash__(self) -> int:
@@ -202,7 +203,7 @@ class FactorGraph:
                 + factor_num_states_cumsum[vv]
             )
 
-            if isinstance(factor, nodes.EnumerationFactor):
+            if isinstance(factor, enumeration.EnumerationFactor):
                 self._factor_to_potentials_starts[factor] = (
                     self._factor_group_to_potentials_starts[factor_group]
                     + vv * factor.log_potentials.shape[0]
@@ -235,7 +236,7 @@ class FactorGraph:
         var_states_for_edges = []
 
         for factor in self.factors:
-            factor_type = self._factors_to_types[factor]
+            factor_type = self._factors_to_types[factor].__name__
             wiring = factor.compile_wiring(self._vars_to_starts)
             factor_to_msgs_starts = self._factor_to_msgs_starts[factor]
 
@@ -299,7 +300,7 @@ class FactorGraph:
     @cached_property
     def factors(
         self,
-    ) -> Tuple[Union[nodes.EnumerationFactor, nodes.LogicalFactor], ...]:
+    ) -> Tuple[Union[enumeration.EnumerationFactor, logical.LogicalFactor], ...]:
         """Tuple of individual factors in the factor graph"""
         return tuple(self._variables_to_factors.values())
 
@@ -363,15 +364,15 @@ class FactorGraphState:
     num_var_states: int
     total_factor_num_states: int
     variables_to_factors: Mapping[
-        FrozenSet, Union[nodes.EnumerationFactor, nodes.LogicalFactor]
+        FrozenSet, Union[enumeration.EnumerationFactor, logical.LogicalFactor]
     ]
     named_factor_groups: Mapping[Hashable, groups.FactorGroup]
     factor_to_msgs_starts: OrderedDict[
-        Union[nodes.EnumerationFactor, nodes.LogicalFactor], int
+        Union[enumeration.EnumerationFactor, logical.LogicalFactor], int
     ]
     log_potentials: np.ndarray
     factor_group_to_potentials_starts: Mapping[groups.FactorGroup, int]
-    factor_to_potentials_starts: OrderedDict[nodes.EnumerationFactor, int]
+    factor_to_potentials_starts: OrderedDict[enumeration.EnumerationFactor, int]
     wiring: GraphWiring
 
     def __post_init__(self):
@@ -396,12 +397,12 @@ class GraphWiring:
     edges_num_states: Union[np.ndarray, jnp.ndarray]
     var_states_for_edges: Union[np.ndarray, jnp.ndarray]
     wiring_by_type: OrderedDict[
-        type, Union[None, nodes.EnumerationWiring, nodes.LogicalWiring]
+        type, Union[None, enumeration.EnumerationWiring, logical.LogicalWiring]
     ]
 
     def __post_init__(self):
         for wiring in self.wiring_by_type.values():
-            if isinstance(wiring, nodes.LogicalWiring):
+            if isinstance(wiring, logical.LogicalWiring):
                 factor_indices = wiring.parents_edge_states[:, 0]
                 num_OR_factors = wiring.children_edge_states.shape[0]
 
@@ -493,7 +494,7 @@ def update_log_potentials(
             )
         elif frozenset(name) in fg_state.variables_to_factors:
             factor = fg_state.variables_to_factors[frozenset(name)]
-            if not isinstance(factor, nodes.EnumerationFactor):
+            if not isinstance(factor, enumeration.EnumerationFactor):
                 raise ValueError(f"The factor {name} does not have log potentials")
 
             if data.shape != factor.log_potentials.shape:
@@ -569,7 +570,7 @@ class LogPotentials:
             ]
         elif frozenset(name) in self.fg_state.variables_to_factors:
             factor = self.fg_state.variables_to_factors[frozenset(name)]
-            if not isinstance(factor, nodes.EnumerationFactor):
+            if not isinstance(factor, enumeration.EnumerationFactor):
                 raise ValueError(f"The factor {name} does not have log potentials")
 
             start = self.fg_state.factor_to_potentials_starts[factor]
@@ -945,7 +946,7 @@ def BP(
     num_val_configs = 0
     if "EnumerationWiring" in wiring.wiring_by_type:
         assert isinstance(
-            wiring.wiring_by_type["EnumerationWiring"], nodes.EnumerationWiring
+            wiring.wiring_by_type["EnumerationWiring"], enumeration.EnumerationWiring
         )
         num_val_configs = (
             int(
@@ -1007,21 +1008,21 @@ def BP(
             )
             ftov_msgs = vtof_msgs
             # Compute new factor to variable messages by message passing
-            if nodes.EnumerationWiring in wiring.wiring_by_type:
+            if enumeration.EnumerationWiring in wiring.wiring_by_type:
                 ftov_msgs = infer.pass_enum_fac_to_var_messages(
                     ftov_msgs,
                     wiring.wiring_by_type[
-                        nodes.EnumerationWiring
+                        enumeration.EnumerationWiring
                     ].factor_configs_edge_states,
                     log_potentials,
                     num_val_configs,
                     temperature,
                 )
-            if nodes.ORWiring in wiring.wiring_by_type:
+            if logical.LogicalWiring in wiring.wiring_by_type:
                 ftov_msgs = infer.pass_OR_fac_to_var_messages(
                     ftov_msgs,
-                    wiring.wiring_by_type[nodes.ORWiring].parents_edge_states,
-                    wiring.wiring_by_type[nodes.ORWiring].children_edge_states,
+                    wiring.wiring_by_type[logical.LogicalWiring].parents_edge_states,
+                    wiring.wiring_by_type[logical.LogicalWiring].children_edge_states,
                     temperature,
                 )
             # Use the results of message passing to perform damping and
