@@ -280,8 +280,11 @@ class FactorGraph:
 
     @cached_property
     def fg_state(self) -> FactorGraphState:
-        """Current factor graph state given the added factors."""
-        wiring = self.wiring  # computes first
+        """Current factor graph state given the added factors.
+        Also computes the factor_to_msgs_starts and the log_potentials."""
+        # Preliminary computations
+        log_potentials = self.log_potentials
+        wiring = self.wiring
 
         return FactorGraphState(
             variable_group=self._variable_group,
@@ -290,7 +293,7 @@ class FactorGraph:
             total_factor_num_states=self._total_factor_num_states,
             variables_to_factors=copy.copy(self._variables_to_factors),
             named_factor_groups=copy.copy(self._named_factor_groups),
-            log_potentials=self.log_potentials,
+            log_potentials=log_potentials,
             factor_group_to_potentials_starts=copy.copy(
                 self._factor_group_to_potentials_starts
             ),
@@ -978,7 +981,6 @@ def BP(
 
             # Compute new factor to variable messages by message passing
             if "EnumerationFactor" in wiring.wiring_by_factor_type:
-                print("EnumerationFactor")
                 ftov_msgs = infer.pass_enum_fac_to_var_messages(
                     ftov_msgs,
                     wiring.wiring_by_factor_type[
@@ -989,7 +991,6 @@ def BP(
                     temperature,
                 )
             if "LogicalFactor" in wiring.wiring_by_factor_type:
-                print("LogicalFactor")
                 ftov_msgs = infer.pass_OR_fac_to_var_messages(
                     ftov_msgs,
                     wiring.wiring_by_factor_type["LogicalFactor"].parents_edge_states,
