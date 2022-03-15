@@ -44,7 +44,7 @@ FACTOR_GROUP_FACTORY = {
 }
 
 
-@dataclass
+@dataclass(eq=False)
 class FactorGraph:
     """Class for representing a factor graph
 
@@ -178,7 +178,7 @@ class FactorGraph:
         if name is not None:
             self._named_factor_groups[name] = factor_group
 
-    @property
+    @cached_property
     def wiring(self) -> GraphWiring:
         """Function to compile wiring for belief propagation.
         Also computes start factor messages indices in the flattened array of message.
@@ -226,7 +226,7 @@ class FactorGraph:
         )
         return graph_wiring
 
-    @property
+    @cached_property
     def log_potentials(self) -> np.ndarray:
         """Function to compile potential array for belief propagation..
 
@@ -263,7 +263,7 @@ class FactorGraph:
             return None
         return np.concatenate(log_potentials)
 
-    @property
+    @cached_property
     def factors(
         self,
     ) -> Tuple[nodes.Factor, ...]:
@@ -275,7 +275,7 @@ class FactorGraph:
         """Tuple of factor groups in the factor graph"""
         return tuple(self._factor_group_to_msgs_starts.keys())
 
-    @property
+    @cached_property
     def fg_state(self) -> FactorGraphState:
         """Current factor graph state given the added factors.
         Also computes the factor_to_msgs_starts and the log_potentials."""
@@ -402,13 +402,6 @@ class BPState:
     evidence: Evidence
 
     def __post_init__(self):
-        print(self.log_potentials.fg_state.wiring == self.ftov_msgs.fg_state.wiring)
-        print(
-            self.log_potentials.fg_state.wiring.wiring_by_factor_type,
-            self.ftov_msgs.fg_state.wiring.wiring_by_factor_type,
-        )
-        print(self.log_potentials.fg_state.wiring)
-
         if (self.log_potentials.fg_state != self.ftov_msgs.fg_state) or (
             self.ftov_msgs.fg_state != self.evidence.fg_state
         ):

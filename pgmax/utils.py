@@ -13,4 +13,5 @@ def cached_property(func: Callable) -> property:
     Returns:
         Decorated cached property
     """
+    print(func)
     return property(functools.lru_cache(None)(func))
