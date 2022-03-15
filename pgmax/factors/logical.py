@@ -1,4 +1,4 @@
-"""Defines an enumeration factor"""
+"""Defines a logical factor"""
 
 from dataclasses import dataclass, field
 from typing import Mapping, Union
