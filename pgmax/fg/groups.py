@@ -1032,7 +1032,6 @@ class LogicalFactorGroup(FactorGroup):
                     logical.LogicalFactor(
                         tuple(self.variable_group[self.variable_names_for_factors[ii]]),
                         logical_type=self.logical_type,
-                        log_potentials=None,
                     ),
                 )
                 for ii in range(len(self.variable_names_for_factors))

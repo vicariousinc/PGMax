@@ -50,7 +50,7 @@ class LogicalFactor(nodes.Factor):
     """
 
     logical_type: str
-    log_potentials: field(init=False, default=None)
+    log_potentials: np.ndarray = field(init=False, default=None)
 
     def __post_init__(self):
         if self.logical_type not in ALLOWED_LOGICAL_TYPES:

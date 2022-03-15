@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 """A module containing helper functions for constructing Factor Graphs."""
 
-from typing import Sequence, Union
+from typing import Sequence
 
 import numpy as np
 
@@ -10,7 +12,7 @@ from pgmax.factors.logical import LogicalWiring
 
 def concatenate_enumeration_wirings(
     enum_wirings: Sequence[EnumerationWiring], enum_factor_to_msgs_starts: np.ndarray
-) -> Union[None, EnumerationWiring]:
+) -> EnumerationWiring:
     """Concatenate a list of EnumerationWirings from individual EnumerationFactors
 
     Args:
@@ -20,10 +22,13 @@ def concatenate_enumeration_wirings(
 
     Returns:
         Concatenated EnumerationWirings
+
+    Raises:
+        ValueError: if the list of EnumerationWirings is empty
     """
     assert len(enum_wirings) == len(enum_factor_to_msgs_starts)
     if len(enum_wirings) == 0:
-        return None
+        raise ValueError("There are no EnumerationFactor in the graph")
 
     factor_configs_cumsum = np.insert(
         np.array(
@@ -56,7 +61,7 @@ def concatenate_enumeration_wirings(
 def concatenate_logical_wirings(
     logical_wirings: Sequence[LogicalWiring],
     logical_factor_to_msgs_starts: np.ndarray,
-) -> Union[None, LogicalWiring]:
+) -> LogicalWiring:
     """Concatenate a list of LogicalWirings from individual LogicalFactors
 
     Args:
@@ -67,10 +72,13 @@ def concatenate_logical_wirings(
 
     Returns:
         Concatenated LogicalWirings
+
+    Raises:
+        ValueError: if the list of LogicalWirings is empty
     """
     assert len(logical_wirings) == len(logical_factor_to_msgs_starts)
     if len(logical_wirings) == 0:
-        return None
+        raise ValueError("There are no LogicalFactor in the graph")
 
     parents_edge_states = []
     children_edge_states = []

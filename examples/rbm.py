@@ -6,7 +6,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.13.2
+#       jupytext_version: 1.13.7
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -62,6 +62,7 @@ fg = graph.FactorGraph(
 # Add unary factors
 for ii in range(bh.shape[0]):
     fg.add_factor(
+        factor_type="EnumerationFactor",
         variable_names=[("hidden", ii)],
         factor_configs=np.arange(2)[:, None],
         log_potentials=np.array([0, bh[ii]]),
@@ -69,6 +70,7 @@ for ii in range(bh.shape[0]):
 
 for jj in range(bv.shape[0]):
     fg.add_factor(
+        factor_type="EnumerationFactor",
         variable_names=[("visible", jj)],
         factor_configs=np.arange(2)[:, None],
         log_potentials=np.array([0, bv[jj]]),
@@ -80,6 +82,7 @@ factor_configs = np.array(list(itertools.product(np.arange(2), repeat=2)))
 for ii in tqdm(range(bh.shape[0])):
     for jj in range(bv.shape[0]):
         fg.add_factor(
+            factor_type="EnumerationFactor",
             variable_names=[("hidden", ii), ("visible", jj)],
             factor_configs=factor_configs,
             log_potentials=np.array([0, 0, 0, W[ii, jj]]),
