@@ -38,7 +38,6 @@ def test_factor_graph():
             variable_names=[0],
             factor_type="EnumerationFactor",
             factor_configs=np.arange(10)[:, None],
-            name="test",
         )
 
 
