@@ -1,7 +1,7 @@
 """Defines an enumeration factor"""
 
 from dataclasses import dataclass
-from typing import Mapping, Tuple, Union
+from typing import Mapping, Union
 
 import jax
 import jax.numpy as jnp
@@ -51,8 +51,6 @@ class EnumerationFactor(nodes.Factor):
     log_potentials: np.ndarray
 
     def __post_init__(self):
-        print(self.configs, self.log_potentials)
-
         self.configs.flags.writeable = False
         if not np.issubdtype(self.configs.dtype, np.integer):
             raise ValueError(

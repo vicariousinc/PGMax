@@ -613,14 +613,6 @@ class FactorGroup:
         return tuple(self._variables_to_factors.values())
 
     @cached_property
-    def factor_num_states(self) -> np.ndarray:
-        """Returns the list of total number of edge states for factors in the factor group."""
-        factor_num_states = np.array(
-            [np.sum(factor.edges_num_states) for factor in self.factors], dtype=int
-        )
-        return factor_num_states
-
-    @cached_property
     def factor_group_log_potentials(self) -> np.ndarray:
         """Function to compile potential array for the factor group
 
@@ -1018,6 +1010,7 @@ class LogicalFactorGroup(FactorGroup):
         variable_names_for_factors: A list of list of tuples, where each innermost tuple contains a
             name into variable_group. Each list within the outer list is taken to contain the names of variables
             neighboring a particular LogicalFactor to be added.
+        logical_type: The logical condition supported by the factor
     """
 
     variable_names_for_factors: Sequence[List]
@@ -1029,7 +1022,7 @@ class LogicalFactorGroup(FactorGroup):
         """Function that generates a dictionary mapping set of connected variables to LogicalFactors.
 
         Returns:
-            A dictionary mapping all possible set of connected variables to different factors.
+            A dictionary mapping all possible set of connected variables to different LogicalFactors.
         """
 
         variables_to_factors = collections.OrderedDict(

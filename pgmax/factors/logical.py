@@ -1,7 +1,7 @@
 """Defines an enumeration factor"""
 
 from dataclasses import dataclass, field
-from typing import Mapping, Tuple, Union
+from typing import Mapping, Union
 
 import jax
 import jax.numpy as jnp

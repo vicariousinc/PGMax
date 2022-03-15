@@ -109,6 +109,7 @@ def test_run_bp_with_OR_factors():
             num_val_configs,
             temperature,
         )
+        num_val_configs
 
         parents_edge_states = fg2.fg_state.wiring.wiring_by_type[
             "LogicalFactor"

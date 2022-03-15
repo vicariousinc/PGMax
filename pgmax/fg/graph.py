@@ -33,11 +33,6 @@ from pgmax.factors import enumeration, logical
 from pgmax.fg import fg_utils, groups, nodes
 from pgmax.utils import cached_property
 
-# CONCATENATE_WIRING = {
-#     enumeration.EnumerationFactor: fg_utils.concatenate_enumeration_wirings,
-#     logical.LogicalFactor: fg_utils.concatenate_logical_wirings,
-# }
-
 CONCATENATE_WIRING = {
     "EnumerationFactor": fg_utils.concatenate_enumeration_wirings,
     "LogicalFactor": fg_utils.concatenate_logical_wirings,
@@ -89,8 +84,11 @@ class FactorGraph:
         self._variables_to_factors: OrderedDict[
             FrozenSet, Union[enumeration.EnumerationFactor, logical.LogicalFactor]
         ] = collections.OrderedDict()
-        self._factors_to_types: OrderedDict[
-            Union[enumeration.EnumerationFactor, logical.LogicalFactor], type
+        self._types_to_factors: OrderedDict[
+            type,
+            OrderedDict[
+                Hashable, Union[enumeration.EnumerationFactor, logical.LogicalFactor]
+            ],
         ] = collections.OrderedDict()
 
         # For ftov messages
@@ -100,15 +98,6 @@ class FactorGraph:
         ] = collections.OrderedDict()
         self._factor_to_msgs_starts: OrderedDict[
             Union[enumeration.EnumerationFactor, logical.LogicalFactor], int
-        ] = collections.OrderedDict()
-
-        # Only enumeration and pairwise factors have log potentials
-        self._total_factor_num_configs: int = 0
-        self._factor_group_to_potentials_starts: OrderedDict[
-            groups.FactorGroup, int
-        ] = collections.OrderedDict()
-        self._factor_to_potentials_starts: OrderedDict[
-            enumeration.EnumerationFactor, int
         ] = collections.OrderedDict()
 
     def __hash__(self) -> int:
@@ -177,19 +166,7 @@ class FactorGraph:
                 f"A factor group with the name {name} already exists. Please choose a different name!"
             )
 
-        self._factor_group_to_msgs_starts[factor_group] = self._total_factor_num_states
-        factor_num_states_cumsum = np.insert(
-            factor_group.factor_num_states.cumsum(), 0, 0
-        )
-        if isinstance(
-            factor_group, (groups.EnumerationFactorGroup, groups.PairwiseFactorGroup)
-        ):
-            self._factor_group_to_potentials_starts[
-                factor_group
-            ] = self._total_factor_num_configs
-            factor_group_num_configs = 0
-
-        for vv, variables in enumerate(factor_group._variables_to_factors):
+        for variables in factor_group._variables_to_factors:
             if variables in self._variables_to_factors:
                 raise ValueError(
                     f"A factor involving variables {variables} already exists. Please merge the corresponding factors."
@@ -197,27 +174,18 @@ class FactorGraph:
 
             factor = factor_group._variables_to_factors[variables]
             self._variables_to_factors[variables] = factor
-            self._factors_to_types[factor] = type(factor)
-            self._factor_to_msgs_starts[factor] = (
-                self._factor_group_to_msgs_starts[factor_group]
-                + factor_num_states_cumsum[vv]
-            )
 
-            if isinstance(factor, enumeration.EnumerationFactor):
-                self._factor_to_potentials_starts[factor] = (
-                    self._factor_group_to_potentials_starts[factor_group]
-                    + vv * factor.log_potentials.shape[0]
-                )
-                factor_group_num_configs += factor.log_potentials.shape[0]
+            type_factor = type(factor).__name__
+            if type_factor not in self._types_to_factors:
+                self._types_to_factors[type_factor] = collections.OrderedDict()
 
-        self._total_factor_num_states += factor_num_states_cumsum[-1]
+            if factor_group not in self._types_to_factors[type_factor]:
+                self._types_to_factors[type_factor][factor_group] = [factor]
+            else:
+                self._types_to_factors[type_factor][factor_group].append(factor)
+
         if name is not None:
             self._named_factor_groups[name] = factor_group
-
-        if isinstance(
-            factor_group, (groups.EnumerationFactorGroup, groups.PairwiseFactorGroup)
-        ):
-            self._total_factor_num_configs += factor_group_num_configs
 
     @cached_property
     def wiring(self) -> GraphWiring:
@@ -228,35 +196,38 @@ class FactorGraph:
         Returns:
             Compiled graph wiring from individual factors.
         """
-        wiring_by_type = collections.OrderedDict()
-        factor_to_msgs_starts_by_type = collections.OrderedDict()
-        wiring_list_by_type = collections.OrderedDict()
+        self._factor_to_msgs_starts = collections.OrderedDict()
+        factor_num_states_cumsum = 0
 
+        # Compile wiring
         edges_num_states = []
         var_states_for_edges = []
+        wiring_by_type = collections.OrderedDict()
 
-        for factor in self.factors:
-            factor_type = self._factors_to_types[factor].__name__
-            wiring = factor.compile_wiring(self._vars_to_starts)
-            factor_to_msgs_starts = self._factor_to_msgs_starts[factor]
+        for factor_type, factors_groups_by_type in self._types_to_factors.items():
+            wirings_by_type = []
+            factor_to_msgs_starts_by_type = []
 
-            if factor_type not in wiring_list_by_type:
-                wiring_list_by_type[factor_type] = [wiring]
-                factor_to_msgs_starts_by_type[factor_type] = [factor_to_msgs_starts]
-            else:
-                wiring_list_by_type[factor_type].append(wiring)
-                factor_to_msgs_starts_by_type[factor_type].append(factor_to_msgs_starts)
+            for factors in factors_groups_by_type.values():
+                for factor in factors:
+                    wiring = factor.compile_wiring(self._vars_to_starts)
+                    self._factor_to_msgs_starts[factor] = factor_num_states_cumsum
 
-            # Add elements to edges_num_states and var_states_for_edge in the same order than _factor_to_msgs_starts
-            edges_num_states.append(wiring.edges_num_states)
-            var_states_for_edges.append(wiring.var_states_for_edges)
+                    wirings_by_type.append(wiring)
+                    factor_to_msgs_starts_by_type.append(factor_num_states_cumsum)
+                    edges_num_states.append(wiring.edges_num_states)
+                    var_states_for_edges.append(wiring.var_states_for_edges)
 
-        for factor_type in wiring_list_by_type:
+                    factor_num_states = np.sum(factor.edges_num_states)
+                    factor_num_states_cumsum += factor_num_states
+
+            # Concatenate the wirings
             concatenated_wiring_by_type = CONCATENATE_WIRING[factor_type](
-                wiring_list_by_type[factor_type],
-                factor_to_msgs_starts_by_type[factor_type],
+                wirings_by_type, factor_to_msgs_starts_by_type
             )
             wiring_by_type[factor_type] = concatenated_wiring_by_type
+
+        self._total_factor_num_states = factor_num_states_cumsum
 
         graph_wiring = GraphWiring(
             edges_num_states=np.concatenate(edges_num_states),
@@ -275,27 +246,31 @@ class FactorGraph:
             A jnp array representing the log of the potential function for each
                 valid configuration
         """
-        if not np.any(
-            [
-                isinstance(
-                    factor_group,
-                    (groups.EnumerationFactorGroup, groups.PairwiseFactorGroup),
-                )
-                for factor_group in self.factor_groups
-            ]
-        ):
-            return None
+        # Aggregate log potentials
+        factor_group_num_configs = 0
+        self._factor_group_to_potentials_starts = collections.OrderedDict()  # TODO
+        self._factor_to_potentials_starts = collections.OrderedDict()
 
-        return np.concatenate(
-            [
-                factor_group.factor_group_log_potentials
-                for factor_group in self.factor_groups
-                if isinstance(
-                    factor_group,
-                    (groups.EnumerationFactorGroup, groups.PairwiseFactorGroup),
-                )
-            ]
-        )
+        log_potentials = []
+        if "EnumerationFactor" in self._types_to_factors:
+            # Only EnumerationFactors have log potentials
+            for factor_group, factors in self._types_to_factors[
+                "EnumerationFactor"
+            ].items():
+                self._factor_group_to_potentials_starts[
+                    factor_group
+                ] = factor_group_num_configs
+
+                for factor in factors:
+                    self._factor_to_potentials_starts[factor] = factor_group_num_configs
+                    factor_num_potentials = factor.log_potentials.shape[0]
+                    log_potentials.append(factor.log_potentials)
+                    factor_group_num_configs += factor_num_potentials
+        self._total_factor_num_configs = factor_group_num_configs
+
+        if len(log_potentials) == 0:
+            return None
+        return np.concatenate(log_potentials)
 
     @cached_property
     def factors(
@@ -312,6 +287,8 @@ class FactorGraph:
     @cached_property
     def fg_state(self) -> FactorGraphState:
         """Current factor graph state given the added factors."""
+        wiring = self.wiring  # computes first
+
         return FactorGraphState(
             variable_group=self._variable_group,
             vars_to_starts=self._vars_to_starts,
@@ -319,13 +296,13 @@ class FactorGraph:
             total_factor_num_states=self._total_factor_num_states,
             variables_to_factors=copy.copy(self._variables_to_factors),
             named_factor_groups=copy.copy(self._named_factor_groups),
+            log_potentials=self.log_potentials,
             factor_group_to_potentials_starts=copy.copy(
                 self._factor_group_to_potentials_starts
             ),
             factor_to_potentials_starts=copy.copy(self._factor_to_potentials_starts),
             factor_to_msgs_starts=copy.copy(self._factor_to_msgs_starts),
-            log_potentials=self.log_potentials,
-            wiring=self.wiring,
+            wiring=wiring,
         )
 
     @property
