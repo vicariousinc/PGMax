@@ -11,15 +11,15 @@ from pgmax.factors.logical import LogicalWiring
 def concatenate_enumeration_wirings(
     enum_wirings: Sequence[EnumerationWiring], enum_factor_to_msgs_starts: np.ndarray
 ) -> Union[None, EnumerationWiring]:
-    """Concatenate a list of enumeration wirings from individual enumeration factors
+    """Concatenate a list of EnumerationWirings from individual EnumerationFactors
 
     Args:
-        enum_wirings: A list of enumeration wirings, one for each individual enumeration factor
-        enum_factor_to_msgs_starts: List of offsets indices for the edge_states of each enumeration factor.
-            The offsets take into account all the factors in the graph.
+        enum_wirings: A list of EnumerationWirings, one for each individual EnumerationFactor
+        enum_factor_to_msgs_starts: List of offsets indices for the edge_states of each EnumerationFactor.
+            The offsets take into account all the EnumerationFactors and LogicalFactors in the graph.
 
     Returns:
-        Concatenated enumeration wiring
+        Concatenated EnumerationWirings
     """
     assert len(enum_wirings) == len(enum_factor_to_msgs_starts)
     if len(enum_wirings) == 0:
@@ -57,16 +57,16 @@ def concatenate_logical_wirings(
     logical_wirings: Sequence[LogicalWiring],
     logical_factor_to_msgs_starts: np.ndarray,
 ) -> Union[None, LogicalWiring]:
-    """Concatenate a list of logical wirings from individual logical factors
+    """Concatenate a list of LogicalWirings from individual LogicalFactors
 
     Args:
-        logical_wirings: A list of logical wirings, one for each individual logical factor.
-            All these wirings must have the same type, which is a subclass of nodes.LogicalWiring
-        logical_factor_to_msgs_starts: List of offsets indices for the edge_states of each logical factor.
-            The offsets take into account all the enumeration and logical factors in the graph.
+        logical_wirings: A list of LogicalWirings, one for each individual LogicalFactors.
+            All these wirings must have the same type, which is a subclass of LogicalWiring
+        logical_factor_to_msgs_starts: List of offsets indices for the edge_states of each LogicalFactor.
+            The offsets take into account all the EnumerationFactors and LogicalFactors in the graph.
 
     Returns:
-        Concatenated logical wiring.
+        Concatenated LogicalWirings
     """
     assert len(logical_wirings) == len(logical_factor_to_msgs_starts)
     if len(logical_wirings) == 0:

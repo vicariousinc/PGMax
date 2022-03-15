@@ -94,9 +94,9 @@ class EnumerationFactor(nodes.Factor):
             Array of shape (num_factor_configs, 2)
             factor_configs_edge_states[ii] contains a pair of global factor_config and edge_state indices
             factor_configs_edge_states[ii, 0] contains the global factor config index,
-            which takes into account all the enumeration factors
+            which takes into account all the EnumerationFactors
             factor_configs_edge_states[ii, 1] contains the corresponding global edge_state index,
-            which takes into account all the enumeration and logical factors
+            which takes into account all the EnumerationFactors and LogicalFactors
         """
         edges_starts = np.insert(self.edges_num_states.cumsum(), 0, 0)[:-1]
         factor_configs_edge_states = np.stack(
@@ -111,7 +111,7 @@ class EnumerationFactor(nodes.Factor):
     def compile_wiring(
         self, vars_to_starts: Mapping[nodes.Variable, int]
     ) -> EnumerationWiring:
-        """Compile enumeration wiring for the enumeration factor
+        """Compile EnumerationWiring for the EnumerationFactor
 
         Args:
             vars_to_starts: A dictionary that maps variables to their global starting indices
@@ -119,7 +119,7 @@ class EnumerationFactor(nodes.Factor):
                 of its n variable states are m, m + 1, ..., m + n - 1
 
         Returns:
-            Enumeration wiring for the enumeration factor
+            EnumerationWiring for the EnumerationFactor
         """
         var_states_for_edges = np.concatenate(
             [
