@@ -97,7 +97,7 @@ def test_run_bp_with_OR_factors():
         vtof_msgs = np.random.normal(
             0, 1, size=(2 * (sum(num_parents) + len(num_parents)))
         )
-        factor_configs_edge_states = fg1.fg_state.wiring.wiring_by_type[
+        factor_configs_edge_states = fg1.fg_state.wiring.wiring_by_factor_type[
             "EnumerationFactor"
         ].factor_configs_edge_states
         log_potentials = fg1.fg_state.log_potentials
@@ -112,10 +112,10 @@ def test_run_bp_with_OR_factors():
         )
         num_val_configs
 
-        parents_edge_states = fg2.fg_state.wiring.wiring_by_type[
+        parents_edge_states = fg2.fg_state.wiring.wiring_by_factor_type[
             "LogicalFactor"
         ].parents_edge_states
-        children_edge_states = fg2.fg_state.wiring.wiring_by_type[
+        children_edge_states = fg2.fg_state.wiring.wiring_by_factor_type[
             "LogicalFactor"
         ].children_edge_states
 

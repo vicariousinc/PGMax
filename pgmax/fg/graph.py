@@ -6,6 +6,7 @@ import copy
 import functools
 import typing
 from dataclasses import asdict, dataclass
+from email.policy import strict
 from types import MappingProxyType
 from typing import (
     Any,
@@ -195,7 +196,7 @@ class FactorGraph:
         # Compile wiring
         edges_num_states = []
         var_states_for_edges = []
-        wiring_by_type = collections.OrderedDict()
+        wiring_by_factor_type = collections.OrderedDict()
 
         for factor_type, factors_groups_by_type in self._types_to_factors.items():
             wirings_by_type = []
@@ -215,17 +216,17 @@ class FactorGraph:
                     factor_num_states_cumsum += factor_num_states
 
             # Concatenate the wirings
-            concatenated_wiring_by_type = CONCATENATE_WIRING[factor_type](
+            concatenated_wiring_by_factor_type = CONCATENATE_WIRING[factor_type](
                 wirings_by_type, factor_to_msgs_starts_by_type
             )
-            wiring_by_type[factor_type] = concatenated_wiring_by_type
+            wiring_by_factor_type[factor_type] = concatenated_wiring_by_factor_type
 
         self._total_factor_num_states = factor_num_states_cumsum
 
         graph_wiring = GraphWiring(
             edges_num_states=np.concatenate(edges_num_states),
             var_states_for_edges=np.concatenate(var_states_for_edges),
-            wiring_by_type=wiring_by_type,
+            wiring_by_factor_type=wiring_by_factor_type,
         )
         return graph_wiring
 
@@ -361,17 +362,17 @@ class GraphWiring:
     Args:
         edges_num_states: Array of the total number of edge states for all factors in the factor group.
         var_states_for_edges: Array of the global variable state indices for each edge state.
-        wiring_by_type: Wiring for all the factor types.
+        wiring_by_factor_type: Wiring for all the factor types.
     """
 
     edges_num_states: Union[np.ndarray, jnp.ndarray]
     var_states_for_edges: Union[np.ndarray, jnp.ndarray]
-    wiring_by_type: OrderedDict[
-        type, Union[None, enumeration.EnumerationWiring, logical.LogicalWiring]
+    wiring_by_factor_type: OrderedDict[
+        str, Union[None, enumeration.EnumerationWiring, logical.LogicalWiring]
     ]
 
     def __post_init__(self):
-        for wiring in self.wiring_by_type.values():
+        for wiring in self.wiring_by_factor_type.values():
             if isinstance(wiring, logical.LogicalWiring):
                 factor_indices = wiring.parents_edge_states[:, 0]
                 num_OR_factors = wiring.children_edge_states.shape[0]
@@ -914,15 +915,12 @@ def BP(
     max_msg_size = int(np.max(wiring.edges_num_states))
 
     num_val_configs = 0
-    if "EnumerationWiring" in wiring.wiring_by_type:
-        assert isinstance(
-            wiring.wiring_by_type["EnumerationWiring"], enumeration.EnumerationWiring
-        )
+    if "EnumerationFactor" in wiring.wiring_by_factor_type:
         num_val_configs = (
             int(
-                wiring.wiring_by_type["EnumerationWiring"].factor_configs_edge_states[
-                    -1, 0
-                ]
+                wiring.wiring_by_factor_type[
+                    "EnumerationFactor"
+                ].factor_configs_edge_states[-1, 0]
             )
             + 1
         )
@@ -977,22 +975,25 @@ def BP(
                 wiring.var_states_for_edges,
             )
             ftov_msgs = vtof_msgs
+
             # Compute new factor to variable messages by message passing
-            if enumeration.EnumerationWiring in wiring.wiring_by_type:
+            if "EnumerationFactor" in wiring.wiring_by_factor_type:
+                print("EnumerationFactor")
                 ftov_msgs = infer.pass_enum_fac_to_var_messages(
                     ftov_msgs,
-                    wiring.wiring_by_type[
-                        enumeration.EnumerationWiring
+                    wiring.wiring_by_factor_type[
+                        "EnumerationFactor"
                     ].factor_configs_edge_states,
                     log_potentials,
                     num_val_configs,
                     temperature,
                 )
-            if logical.LogicalWiring in wiring.wiring_by_type:
+            if "LogicalFactor" in wiring.wiring_by_factor_type:
+                print("LogicalFactor")
                 ftov_msgs = infer.pass_OR_fac_to_var_messages(
                     ftov_msgs,
-                    wiring.wiring_by_type[logical.LogicalWiring].parents_edge_states,
-                    wiring.wiring_by_type[logical.LogicalWiring].children_edge_states,
+                    wiring.wiring_by_factor_type["LogicalFactor"].parents_edge_states,
+                    wiring.wiring_by_factor_type["LogicalFactor"].children_edge_states,
                     temperature,
                 )
             # Use the results of message passing to perform damping and
