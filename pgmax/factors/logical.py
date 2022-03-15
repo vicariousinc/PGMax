@@ -38,6 +38,7 @@ class LogicalWiring(nodes.Wiring):
 @dataclass(frozen=True, eq=False)
 class LogicalFactor(nodes.Factor):
     """A logical OR/AND factor
+
     Args:
         variables: List of connected variables.
             The last variable is assumed to be the child one.
