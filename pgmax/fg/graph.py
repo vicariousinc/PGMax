@@ -368,17 +368,17 @@ class GraphWiring:
     def __post_init__(self):
         for wiring in self.wiring_by_factor_type.values():
             if isinstance(wiring, logical.LogicalWiring):
-                factor_indices = wiring.parents_edge_states[:, 0]
-                num_OR_factors = wiring.children_edge_states.shape[0]
+                logical_factor_indices = wiring.parents_edge_states[:, 0]
+                num_logical_factors = wiring.children_edge_states.shape[0]
 
-                if factor_indices.max() >= num_OR_factors:
+                if logical_factor_indices.max() >= num_logical_factors:
                     raise ValueError(
-                        f"The highest OR factor index must be {num_OR_factors - 1}"
+                        f"The highest OR factor index must be {num_logical_factors - 1}"
                     )
 
-                if np.unique(factor_indices).shape[0] != num_OR_factors:
+                if np.unique(logical_factor_indices).shape[0] != num_logical_factors:
                     raise ValueError(
-                        f"There must be {num_OR_factors} different OR factor indices"
+                        f"There must be {num_logical_factors} different OR factor indices"
                     )
 
 
