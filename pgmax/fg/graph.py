@@ -33,14 +33,14 @@ from pgmax.factors import enumeration, logical
 from pgmax.fg import fg_utils, groups, nodes
 from pgmax.utils import cached_property
 
-CONCATENATE_WIRING: Dict[str, Callable[..., nodes.Wiring]] = {
-    "EnumerationFactor": fg_utils.concatenate_enumeration_wirings,
-    "LogicalFactor": fg_utils.concatenate_logical_wirings,
-}
-
 FACTOR_GROUP_FACTORY = {
     "EnumerationFactor": groups.EnumerationFactorGroup,
     "LogicalFactor": groups.LogicalFactorGroup,
+}
+
+CONCATENATE_WIRING: Dict[str, Callable[..., nodes.Wiring]] = {
+    "EnumerationFactor": fg_utils.concatenate_enumeration_wirings,
+    "ORFactor": fg_utils.concatenate_logical_wirings,
 }
 
 
@@ -89,7 +89,7 @@ class FactorGraph:
         self._variables_to_factors: OrderedDict[
             FrozenSet, nodes.Factor
         ] = collections.OrderedDict()
-        self._types_to_factors: OrderedDict[
+        self._subtypes_to_factors: OrderedDict[
             str, OrderedDict[Hashable, List[nodes.Factor]]
         ] = collections.OrderedDict()
 
@@ -166,14 +166,14 @@ class FactorGraph:
             factor = factor_group._variables_to_factors[variables]
             self._variables_to_factors[variables] = factor
 
-            type_factor = type(factor).__name__
-            if type_factor not in self._types_to_factors:
-                self._types_to_factors[type_factor] = collections.OrderedDict()
+            factor_subtype = factor.__subtype__
+            if factor_subtype not in self._subtypes_to_factors:
+                self._subtypes_to_factors[factor_subtype] = collections.OrderedDict()
 
-            if factor_group not in self._types_to_factors[type_factor]:
-                self._types_to_factors[type_factor][factor_group] = [factor]
+            if factor_group not in self._subtypes_to_factors[factor_subtype]:
+                self._subtypes_to_factors[factor_subtype][factor_group] = [factor]
             else:
-                self._types_to_factors[type_factor][factor_group].append(factor)
+                self._subtypes_to_factors[factor_subtype][factor_group].append(factor)
 
         if name is not None:
             self._named_factor_groups[name] = factor_group
@@ -192,19 +192,22 @@ class FactorGraph:
         # Compile wiring
         edges_num_states = []
         var_states_for_edges = []
-        wiring_by_factor_type = collections.OrderedDict()
+        wiring_by_factor_subtype = collections.OrderedDict()
 
-        for factor_type, factors_groups_by_type in self._types_to_factors.items():
-            wirings_by_type = []
-            factor_to_msgs_starts_by_type = []
+        for (
+            factor_subtype,
+            factors_groups_by_subtype,
+        ) in self._subtypes_to_factors.items():
+            wirings_by_subtype = []
+            factor_to_msgs_starts_by_subtype = []
 
-            for factors in factors_groups_by_type.values():
+            for factors in factors_groups_by_subtype.values():
                 for factor in factors:
                     wiring = factor.compile_wiring(self._vars_to_starts)
                     self._factor_to_msgs_starts[factor] = factor_num_states_cumsum
 
-                    wirings_by_type.append(wiring)
-                    factor_to_msgs_starts_by_type.append(factor_num_states_cumsum)
+                    wirings_by_subtype.append(wiring)
+                    factor_to_msgs_starts_by_subtype.append(factor_num_states_cumsum)
                     edges_num_states.append(wiring.edges_num_states)
                     var_states_for_edges.append(wiring.var_states_for_edges)
 
@@ -212,17 +215,19 @@ class FactorGraph:
                     factor_num_states_cumsum += factor_num_states
 
             # Concatenate the wirings
-            concatenated_wiring_by_factor_type = CONCATENATE_WIRING[factor_type](
-                wirings_by_type, factor_to_msgs_starts_by_type
+            concatenated_wiring_by_factor_subtype = CONCATENATE_WIRING[factor_subtype](
+                wirings_by_subtype, factor_to_msgs_starts_by_subtype
             )
-            wiring_by_factor_type[factor_type] = concatenated_wiring_by_factor_type
+            wiring_by_factor_subtype[
+                factor_subtype
+            ] = concatenated_wiring_by_factor_subtype
 
         self._total_factor_num_states = factor_num_states_cumsum
 
         graph_wiring = GraphWiring(
             edges_num_states=np.concatenate(edges_num_states),
             var_states_for_edges=np.concatenate(var_states_for_edges),
-            wiring_by_factor_type=wiring_by_factor_type,
+            wiring_by_factor_subtype=wiring_by_factor_subtype,
         )
         return graph_wiring
 
@@ -243,8 +248,8 @@ class FactorGraph:
 
         log_potentials = []
         # Only EnumerationFactors have log potentials
-        if "EnumerationFactor" in self._types_to_factors:
-            for factor_group, factors in self._types_to_factors[
+        if "EnumerationFactor" in self._subtypes_to_factors:
+            for factor_group, factors in self._subtypes_to_factors[
                 "EnumerationFactor"
             ].items():
                 self._factor_group_to_potentials_starts[
@@ -358,15 +363,15 @@ class GraphWiring:
     Args:
         edges_num_states: Array of the total number of edge states for all factors in the factor group.
         var_states_for_edges: Array of the global variable state indices for each edge state.
-        wiring_by_factor_type: Wiring for all the factor types.
+        wiring_by_factor_subtype: Wiring for all the factor subtypes.
     """
 
     edges_num_states: Union[np.ndarray, jnp.ndarray]
     var_states_for_edges: Union[np.ndarray, jnp.ndarray]
-    wiring_by_factor_type: OrderedDict[str, nodes.Wiring]
+    wiring_by_factor_subtype: OrderedDict[str, nodes.Wiring]
 
     def __post_init__(self):
-        for wiring in self.wiring_by_factor_type.values():
+        for wiring in self.wiring_by_factor_subtype.values():
             if isinstance(wiring, logical.LogicalWiring):
                 logical_factor_indices = wiring.parents_edge_states[:, 0]
                 num_logical_factors = wiring.children_edge_states.shape[0]
@@ -909,14 +914,14 @@ def BP(
     max_msg_size = int(np.max(wiring.edges_num_states))
 
     num_val_configs = 0
-    if "EnumerationFactor" in wiring.wiring_by_factor_type:
+    if "EnumerationFactor" in wiring.wiring_by_factor_subtype:
         assert isinstance(
-            wiring.wiring_by_factor_type["EnumerationFactor"],
+            wiring.wiring_by_factor_subtype["EnumerationFactor"],
             enumeration.EnumerationWiring,
         )
         num_val_configs = (
             int(
-                wiring.wiring_by_factor_type[
+                wiring.wiring_by_factor_subtype[
                     "EnumerationFactor"
                 ].factor_configs_edge_states[-1, 0]
             )
@@ -975,30 +980,25 @@ def BP(
             ftov_msgs = vtof_msgs
 
             # Compute new factor to variable messages by message passing
-            if "EnumerationFactor" in wiring.wiring_by_factor_type:
-                assert isinstance(
-                    wiring.wiring_by_factor_type["EnumerationFactor"],
-                    enumeration.EnumerationWiring,
-                )
-                ftov_msgs = infer.pass_enum_fac_to_var_messages(
-                    ftov_msgs,
-                    wiring.wiring_by_factor_type[
-                        "EnumerationFactor"
-                    ].factor_configs_edge_states,
-                    log_potentials,
-                    num_val_configs,
-                    temperature,
-                )
-            if "LogicalFactor" in wiring.wiring_by_factor_type:
-                assert isinstance(
-                    wiring.wiring_by_factor_type["LogicalFactor"], logical.LogicalWiring
-                )
-                ftov_msgs = infer.pass_OR_fac_to_var_messages(
-                    ftov_msgs,
-                    wiring.wiring_by_factor_type["LogicalFactor"].parents_edge_states,
-                    wiring.wiring_by_factor_type["LogicalFactor"].children_edge_states,
-                    temperature,
-                )
+            for (
+                factor_subtype,
+                factor_wiring,
+            ) in wiring.wiring_by_factor_subtype.items():
+                if isinstance(factor_wiring, enumeration.EnumerationWiring):
+                    ftov_msgs = infer.pass_enum_fac_to_var_messages(
+                        ftov_msgs,
+                        factor_wiring.factor_configs_edge_states,
+                        log_potentials,
+                        num_val_configs,
+                        temperature,
+                    )
+                elif isinstance(factor_wiring, logical.LogicalWiring):
+                    ftov_msgs = logical.INFERENCE_BY_SUBTYPES[factor_subtype](
+                        ftov_msgs,
+                        factor_wiring.parents_edge_states,
+                        factor_wiring.children_edge_states,
+                        temperature,
+                    )
             # Use the results of message passing to perform damping and
             # update the factor to variable messages
             delta_msgs = ftov_msgs - msgs

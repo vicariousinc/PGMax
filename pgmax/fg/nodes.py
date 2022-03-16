@@ -17,8 +17,7 @@ class Variable:
     meta-information
 
     Args:
-        num_states: an int representing the number of states this variable
-            has.
+        num_states: an int representing the number of states this variable has.
     """
 
     num_states: int
@@ -61,6 +60,15 @@ class Factor:
     """
 
     variables: Tuple[Variable, ...]
+
+    @utils.cached_property
+    def __subtype__(self):
+        """Factor subtype, which can be overridden internally without implementing a subclass.
+
+        Returns:
+            Factor type
+        """
+        return type(self).__name__
 
     @utils.cached_property
     def edges_num_states(self) -> np.ndarray:

@@ -90,14 +90,14 @@ def test_run_bp_with_OR_factors():
         fg2.add_factor_group(
             factory=groups.LogicalFactorGroup,
             variable_names_for_factors=variables_names_for_OR_factors,
-            logical_type="OR",
+            logical_types="OR",
         )
 
         # Test 1: Comparing both specialized inference functions
         vtof_msgs = np.random.normal(
             0, 1, size=(2 * (sum(num_parents) + len(num_parents)))
         )
-        factor_configs_edge_states = fg1.fg_state.wiring.wiring_by_factor_type[
+        factor_configs_edge_states = fg1.fg_state.wiring.wiring_by_factor_subtype[
             "EnumerationFactor"
         ].factor_configs_edge_states
         log_potentials = fg1.fg_state.log_potentials
@@ -110,13 +110,12 @@ def test_run_bp_with_OR_factors():
             num_val_configs,
             temperature,
         )
-        num_val_configs
 
-        parents_edge_states = fg2.fg_state.wiring.wiring_by_factor_type[
-            "LogicalFactor"
+        parents_edge_states = fg2.fg_state.wiring.wiring_by_factor_subtype[
+            "ORFactor"
         ].parents_edge_states
-        children_edge_states = fg2.fg_state.wiring.wiring_by_factor_type[
-            "LogicalFactor"
+        children_edge_states = fg2.fg_state.wiring.wiring_by_factor_subtype[
+            "ORFactor"
         ].children_edge_states
 
         ftov_msgs2 = infer.pass_OR_fac_to_var_messages(

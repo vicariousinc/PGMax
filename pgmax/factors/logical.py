@@ -1,16 +1,20 @@
 """Defines a logical factor"""
 
 from dataclasses import dataclass, field
-from typing import Mapping, Union
+from typing import Callable, Dict, Mapping, Union
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 
 from pgmax import utils
+from pgmax.bp import infer
 from pgmax.fg import nodes
 
-ALLOWED_LOGICAL_TYPES = ["OR"]
+FACTOR_SUBTYPES = {"OR": "ORFactor"}
+INFERENCE_BY_SUBTYPES: Dict[str, Callable[..., jnp.ndarray]] = {
+    "ORFactor": infer.pass_OR_fac_to_var_messages,
+}
 
 
 @jax.tree_util.register_pytree_node_class
@@ -21,7 +25,7 @@ class LogicalWiring(nodes.Wiring):
     Args:
         parents_edge_states: Array of shape (num_parents, 2)
             parents_edge_states[ii, 0] contains the global factor index,
-            which takes into account all the LogicalFactors of the same subtype (AND / OR).
+            which takes into account all the LogicalFactors of the same subtype
             parents_edge_states[ii, 1] contains the message index of the parent variable's state 0,
             which takes into account all the EnumerationFactors and LogicalFactors.
             The parent variable's state 1 is parents_edge_states[ii, 2] + 1.
@@ -54,9 +58,9 @@ class LogicalFactor(nodes.Factor):
     log_potentials: np.ndarray = field(init=False, default=None)
 
     def __post_init__(self):
-        if self.logical_type not in ALLOWED_LOGICAL_TYPES:
+        if self.logical_type not in FACTOR_SUBTYPES:
             raise ValueError(
-                "Logical type {logical_type} is not one of the supported type {ALLOWED_LOGICAL_TYPES}"
+                f"Logical type {self.logical_type} is not one of the supported type {FACTOR_SUBTYPES.keys()}"
             )
 
         if not np.all([variable.num_states == 2 for variable in self.variables]):
@@ -66,6 +70,15 @@ class LogicalFactor(nodes.Factor):
             raise ValueError(
                 "At least one parent variable and one child variable is required"
             )
+
+    @utils.cached_property
+    def __subtype__(self):
+        """Factor subtype of the logical factor
+
+        Returns:
+            Factor subtype
+        """
+        return FACTOR_SUBTYPES[self.logical_type]
 
     @utils.cached_property
     def parents_edge_states(self) -> np.ndarray:
