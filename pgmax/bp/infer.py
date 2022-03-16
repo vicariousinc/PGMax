@@ -113,13 +113,13 @@ def pass_OR_fac_to_var_messages(
     temperature: float,
 ) -> jnp.ndarray:
 
-    """Passes messages from OR Factors to Variables.
+    """Passes messages from ORFactors to Variables.
 
     Args:
         vtof_msgs: Array of shape (num_edge_state,). This holds all the flattened variable to all the factor messages,
             taking into account all the EnumerationFactors and LogicalFactors.
         parents_edge_states: Array of shape (num_parents, 2)
-            parents_edge_states[ii, 0] contains the global OR factor index,
+            parents_edge_states[ii, 0] contains the global ORFactor index,
             which only takes into account all the ORFactors
             parents_edge_states[ii, 1] contains the message index of the parent variable's state 0,
             which takes into account all the EnumerationFactors and LogicalFactors.

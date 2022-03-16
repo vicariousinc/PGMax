@@ -184,7 +184,7 @@ class FactorGraph:
         Also computes start factor messages indices in the flattened array of message.
 
         Returns:
-            Compiled graph wiring from individual factors.
+            Compiled GraphWiring from individual factors.
         """
         self._factor_to_msgs_starts = collections.OrderedDict()
         factor_num_states_cumsum = 0
