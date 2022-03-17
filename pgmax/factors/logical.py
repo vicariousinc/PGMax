@@ -144,7 +144,7 @@ def concatenate_logical_wirings(
         ValueError: if the list of LogicalWirings is empty
     """
     if len(logical_wirings) == 0:
-        raise ValueError("There are no LogicalFactor in the graph")
+        raise ValueError("The list of LogicalWirings is empty")
 
     # Note: this correspomds to all the factor_to_msgs_starts for the EnumerationFactors
     num_edge_states_cumsum = np.insert(

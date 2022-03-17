@@ -174,8 +174,8 @@ class FactorGraph:
 
     @functools.lru_cache(maxsize=None)
     def compute_offsets(self) -> None:
-        """Computes factor messages offsets for the types, groups and factors
-        in the flattened array of message. Also computes log potentials offsets.
+        """Compute factor messages offsets for the factor types, factor groups and factors
+        in the flattened array of message. Also compute log potentials offsets for factor groups and factors.
 
         See FactorGraphState for a description of the arguments used.
 
@@ -195,7 +195,8 @@ class FactorGraph:
         for factor_type, factors_groups_by_type in self.factor_groups.items():
             factor_num_states_start = factor_num_states_cumsum
 
-            # We reset to 0 within a type, as inference will be run by chunking
+            # As inference will be run by chunking the flattened arrays of messages from variables
+            # to factors by factor types, this resets the offsets to 0 within a type
             factor_num_states_cumsum_by_type = 0
             factor_group_num_configs_cumsum_by_type = 0
 
@@ -215,7 +216,6 @@ class FactorGraph:
                         factor
                     ] = factor_group_num_configs_cumsum_by_type
 
-                    # Add offset
                     factor_num_states_cumsum_by_type += np.sum(factor.edges_num_states)
                     if factor.log_potentials is not None:
                         factor_group_num_configs_cumsum_by_type += (
@@ -249,14 +249,16 @@ class FactorGraph:
             logical.ORFactor: logical.concatenate_logical_wirings,
         }
 
+        #
         for factor_type, factors_groups_by_type in self.factor_groups.items():
+            # Compile the wirings for the factors or a given type
             wirings_by_type = []
             for factor_group in factors_groups_by_type:
                 for factor in factor_group.factors:
                     wiring = factor.compile_wiring(self._vars_to_starts)
                     wirings_by_type.append(wiring)
 
-            # Concatenate the wirings
+            # Concatenate the wirings for this type
             concatenated_wiring_by_factor_type = CONCATENATE_WIRING_BIS[factor_type](
                 wirings_by_type
             )
@@ -265,7 +267,7 @@ class FactorGraph:
 
     @cached_property
     def log_potentials_by_factor_type(self) -> OrderedDict[Type, None | np.ndarray]:
-        """Function to compile potential array for belief propagation..
+        """Function to compile potential array for belief propagation.
 
         If potential array has already beeen compiled, do nothing.
 
@@ -457,7 +459,7 @@ def update_log_potentials(
     Raises: ValueError if
         (1) Log potentials are provided for a factor (group) without factor(_group)_log_potentials
         (2) Provided log_potentials shape does not match the expected log_potentials shape.
-        (4) Provided name is not valid for log_potentials updates.
+        (3) Provided name is not valid for log_potentials updates.
     """
     for name in updates:
         data = updates[name]

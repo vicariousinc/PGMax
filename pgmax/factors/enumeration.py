@@ -151,7 +151,7 @@ def concatenate_enumeration_wirings(
         ValueError: if the list of EnumerationWirings is empty
     """
     if len(enum_wirings) == 0:
-        raise ValueError("No EnumerationWiring in the graph")
+        raise ValueError("The list of EnumerationWirings is empty")
 
     factor_configs_cumsum = np.insert(
         np.array(
