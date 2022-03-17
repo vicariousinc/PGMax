@@ -44,14 +44,14 @@ class LogicalWiring(nodes.Wiring):
             logical_factor_indices = self.parents_edge_states[:, 0]
             num_logical_factors = self.children_edge_states.shape[0]
 
-            if logical_factor_indices.max() >= num_logical_factors:
-                raise ValueError(
-                    f"The highest OR factor index must be {num_logical_factors - 1}"
-                )
-
             if np.unique(logical_factor_indices).shape[0] != num_logical_factors:
                 raise ValueError(
-                    f"There must be {num_logical_factors} different OR factor indices"
+                    f"The LogicalWiring must have {num_logical_factors} different LogicalFactor indices"
+                )
+
+            if logical_factor_indices.max() >= num_logical_factors:
+                raise ValueError(
+                    f"The highest LogicalFactor index must be {num_logical_factors - 1}"
                 )
 
     @property
@@ -76,13 +76,13 @@ class LogicalFactor(nodes.Factor):
     log_potentials: np.ndarray = field(init=False, default=np.empty((0,)))
 
     def __post_init__(self):
-        if not np.all([variable.num_states == 2 for variable in self.variables]):
-            raise ValueError("All variables should all be binary")
-
         if len(self.variables) < 2:
             raise ValueError(
                 "At least one parent variable and one child variable is required"
             )
+
+        if not np.all([variable.num_states == 2 for variable in self.variables]):
+            raise ValueError("All variables should all be binary")
 
     @utils.cached_property
     def parents_edge_states(self) -> np.ndarray:

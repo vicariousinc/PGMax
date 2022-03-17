@@ -369,7 +369,7 @@ def test_e2e_sanity_check():
     bp_state = fg.bp_state
     assert np.all(
         [
-            isinstance(this_wiring, nodes.Wiring)
+            isinstance(jax.device_put(this_wiring), nodes.Wiring)
             for this_wiring in fg.fg_state.wiring.values()
         ]
     )

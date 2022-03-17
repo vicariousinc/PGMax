@@ -72,9 +72,6 @@ def get_maxes_and_argmaxes(
     Raises:
         ValueError if the data and labels arrays do not have the same size.
     """
-    if data.shape[0] != labels.shape[0]:
-        raise ValueError("Data and labels arrays must have the same size")
-
     num_obs = data.shape[0]
 
     maxes = jnp.full(shape=(num_labels,), fill_value=NEG_INF).at[labels].max(data)

@@ -6,7 +6,6 @@ import jax.numpy as jnp
 from pgmax.factors import enumeration, logical
 from pgmax.fg import groups, nodes
 
-REGISTERED_FACTOR_TYPES = [enumeration.EnumerationFactor, logical.ORFactor]
 FACTOR_GROUP_FACTORY: OrderedDict[Type, Type] = collections.OrderedDict(
     [
         (enumeration.EnumerationFactor, groups.EnumerationFactorGroup),

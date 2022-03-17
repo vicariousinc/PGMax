@@ -5,13 +5,15 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from pgmax.factors import FACTOR_GROUP_FACTORY, enumeration
 from pgmax.fg import graph, groups
 
 
 def test_factor_graph():
     variable_group = groups.VariableDict(15, (0,))
     fg = graph.FactorGraph(variable_group)
-    fg.add_factor(
+    fg.add_factor_by_type(
+        factor_type=enumeration.EnumerationFactor,
         variable_names=[0],
         factor_configs=np.arange(15)[:, None],
         name="test",
@@ -36,6 +38,14 @@ def test_factor_graph():
             variable_names=[0],
             factor_configs=np.arange(10)[:, None],
         )
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            f"Factor type TestFactor is not one of the supported types {FACTOR_GROUP_FACTORY.keys()}"
+        ),
+    ):
+        fg.add_factor_by_type(variable_names=[0], factor_type="TestFactor")
 
 
 def test_bp_state():

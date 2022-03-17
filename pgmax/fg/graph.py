@@ -31,12 +31,7 @@ import numpy as np
 from jax.scipy.special import logsumexp
 
 from pgmax.bp import infer
-from pgmax.factors import (
-    CONCATENATE_WIRING,
-    FAC_TO_VAR_UPDATES,
-    FACTOR_GROUP_FACTORY,
-    REGISTERED_FACTOR_TYPES,
-)
+from pgmax.factors import CONCATENATE_WIRING, FAC_TO_VAR_UPDATES, FACTOR_GROUP_FACTORY
 from pgmax.fg import groups, nodes
 from pgmax.utils import cached_property
 
@@ -90,7 +85,7 @@ class FactorGraph:
         self._factor_types_to_groups: OrderedDict[
             Type, List[groups.FactorGroup]
         ] = collections.OrderedDict(
-            [(factor_type, []) for factor_type in REGISTERED_FACTOR_TYPES]
+            [(factor_type, []) for factor_type in FACTOR_GROUP_FACTORY]
         )
 
     def __hash__(self) -> int:
@@ -189,11 +184,6 @@ class FactorGraph:
             self._variables_to_factors[variables] = factor
 
         factor_type = type(factor)
-        if factor_type not in self._factor_types_to_groups:
-            raise ValueError(
-                f"Factor type {factor_type} is not one of the registered types {REGISTERED_FACTOR_TYPES}"
-            )
-
         self._factor_types_to_groups[factor_type].append(factor_group)
         if name is not None:
             self._named_factor_groups[name] = factor_group
@@ -473,18 +463,13 @@ def update_log_potentials(
         A flat jnp array containing updated log_potentials.
 
     Raises: ValueError if
-        (1) Log potentials are provided for a factor (group) without factor(_group)_log_potentials
-        (2) Provided log_potentials shape does not match the expected log_potentials shape.
+        (1) Provided log_potentials shape does not match the expected log_potentials shape.
         (3) Provided name is not valid for log_potentials updates.
     """
     for name in updates:
         data = updates[name]
         if name in fg_state.named_factor_groups:
             factor_group = fg_state.named_factor_groups[name]
-            if factor_group.factor_group_log_potentials is None:
-                raise ValueError(
-                    f"The factor_group {factor_group} does not have factor_group_log_potentials"
-                )
 
             flat_data = factor_group.flatten(data)
             if flat_data.shape != factor_group.factor_group_log_potentials.shape:
@@ -499,8 +484,6 @@ def update_log_potentials(
             )
         elif frozenset(name) in fg_state.variables_to_factors:
             factor = fg_state.variables_to_factors[frozenset(name)]
-            if factor.log_potentials is None:
-                raise ValueError(f"The factor {factor} does not have log_potentials")
 
             if data.shape != factor.log_potentials.shape:
                 raise ValueError(
