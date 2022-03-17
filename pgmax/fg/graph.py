@@ -102,7 +102,7 @@ class FactorGraph:
         ] = collections.OrderedDict()
 
     def __hash__(self) -> int:
-        return hash(self.factor_groups.values())
+        return hash(tuple(sum(self.factor_groups.values(), [])))
 
     def add_factor(self, variable_names: List, factor_type: str, **kwargs) -> None:
         """Function to add a single factor to the FactorGraph.
@@ -244,12 +244,11 @@ class FactorGraph:
         """
         wiring_by_factor_type = collections.OrderedDict()
 
-        CONCATENATE_WIRING_BIS: Dict[Type, Callable[..., nodes.Wiring]] = {
-            enumeration.EnumerationFactor: enumeration.concatenate_enumeration_wirings,
-            logical.ORFactor: logical.concatenate_logical_wirings,
-        }
+        # CONCATENATE_WIRING_BIS: Dict[Type, Callable[..., nodes.Wiring]] = {
+        #     enumeration.EnumerationFactor: enumeration.concatenate_enumeration_wirings,
+        #     logical.ORFactor: logical.concatenate_logical_wirings,
+        # }
 
-        #
         for factor_type, factors_groups_by_type in self.factor_groups.items():
             # Compile the wirings for the factors or a given type
             wirings_by_type = []
@@ -259,7 +258,7 @@ class FactorGraph:
                     wirings_by_type.append(wiring)
 
             # Concatenate the wirings for this type
-            concatenated_wiring_by_factor_type = CONCATENATE_WIRING_BIS[factor_type](
+            concatenated_wiring_by_factor_type = CONCATENATE_WIRING[factor_type](
                 wirings_by_type
             )
             wiring_by_factor_type[factor_type] = concatenated_wiring_by_factor_type
