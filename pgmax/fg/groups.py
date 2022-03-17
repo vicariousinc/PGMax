@@ -615,7 +615,7 @@ class FactorGroup:
         return tuple(self._variables_to_factors.values())
 
     @cached_property
-    def factor_group_log_potentials(self) -> None | np.ndarray:
+    def factor_group_log_potentials(self) -> np.ndarray:
         """Function to compile potential array for the factor group
 
         Returns
@@ -625,13 +625,6 @@ class FactorGroup:
         Raises:
             ValueError: if some factors have empty log potentials and others have non-empty ones
         """
-        if np.any([factor.log_potentials is None for factor in self.factors]):
-            if not np.all([factor.log_potentials is None for factor in self.factors]):
-                raise ValueError(
-                    "All the factors must have empty or non-empty log potentials"
-                )
-            return None
-
         return np.concatenate([factor.log_potentials for factor in self.factors])
 
     def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
@@ -1089,7 +1082,6 @@ class ORFactorGroup(FactorGroup):
                         variables=tuple(
                             self.variable_group[self.variable_names_for_factors[ii]]
                         ),
-                        log_potentials=None,
                     ),
                 )
                 for ii in range(len(self.variable_names_for_factors))

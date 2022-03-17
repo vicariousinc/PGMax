@@ -31,24 +31,14 @@ import numpy as np
 from jax.scipy.special import logsumexp
 
 from pgmax.bp import infer
-from pgmax.factors import enumeration, logical
+from pgmax.factors import (
+    CONCATENATE_WIRING,
+    FAC_TO_VAR_UPDATES,
+    FACTOR_GROUP_FACTORY,
+    REGISTERED_FACTOR_TYPES,
+)
 from pgmax.fg import groups, nodes
 from pgmax.utils import cached_property
-
-FACTOR_GROUP_FACTORY = {
-    "EnumerationFactor": groups.EnumerationFactorGroup,
-    "ORFactor": groups.ORFactorGroup,
-}
-
-CONCATENATE_WIRING: Dict[Type, Callable[..., nodes.Wiring]] = {
-    enumeration.EnumerationFactor: enumeration.concatenate_enumeration_wirings,
-    logical.ORFactor: logical.concatenate_logical_wirings,
-}
-
-FAC_TO_VAR_UPDATES: Dict[Type, Callable[..., jnp.ndarray]] = {
-    enumeration.EnumerationFactor: infer.pass_enum_fac_to_var_messages,
-    logical.ORFactor: infer.pass_OR_fac_to_var_messages,
-}
 
 
 @dataclass
@@ -99,12 +89,14 @@ class FactorGraph:
         ] = collections.OrderedDict()
         self._factor_types_to_groups: OrderedDict[
             Type, List[groups.FactorGroup]
-        ] = collections.OrderedDict()
+        ] = collections.OrderedDict(
+            [(factor_type, []) for factor_type in REGISTERED_FACTOR_TYPES]
+        )
 
     def __hash__(self) -> int:
         return hash(tuple(sum(self.factor_groups.values(), [])))
 
-    def add_factor(self, variable_names: List, factor_type: str, **kwargs) -> None:
+    def add_factor(self, variable_names: List, factor_type: type, **kwargs) -> None:
         """Function to add a single factor to the FactorGraph.
 
         Args:
@@ -165,10 +157,11 @@ class FactorGraph:
 
         factor_type = type(factor)
         if factor_type not in self._factor_types_to_groups:
-            self._factor_types_to_groups[factor_type] = [factor_group]
-        else:
-            self._factor_types_to_groups[factor_type].append(factor_group)
+            raise ValueError(
+                f"Factor type {factor_type} is not one of the registered types {REGISTERED_FACTOR_TYPES}"
+            )
 
+        self._factor_types_to_groups[factor_type].append(factor_group)
         if name is not None:
             self._named_factor_groups[name] = factor_group
 
@@ -182,18 +175,20 @@ class FactorGraph:
         If offsets have already beeen compiled, do nothing.
         """
         # Message offsets for ftov messages
-        self._factor_type_to_msgs_starts = collections.OrderedDict()
+        self._factor_type_to_msgs_range = collections.OrderedDict()
         self._factor_group_to_msgs_starts = collections.OrderedDict()
         self._factor_to_msgs_starts = collections.OrderedDict()
         factor_num_states_cumsum = 0
 
         # Log potentials offsets
+        self._factor_type_to_potentials_range = collections.OrderedDict()
         self._factor_group_to_potentials_starts = collections.OrderedDict()
         self._factor_to_potentials_starts = collections.OrderedDict()
         factor_group_num_configs_cumsum = 0
 
         for factor_type, factors_groups_by_type in self.factor_groups.items():
             factor_num_states_start = factor_num_states_cumsum
+            factor_group_num_configs_start = factor_group_num_configs_cumsum
 
             # As inference will be run by chunking the flattened arrays of messages from variables
             # to factors by factor types, this resets the offsets to 0 within a type
@@ -225,16 +220,20 @@ class FactorGraph:
             # Add global offsets
             factor_num_states_cumsum += factor_num_states_cumsum_by_type
             factor_group_num_configs_cumsum += factor_group_num_configs_cumsum_by_type
-            self._factor_type_to_msgs_starts[factor_type] = (
+            self._factor_type_to_msgs_range[factor_type] = (
                 factor_num_states_start,
                 factor_num_states_cumsum,
+            )
+            self._factor_type_to_potentials_range[factor_type] = (
+                factor_group_num_configs_start,
+                factor_group_num_configs_cumsum,
             )
 
         self._total_factor_num_states = factor_num_states_cumsum
         self._total_factor_num_configs = factor_group_num_configs_cumsum
 
     @cached_property
-    def wiring_by_factor_type(self) -> OrderedDict[Type, nodes.Wiring]:
+    def wiring(self) -> OrderedDict[Type, nodes.Wiring]:
         """Function to compile wiring for belief propagation.
 
         If wiring has already beeen compiled, do nothing.
@@ -242,30 +241,28 @@ class FactorGraph:
         Returns:
             A dictionnary mapping each factor type to its wiring.
         """
-        wiring_by_factor_type = collections.OrderedDict()
-
-        # CONCATENATE_WIRING_BIS: Dict[Type, Callable[..., nodes.Wiring]] = {
-        #     enumeration.EnumerationFactor: enumeration.concatenate_enumeration_wirings,
-        #     logical.ORFactor: logical.concatenate_logical_wirings,
-        # }
-
-        for factor_type, factors_groups_by_type in self.factor_groups.items():
-            # Compile the wirings for the factors or a given type
-            wirings_by_type = []
-            for factor_group in factors_groups_by_type:
-                for factor in factor_group.factors:
-                    wiring = factor.compile_wiring(self._vars_to_starts)
-                    wirings_by_type.append(wiring)
-
-            # Concatenate the wirings for this type
-            concatenated_wiring_by_factor_type = CONCATENATE_WIRING[factor_type](
-                wirings_by_type
-            )
-            wiring_by_factor_type[factor_type] = concatenated_wiring_by_factor_type
-        return wiring_by_factor_type
+        wiring = collections.OrderedDict(
+            [
+                (
+                    factor_type,
+                    [
+                        factor.compile_wiring(self._vars_to_starts)
+                        for factor in self.factors[factor_type]
+                    ],
+                )
+                for factor_type in self.factors
+            ]
+        )
+        wiring = collections.OrderedDict(
+            [
+                (factor_type, CONCATENATE_WIRING[factor_type](wiring[factor_type]))
+                for factor_type in wiring
+            ]
+        )
+        return wiring
 
     @cached_property
-    def log_potentials_by_factor_type(self) -> OrderedDict[Type, None | np.ndarray]:
+    def log_potentials(self) -> OrderedDict[Type, np.ndarray]:
         """Function to compile potential array for belief propagation.
 
         If potential array has already beeen compiled, do nothing.
@@ -278,34 +275,19 @@ class FactorGraph:
             ValueError: if within a factor type, some factor groups have empty log potentials
                 and others have non-empty log potentials
         """
-        log_potentials_by_factor_type = collections.OrderedDict()
-
+        log_potentials = collections.OrderedDict()
         for factor_type, factors_groups_by_type in self.factor_groups.items():
-            if np.any(
-                [
-                    factor_group.factor_group_log_potentials is None
-                    for factor_group in factors_groups_by_type
-                ]
-            ):
-                if not np.all(
-                    [
-                        factor_group.factor_group_log_potentials is None
-                        for factor_group in factors_groups_by_type
-                    ]
-                ):
-                    raise ValueError(
-                        "All the factors groups with the same factor type must have empty or non-empty log potentials"
-                    )
-                log_potentials = None
+            if len(factors_groups_by_type) == 0:
+                log_potentials[factor_type] = np.empty((0,))
             else:
-                log_potentials = np.concatenate(
+                log_potentials[factor_type] = np.concatenate(
                     [
                         factor_group.factor_group_log_potentials
                         for factor_group in factors_groups_by_type
                     ]
                 )
-            log_potentials_by_factor_type[factor_type] = log_potentials
-        return log_potentials_by_factor_type
+
+        return log_potentials
 
     @cached_property
     def factors(self) -> OrderedDict[Type, List[nodes.Factor]]:
@@ -329,6 +311,9 @@ class FactorGraph:
         """Current factor graph state given the added factors."""
         # Preliminary computations
         self.compute_offsets()
+        log_potentials = np.concatenate(
+            [self.log_potentials[factor_type] for factor_type in self.log_potentials]
+        )
 
         return FactorGraphState(
             variable_group=self._variable_group,
@@ -342,9 +327,12 @@ class FactorGraph:
             ),
             factor_to_potentials_starts=copy.copy(self._factor_to_potentials_starts),
             factor_to_msgs_starts=copy.copy(self._factor_to_msgs_starts),
-            factor_type_to_msgs_starts=copy.copy(self._factor_type_to_msgs_starts),
-            log_potentials=self.log_potentials_by_factor_type,
-            wiring_by_factor_type=self.wiring_by_factor_type,
+            factor_type_to_msgs_range=copy.copy(self._factor_type_to_msgs_range),
+            factor_type_to_potentials_range=copy.copy(
+                self._factor_type_to_potentials_range
+            ),
+            log_potentials=log_potentials,
+            wiring=self.wiring,
         )
 
     @property
@@ -378,9 +366,9 @@ class FactorGraphState:
         factor_to_potentials_starts: Maps factors to their starting indices in the flat log potentials.
         factor_to_msgs_starts: Maps factors to their starting indices in the flat ftov messages.
         CHANGE
-        factor_type_to_msgs_starts: Maps factors types to their starting indices in the flat ftov messages.
+        factor_type_to_msgs_range: Maps factors types to their starting indices in the flat ftov messages.
         log_potentials: Flat log potentials array for each each factor type
-        wiring_by_factor_type: Wiring derived for each factor type
+        wiring: Wiring derived for each factor type
     """
 
     variable_group: groups.VariableGroup
@@ -392,9 +380,10 @@ class FactorGraphState:
     factor_group_to_potentials_starts: OrderedDict[groups.FactorGroup, int]
     factor_to_potentials_starts: OrderedDict[nodes.Factor, int]
     factor_to_msgs_starts: OrderedDict[nodes.Factor, int]
-    factor_type_to_msgs_starts: OrderedDict[type, Tuple[int, int]]
+    factor_type_to_msgs_range: OrderedDict[type, Tuple[int, int]]
+    factor_type_to_potentials_range: OrderedDict[type, Tuple[int, int]]
     log_potentials: OrderedDict[type, None | np.ndarray]
-    wiring_by_factor_type: OrderedDict[type, nodes.Wiring]
+    wiring: OrderedDict[type, nodes.Wiring]
 
     def __post_init__(self):
         for field in self.__dataclass_fields__:
@@ -425,7 +414,7 @@ class BPState:
     evidence: Evidence
 
     def __post_init__(self):
-        # print(self.log_potentials.fg_state.wiring_by_factor_type, self.ftov_msgs.fg_state.wiring_by_factor_type)
+        # print(self.log_potentials.fg_state.wiring, self.ftov_msgs.fg_state.wiring)
 
         if (self.log_potentials.fg_state != self.ftov_msgs.fg_state) or (
             self.ftov_msgs.fg_state != self.evidence.fg_state
@@ -514,7 +503,7 @@ class LogPotentials:
     """
 
     fg_state: FactorGraphState
-    value: Optional[OrderedDict[Type, None | np.ndarray]] = None
+    value: Optional[np.ndarray] = None
 
     def __post_init__(self):
         if self.value is None:
@@ -646,7 +635,7 @@ def update_ftov_msgs(
             var_states_for_edges = np.concatenate(
                 [
                     wiring_by_type.var_states_for_edges
-                    for wiring_by_type in fg_state.wiring_by_factor_type.values()
+                    for wiring_by_type in fg_state.wiring.values()
                 ]
             )
 
@@ -934,21 +923,19 @@ def BP(
         \tget_bp_state: Function to reconstruct the BPState from BPArrays.\n
         \tget_beliefs: Function to calculate beliefs from BPArrays.\n
     """
-    wiring = bp_state.fg_state.wiring_by_factor_type
-
+    wiring = bp_state.fg_state.wiring
     edges_num_states = np.concatenate(
-        [wiring_by_type.edges_num_states for wiring_by_type in wiring.values()]
+        [wiring[factor_type].edges_num_states for factor_type in wiring]
     )
     max_msg_size = int(np.max(edges_num_states))
     var_states_for_edges = np.concatenate(
-        [wiring_by_type.var_states_for_edges for wiring_by_type in wiring.values()]
+        [wiring[factor_type].var_states_for_edges for factor_type in wiring]
     )
-
-    inference_arguments = {
-        factor_type: {**wiring[factor_type].inference_arguments}  # type: ignore
-        for factor_type in wiring
+    inference_arguments: Dict[type, Mapping] = {
+        factor_type: wiring[factor_type].inference_arguments for factor_type in wiring
     }
-    factor_type_to_msgs_starts = bp_state.fg_state.factor_type_to_msgs_starts
+    factor_type_to_msgs_range = bp_state.fg_state.factor_type_to_msgs_range
+    factor_type_to_potentials_range = bp_state.fg_state.factor_type_to_potentials_range
 
     def run_bp(
         log_potentials_updates: Optional[Dict[Any, jnp.ndarray]] = None,
@@ -970,7 +957,7 @@ def BP(
         Returns:
             A BPArrays containing the updated log_potentials, ftov_msgs and evidence.
         """
-        log_potentials = bp_state.log_potentials.value
+        log_potentials = jax.device_put(bp_state.log_potentials.value)
         if log_potentials_updates is not None:
             log_potentials = update_log_potentials(
                 log_potentials, log_potentials_updates, bp_state.fg_state
@@ -991,12 +978,7 @@ def BP(
             ftov_msgs, edges_num_states, max_msg_size
         )
 
-        FAC_TO_VAR_UPDATES_BIS: Dict[Type, Callable[..., jnp.ndarray]] = {
-            enumeration.EnumerationFactor: infer.pass_enum_fac_to_var_messages,
-            logical.ORFactor: infer.pass_OR_fac_to_var_messages,
-        }
-
-        # @jax.checkpoint
+        @jax.checkpoint
         def update(msgs: jnp.ndarray, _) -> Tuple[jnp.ndarray, None]:
             # Compute new variable to factor messages by message passing
             vtof_msgs = infer.pass_var_to_fac_messages(
@@ -1005,18 +987,18 @@ def BP(
                 var_states_for_edges,
             )
             ftov_msgs = jnp.zeros_like(vtof_msgs)
-
             for factor_type in wiring:
-                start, end = factor_type_to_msgs_starts[factor_type]
-                ftov_msgs_type = FAC_TO_VAR_UPDATES_BIS[factor_type](
-                    **{
-                        "vtof_msgs": vtof_msgs[start:end],
-                        "log_potentials": log_potentials[factor_type],  # type: ignore
-                        "temperature": temperature,
-                        **inference_arguments[factor_type],
-                    }
+                msgs_start, msgs_end = factor_type_to_msgs_range[factor_type]
+                potentials_start, potentials_end = factor_type_to_potentials_range[
+                    factor_type
+                ]
+                ftov_msgs_type = FAC_TO_VAR_UPDATES[factor_type](
+                    vtof_msgs=vtof_msgs[msgs_start:msgs_end],
+                    log_potentials=log_potentials[potentials_start:potentials_end],
+                    temperature=temperature,
+                    **inference_arguments[factor_type],
                 )
-                ftov_msgs = ftov_msgs.at[start:end].set(ftov_msgs_type)
+                ftov_msgs = ftov_msgs.at[msgs_start:msgs_end].set(ftov_msgs_type)
 
             # Use the results of message passing to perform damping and
             # update the factor to variable messages

@@ -3,7 +3,7 @@ from __future__ import annotations
 """A module containing classes that specify the basic components of a Factor Graph."""
 
 from dataclasses import asdict, dataclass
-from typing import Mapping, Tuple, Union
+from typing import Any, Mapping, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -45,6 +45,12 @@ class Wiring:
             if isinstance(getattr(self, field), np.ndarray):
                 getattr(self, field).flags.writeable = False
 
+    @property
+    def inference_arguments(self) -> Mapping[str, Any]:
+        raise NotImplementedError(
+            "Please subclass the Wiring class and override this method."
+        )
+
     def tree_flatten(self):
         return jax.tree_util.tree_flatten(asdict(self))
 
@@ -59,11 +65,10 @@ class Factor:
 
     Args:
         variables: List of connected variables
-        log_potentials: None or array of log potentials
     """
 
     variables: Tuple[Variable, ...]
-    log_potentials: None | np.ndarray
+    log_potentials: np.ndarray
 
     @utils.cached_property
     def edges_num_states(self) -> np.ndarray:

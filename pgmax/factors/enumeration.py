@@ -1,5 +1,6 @@
 """Defines an enumeration factor"""
 
+import functools
 from dataclasses import dataclass
 from typing import Mapping, Sequence, Union
 
@@ -8,6 +9,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from pgmax import utils
+from pgmax.bp import bp_utils
 from pgmax.fg import nodes
 
 
@@ -26,12 +28,12 @@ class EnumerationWiring(nodes.Wiring):
 
     factor_configs_edge_states: Union[np.ndarray, jnp.ndarray]
 
-    def __post_init__(self):
-        inference_arguments = {
+    @property
+    def inference_arguments(self) -> Mapping[str, Union[np.ndarray, int]]:
+        return {
             "factor_configs_edge_states": self.factor_configs_edge_states,
             "num_val_configs": int(self.factor_configs_edge_states[-1, 0]) + 1,
         }
-        object.__setattr__(self, "inference_arguments", inference_arguments)
 
 
 @dataclass(frozen=True, eq=False)
@@ -41,6 +43,8 @@ class EnumerationFactor(nodes.Factor):
     Args:
         configs: Array of shape (num_val_configs, num_variables)
             An array containing an explicit enumeration of all valid configurations
+        log_potentials: Array of shape (num_val_configs,)
+            An array containing the log of the potential value for each valid configuration
 
     Raises:
         ValueError: If:
@@ -52,6 +56,7 @@ class EnumerationFactor(nodes.Factor):
     """
 
     configs: np.ndarray
+    log_potentials: np.ndarray
 
     def __post_init__(self):
         self.configs.flags.writeable = False
@@ -151,7 +156,11 @@ def concatenate_enumeration_wirings(
         ValueError: if the list of EnumerationWirings is empty
     """
     if len(enum_wirings) == 0:
-        raise ValueError("The list of EnumerationWirings is empty")
+        return EnumerationWiring(
+            edges_num_states=np.empty((0,), dtype=int),
+            var_states_for_edges=np.empty((0,), dtype=int),
+            factor_configs_edge_states=np.empty((0, 2), dtype=int),
+        )
 
     factor_configs_cumsum = np.insert(
         np.array(
@@ -186,3 +195,72 @@ def concatenate_enumeration_wirings(
         ),
         factor_configs_edge_states=np.concatenate(factor_configs_edge_states, axis=0),
     )
+
+
+@functools.partial(jax.jit, static_argnames=("num_val_configs", "temperature"))
+def pass_enum_fac_to_var_messages(
+    vtof_msgs: jnp.ndarray,
+    factor_configs_edge_states: jnp.ndarray,
+    log_potentials: jnp.ndarray,
+    num_val_configs: int,
+    temperature: float,
+) -> jnp.ndarray:
+
+    """Passes messages from EnumerationFactors to Variables.
+
+    The update is performed in two steps. First, a "summary" array is generated that has an entry for every valid
+    configuration for every EnumerationFactor. The elements of this array are simply the sums of messages across
+    each valid config. Then, the info from factor_configs_edge_states is used to apply the scattering operation and
+    generate a flat set of output messages.
+
+    Args:
+        vtof_msgs: Array of shape (num_edge_state,). This holds all the flattened variable
+            to all the EnumerationFactors messages
+        factor_configs_edge_states: Array of shape (num_factor_configs, 2)
+            factor_configs_edge_states[ii] contains a pair of global factor_config and edge_state indices
+            factor_configs_edge_states[ii, 0] contains the global EnumerationFactor config index,
+            factor_configs_edge_states[ii, 1] contains the corresponding global edge_state index.
+            Both indices only take into account the EnumerationFactors of the FactorGraph
+        log_potentials: Array of shape (num_val_configs, ). An entry at index i is the log potential
+            function value for the configuration with global EnumerationFactor config index i.
+        num_val_configs: the total number of valid configurations for all the EnumerationFactors
+            in the factor graph.
+        temperature: Temperature for loopy belief propagation.
+            1.0 corresponds to sum-product, 0.0 corresponds to max-product.
+
+    Returns:
+        Array of shape (num_edge_state,). This holds all the flattened EnumerationFactors to variable messages.
+    """
+    fac_config_summary_sum = (
+        jnp.zeros(shape=(num_val_configs,))
+        .at[factor_configs_edge_states[..., 0]]
+        .add(vtof_msgs[factor_configs_edge_states[..., 1]])
+    ) + log_potentials
+    max_factor_config_summary_for_edge_states = (
+        jnp.full(shape=(vtof_msgs.shape[0],), fill_value=bp_utils.NEG_INF)
+        .at[factor_configs_edge_states[..., 1]]
+        .max(fac_config_summary_sum[factor_configs_edge_states[..., 0]])
+    )
+    ftov_msgs = max_factor_config_summary_for_edge_states - vtof_msgs
+    if temperature != 0.0:
+        ftov_msgs = ftov_msgs + (
+            temperature
+            * jnp.log(
+                jnp.full(
+                    shape=(vtof_msgs.shape[0],), fill_value=jnp.exp(bp_utils.NEG_INF)
+                )
+                .at[factor_configs_edge_states[..., 1]]
+                .add(
+                    jnp.exp(
+                        (
+                            fac_config_summary_sum[factor_configs_edge_states[..., 0]]
+                            - max_factor_config_summary_for_edge_states[
+                                factor_configs_edge_states[..., 1]
+                            ]
+                        )
+                        / temperature
+                    )
+                )
+            )
+        )
+    return ftov_msgs
