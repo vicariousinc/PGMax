@@ -1,6 +1,7 @@
 """A module containing the core message-passing functions for belief propagation"""
 
 import functools
+from typing import Optional
 
 import jax
 import jax.numpy as jnp
@@ -111,6 +112,7 @@ def pass_OR_fac_to_var_messages(
     parents_edge_states: jnp.ndarray,
     children_edge_states: jnp.ndarray,
     temperature: float,
+    log_potentials: Optional[jnp.ndarray] = None,
 ) -> jnp.ndarray:
 
     """Passes messages from ORFactors to Variables.

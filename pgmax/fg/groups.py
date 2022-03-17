@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """A module containing the classes for variable and factor groups in a Factor Graph."""
 
 import collections
@@ -613,7 +615,7 @@ class FactorGroup:
         return tuple(self._variables_to_factors.values())
 
     @cached_property
-    def factor_group_log_potentials(self) -> np.ndarray:
+    def factor_group_log_potentials(self) -> None | np.ndarray:
         """Function to compile potential array for the factor group
 
         Returns
@@ -1002,8 +1004,57 @@ class PairwiseFactorGroup(FactorGroup):
         return data
 
 
+# @dataclass(frozen=True, eq=False)
+# class LogicalFactorGroup(FactorGroup):
+#     """Class to represent a group of LogicalFactors.
+
+#     Args:
+#         variable_names_for_factors: A list of list of tuples, where each innermost tuple contains a
+#             name into variable_group. Each list within the outer list is taken to contain the names of variables
+#             neighboring a particular LogicalFactor to be added.
+#         logical_type: The logical condition supported by the factor
+#     """
+
+#     variable_names_for_factors: Sequence[List]
+#     logical_types: Union[str, Sequence[str]]
+
+#     def _get_variables_to_factors(
+#         self,
+#     ) -> OrderedDict[FrozenSet, logical.LogicalFactor]:
+#         """Function that generates a dictionary mapping set of connected variables to LogicalFactors.
+
+#         Returns:
+#             A dictionary mapping all possible set of connected variables to different LogicalFactors.
+#         """
+#         num_factors = len(self.variable_names_for_factors)
+
+#         if (
+#             not isinstance(self.logical_types, str)
+#             and len(self.logical_types) != num_factors
+#         ):
+#             raise ValueError(
+#                 f"Expected logical_type to be a string or a list of length {num_factors}."
+#                 f"Got a list of length {len(self.logical_types)}."
+#             )
+#         logical_types = np.broadcast_to(self.logical_types, (num_factors,))
+
+#         variables_to_factors = collections.OrderedDict(
+#             [
+#                 (
+#                     frozenset(self.variable_names_for_factors[ii]),
+#                     logical.LogicalFactor(
+#                         tuple(self.variable_group[self.variable_names_for_factors[ii]]),
+#                         logical_type=logical_types[ii],
+#                     ),
+#                 )
+#                 for ii in range(len(self.variable_names_for_factors))
+#             ]
+#         )
+#         return variables_to_factors
+
+
 @dataclass(frozen=True, eq=False)
-class LogicalFactorGroup(FactorGroup):
+class ORFactorGroup(FactorGroup):
     """Class to represent a group of LogicalFactors.
 
     Args:
@@ -1014,7 +1065,6 @@ class LogicalFactorGroup(FactorGroup):
     """
 
     variable_names_for_factors: Sequence[List]
-    logical_types: Union[str, Sequence[str]]
 
     def _get_variables_to_factors(
         self,
@@ -1024,25 +1074,12 @@ class LogicalFactorGroup(FactorGroup):
         Returns:
             A dictionary mapping all possible set of connected variables to different LogicalFactors.
         """
-        num_factors = len(self.variable_names_for_factors)
-
-        if (
-            not isinstance(self.logical_types, str)
-            and len(self.logical_types) != num_factors
-        ):
-            raise ValueError(
-                f"Expected logical_type to be a string or a list of length {num_factors}."
-                f"Got a list of length {len(self.logical_types)}."
-            )
-        logical_types = np.broadcast_to(self.logical_types, (num_factors,))
-
         variables_to_factors = collections.OrderedDict(
             [
                 (
                     frozenset(self.variable_names_for_factors[ii]),
-                    logical.LogicalFactor(
+                    logical.ORFactor(
                         tuple(self.variable_group[self.variable_names_for_factors[ii]]),
-                        logical_type=logical_types[ii],
                     ),
                 )
                 for ii in range(len(self.variable_names_for_factors))

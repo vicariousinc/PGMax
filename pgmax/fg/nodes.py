@@ -1,7 +1,7 @@
 """A module containing classes that specify the basic components of a Factor Graph."""
 
 from dataclasses import asdict, dataclass
-from typing import Any, Mapping, Tuple, Union
+from typing import Mapping, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -26,7 +26,7 @@ class Variable:
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True, eq=False)
 class Wiring:
-    """Wiring for enumeration factors.
+    """Wiring for factors.
 
     Args:
         edges_num_states: Array of shape (num_edges,)
@@ -62,15 +62,6 @@ class Factor:
     variables: Tuple[Variable, ...]
 
     @utils.cached_property
-    def __subtype__(self):
-        """Factor subtype, which can be overridden internally without implementing a subclass.
-
-        Returns:
-            Factor type
-        """
-        return type(self).__name__
-
-    @utils.cached_property
     def edges_num_states(self) -> np.ndarray:
         """Number of states for the variables connected to each edge
 
@@ -83,7 +74,7 @@ class Factor:
         )
         return edges_num_states
 
-    def compile_wiring(self, vars_to_starts: Mapping[Variable, int]) -> Any:
+    def compile_wiring(self, vars_to_starts: Mapping[Variable, int]) -> Wiring:
         """Compile wiring for the factor
 
         Args:
@@ -92,7 +83,7 @@ class Factor:
                 of its n variable states are m, m + 1, ..., m + n - 1
 
         Returns:
-            a dictionary mapping all possible names to different variables.
+            Wiring for the Factor
         """
         raise NotImplementedError(
             "Please subclass the Factor class and override this method"

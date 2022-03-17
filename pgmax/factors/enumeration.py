@@ -1,7 +1,7 @@
 """Defines an enumeration factor"""
 
 from dataclasses import dataclass
-from typing import Mapping, Union
+from typing import Mapping, Sequence, Union
 
 import jax
 import jax.numpy as jnp
@@ -26,6 +26,13 @@ class EnumerationWiring(nodes.Wiring):
     """
 
     factor_configs_edge_states: Union[np.ndarray, jnp.ndarray]
+
+    def __post_init__(self):
+        inference_arguments = {
+            "factor_configs_edge_states": self.factor_configs_edge_states,
+            "num_val_configs": int(self.factor_configs_edge_states[-1, 0]) + 1,
+        }
+        object.__setattr__(self, "inference_arguments", inference_arguments)
 
 
 @dataclass(frozen=True, eq=False)
@@ -132,3 +139,55 @@ class EnumerationFactor(nodes.Factor):
             var_states_for_edges=var_states_for_edges,
             factor_configs_edge_states=self.factor_configs_edge_states,
         )
+
+
+def concatenate_enumeration_wirings(
+    enum_wirings: Sequence[EnumerationWiring],
+) -> EnumerationWiring:
+    """Concatenate a list of EnumerationWirings from individual EnumerationFactors
+
+    Args:
+        enum_wirings: A list of EnumerationWirings, one for each individual EnumerationFactor
+
+    Returns:
+        Concatenated EnumerationWirings
+
+    Raises:
+        ValueError: if the list of EnumerationWirings is empty
+    """
+    if len(enum_wirings) == 0:
+        raise ValueError("No EnumerationWiring in the graph")
+
+    factor_configs_cumsum = np.insert(
+        np.array(
+            [wiring.factor_configs_edge_states[-1, 0] + 1 for wiring in enum_wirings]
+        ).cumsum(),
+        0,
+        0,
+    )[:-1]
+
+    # Note: this correspomds to all the factor_to_msgs_starts for the EnumerationFactors
+    num_edge_states_cumsum = np.insert(
+        np.array([wiring.edges_num_states.sum() for wiring in enum_wirings]).cumsum(),
+        0,
+        0,
+    )[:-1]
+
+    factor_configs_edge_states = []
+    for ww, wiring in enumerate(enum_wirings):
+        factor_configs_edge_states.append(
+            wiring.factor_configs_edge_states
+            + np.array(
+                [[factor_configs_cumsum[ww], num_edge_states_cumsum[ww]]], dtype=int
+            )
+        )
+
+    return EnumerationWiring(
+        edges_num_states=np.concatenate(
+            [wiring.edges_num_states for wiring in enum_wirings]
+        ),
+        var_states_for_edges=np.concatenate(
+            [wiring.var_states_for_edges for wiring in enum_wirings]
+        ),
+        factor_configs_edge_states=np.concatenate(factor_configs_edge_states, axis=0),
+    )
