@@ -42,8 +42,6 @@ class EnumerationFactor(nodes.Factor):
     Args:
         configs: Array of shape (num_val_configs, num_variables)
             An array containing an explicit enumeration of all valid configurations
-        log_potentials: Array of shape (num_val_configs,). An array containing
-            the log of the potential value for every possible configuration
 
     Raises:
         ValueError: If:
@@ -55,7 +53,6 @@ class EnumerationFactor(nodes.Factor):
     """
 
     configs: np.ndarray
-    log_potentials: np.ndarray
 
     def __post_init__(self):
         self.configs.flags.writeable = False

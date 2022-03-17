@@ -53,14 +53,13 @@ def pass_enum_fac_to_var_messages(
     generate a flat set of output messages.
 
     Args:
-        vtof_msgs: Array of shape (num_edge_state,). This holds all the flattened variable to all the factor messages,
-            taking into account all the EnumerationFactors and LogicalFactors.
+        vtof_msgs: Array of shape (num_edge_state,). This holds all the flattened variable
+            to all the EnumerationFactors messages
         factor_configs_edge_states: Array of shape (num_factor_configs, 2)
             factor_configs_edge_states[ii] contains a pair of global factor_config and edge_state indices
             factor_configs_edge_states[ii, 0] contains the global EnumerationFactor config index,
-            which only takes into account the EnumerationFactors
-            factor_configs_edge_states[ii, 1] contains the corresponding global edge_state index,
-            which takes into account all the EnumerationFactors and LogicalFactors.
+            factor_configs_edge_states[ii, 1] contains the corresponding global edge_state index.
+            Both indices only take into account the EnumerationFactors of the FactorGraph
         log_potentials: Array of shape (num_val_configs, ). An entry at index i is the log potential
             function value for the configuration with global EnumerationFactor config index i.
         num_val_configs: the total number of valid configurations for all the EnumerationFactors
@@ -69,7 +68,7 @@ def pass_enum_fac_to_var_messages(
             1.0 corresponds to sum-product, 0.0 corresponds to max-product.
 
     Returns:
-        Array of shape (num_edge_state,). This holds all the flattened factor to variable messages.
+        Array of shape (num_edge_state,). This holds all the flattened EnumerationFactors to variable messages.
     """
     fac_config_summary_sum = (
         jnp.zeros(shape=(num_val_configs,))
@@ -118,23 +117,20 @@ def pass_OR_fac_to_var_messages(
     """Passes messages from ORFactors to Variables.
 
     Args:
-        vtof_msgs: Array of shape (num_edge_state,). This holds all the flattened variable to all the factor messages,
-            taking into account all the EnumerationFactors and LogicalFactors.
+        vtof_msgs: Array of shape (num_edge_state,). This holds all the flattened variable to all the ORFactors messages,
         parents_edge_states: Array of shape (num_parents, 2)
             parents_edge_states[ii, 0] contains the global ORFactor index,
-            which only takes into account all the ORFactors
-            parents_edge_states[ii, 1] contains the message index of the parent variable's state 0,
-            which takes into account all the EnumerationFactors and LogicalFactors.
+            parents_edge_states[ii, 1] contains the message index of the parent variable's state 0.
+            Both indices only take into account the ORFactors of the FactorGraph
             The parent variable's state 1 is parents_edge_states[ii, 2] + 1
         children_edge_states: Array of shape (num_factors,)
-            children_edge_states[ii] contains the message index of the child variable's state 0,
-            which takes into account all the EnumerationFactors and LogicalFactors.
+            children_edge_states[ii] contains the message index of the child variable's state 0
             The child variable's state 1 is children_edge_states[ii, 1] + 1
         temperature: Temperature for loopy belief propagation.
             1.0 corresponds to sum-product, 0.0 corresponds to max-product.
 
     Returns:
-        Array of shape (num_edge_state,). This holds all the flattened factor to variable messages.
+        Array of shape (num_edge_state,). This holds all the flattened ORFactors to variable messages.
     """
     num_factors = children_edge_states.shape[0]
 

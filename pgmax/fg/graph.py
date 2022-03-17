@@ -264,7 +264,7 @@ class FactorGraph:
         return wiring_by_factor_type
 
     @cached_property
-    def log_potentials_by_factor_type(self) -> OrderedDict[Type, np.ndarray]:
+    def log_potentials_by_factor_type(self) -> OrderedDict[Type, None | np.ndarray]:
         """Function to compile potential array for belief propagation..
 
         If potential array has already beeen compiled, do nothing.
@@ -272,16 +272,29 @@ class FactorGraph:
         Returns:
             A dictionnary mapping each factor type to the log of the potential function for each
                 valid configuration
+
+        Raises:
+            ValueError: if within a factor type, some factor groups have empty log potentials
+                and others have non-empty log potentials
         """
         log_potentials_by_factor_type = collections.OrderedDict()
 
         for factor_type, factors_groups_by_type in self.factor_groups.items():
-            if np.all(
+            if np.any(
                 [
                     factor_group.factor_group_log_potentials is None
                     for factor_group in factors_groups_by_type
                 ]
             ):
+                if not np.all(
+                    [
+                        factor_group.factor_group_log_potentials is None
+                        for factor_group in factors_groups_by_type
+                    ]
+                ):
+                    raise ValueError(
+                        "All the factors groups with the same factor type must have empty or non-empty log potentials"
+                    )
                 log_potentials = None
             else:
                 log_potentials = np.concatenate(
@@ -442,19 +455,17 @@ def update_log_potentials(
         A flat jnp array containing updated log_potentials.
 
     Raises: ValueError if
-        (1) Provided log_potentials shape does not match the expected log_potentials shape.
-        (2) Provided name is not valid for log_potentials updates.
+        (1) Log potentials are provided for a factor (group) without factor(_group)_log_potentials
+        (2) Provided log_potentials shape does not match the expected log_potentials shape.
+        (4) Provided name is not valid for log_potentials updates.
     """
     for name in updates:
         data = updates[name]
         if name in fg_state.named_factor_groups:
             factor_group = fg_state.named_factor_groups[name]
-            if not isinstance(
-                factor_group,
-                (groups.EnumerationFactorGroup, groups.PairwiseFactorGroup),
-            ):
+            if factor_group.factor_group_log_potentials is None:
                 raise ValueError(
-                    f"The factor group {name} does not have log potentials"
+                    f"The factor_group {factor_group} does not have factor_group_log_potentials"
                 )
 
             flat_data = factor_group.flatten(data)
@@ -470,8 +481,8 @@ def update_log_potentials(
             )
         elif frozenset(name) in fg_state.variables_to_factors:
             factor = fg_state.variables_to_factors[frozenset(name)]
-            if not isinstance(factor, enumeration.EnumerationFactor):
-                raise ValueError(f"The factor {name} does not have log potentials")
+            if factor.log_potentials is None:
+                raise ValueError(f"The factor {factor} does not have log_potentials")
 
             if data.shape != factor.log_potentials.shape:
                 raise ValueError(
@@ -502,10 +513,10 @@ class LogPotentials:
     """
 
     fg_state: FactorGraphState
-    value: OrderedDict[Type, None | np.ndarray] = collections.OrderedDict()
+    value: Optional[OrderedDict[Type, None | np.ndarray]] = None
 
     def __post_init__(self):
-        if len(self.value) == 0:
+        if self.value is None:
             object.__setattr__(self, "value", self.fg_state.log_potentials)
         else:
             if not self.value.keys() == self.fg_state.log_potentials.keys():
@@ -999,7 +1010,7 @@ def BP(
                 ftov_msgs_type = FAC_TO_VAR_UPDATES_BIS[factor_type](
                     **{
                         "vtof_msgs": vtof_msgs[start:end],
-                        "log_potentials": log_potentials[factor_type],
+                        "log_potentials": log_potentials[factor_type],  # type: ignore
                         "temperature": temperature,
                         **inference_arguments[factor_type],
                     }

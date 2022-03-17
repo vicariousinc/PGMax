@@ -1,6 +1,6 @@
 """Defines a logical factor"""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Mapping, Sequence, Union
 
 import jax
@@ -63,18 +63,12 @@ class LogicalFactor(nodes.Factor):
     """A logical OR/AND factor
     See https://arxiv.org/pdf/1611.02252.pdf Appendix B
 
-    Args:
-        variables: List of connected variables.
-            The last variable is assumed to be the child one.
-
     Raises:
         ValueError: If:
             (1) The logical type is not supported
             (2) The variables are not all binary
             (3) There are less than 2 variables
     """
-
-    log_potentials: np.ndarray = field(init=False, default=None)
 
     def __post_init__(self):
         if not np.all([variable.num_states == 2 for variable in self.variables]):

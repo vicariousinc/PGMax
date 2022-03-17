@@ -619,8 +619,11 @@ class FactorGroup:
         """Function to compile potential array for the factor group
 
         Returns
-            a jnp array representing the log of the potential function for
+            None or a jnp array representing the log of the potential function for
             the factor group
+
+        Raises:
+            ValueError: if some factors have empty log potentials and others have non-empty ones
         """
         if np.any([factor.log_potentials is None for factor in self.factors]):
             if not np.all([factor.log_potentials is None for factor in self.factors]):
@@ -718,9 +721,11 @@ class EnumerationFactorGroup(FactorGroup):
                 (
                     frozenset(self.variable_names_for_factors[ii]),
                     enumeration.EnumerationFactor(
-                        tuple(self.variable_group[self.variable_names_for_factors[ii]]),
-                        self.factor_configs,
-                        log_potentials[ii],
+                        variables=tuple(
+                            self.variable_group[self.variable_names_for_factors[ii]]
+                        ),
+                        configs=self.factor_configs,
+                        log_potentials=log_potentials[ii],
                     ),
                 )
                 for ii in range(len(self.variable_names_for_factors))
@@ -912,9 +917,11 @@ class PairwiseFactorGroup(FactorGroup):
                 (
                     frozenset(self.variable_names_for_factors[ii]),
                     enumeration.EnumerationFactor(
-                        tuple(self.variable_group[self.variable_names_for_factors[ii]]),
-                        factor_configs,
-                        log_potential_matrix[
+                        variables=tuple(
+                            self.variable_group[self.variable_names_for_factors[ii]]
+                        ),
+                        configs=factor_configs,
+                        log_potentials=log_potential_matrix[
                             ii, factor_configs[:, 0], factor_configs[:, 1]
                         ],
                     ),
@@ -1079,7 +1086,10 @@ class ORFactorGroup(FactorGroup):
                 (
                     frozenset(self.variable_names_for_factors[ii]),
                     logical.ORFactor(
-                        tuple(self.variable_group[self.variable_names_for_factors[ii]]),
+                        variables=tuple(
+                            self.variable_group[self.variable_names_for_factors[ii]]
+                        ),
+                        log_potentials=None,
                     ),
                 )
                 for ii in range(len(self.variable_names_for_factors))
