@@ -1,5 +1,6 @@
-"""A module containing the core class to specify a Factor Graph."""
 from __future__ import annotations
+
+"""A module containing the core class to specify a Factor Graph."""
 
 import collections
 import copy
@@ -19,6 +20,7 @@ from typing import (
     OrderedDict,
     Sequence,
     Tuple,
+    Type,
     Union,
     cast,
 )
@@ -38,12 +40,12 @@ FACTOR_GROUP_FACTORY = {
     "ORFactor": groups.ORFactorGroup,
 }
 
-CONCATENATE_WIRING: Dict[nodes.Factor, Callable[..., nodes.Wiring]] = {
+CONCATENATE_WIRING: Dict[Type, Callable[..., nodes.Wiring]] = {
     enumeration.EnumerationFactor: enumeration.concatenate_enumeration_wirings,
     logical.ORFactor: logical.concatenate_logical_wirings,
 }
 
-FAC_TO_VAR_UPDATES: Dict[str, Callable[..., jnp.ndarray]] = {
+FAC_TO_VAR_UPDATES: Dict[Type, Callable[..., jnp.ndarray]] = {
     enumeration.EnumerationFactor: infer.pass_enum_fac_to_var_messages,
     logical.ORFactor: infer.pass_OR_fac_to_var_messages,
 }
@@ -96,7 +98,7 @@ class FactorGraph:
             FrozenSet, nodes.Factor
         ] = collections.OrderedDict()
         self._factor_types_to_groups: OrderedDict[
-            type, Sequence[Hashable]
+            Type, List[groups.FactorGroup]
         ] = collections.OrderedDict()
 
     def __hash__(self) -> int:
@@ -170,7 +172,7 @@ class FactorGraph:
         if name is not None:
             self._named_factor_groups[name] = factor_group
 
-    # @functools.lru_cache
+    @functools.lru_cache(maxsize=None)
     def compute_offsets(self) -> None:
         """Computes factor messages offsets for the types, groups and factors
         in the flattened array of message. Also computes log potentials offsets.
@@ -232,7 +234,7 @@ class FactorGraph:
         self._total_factor_num_configs = factor_group_num_configs_cumsum
 
     @cached_property
-    def wiring_by_factor_type(self) -> OrderedDict(type, nodes.Wiring):
+    def wiring_by_factor_type(self) -> OrderedDict[Type, nodes.Wiring]:
         """Function to compile wiring for belief propagation.
 
         If wiring has already beeen compiled, do nothing.
@@ -242,7 +244,7 @@ class FactorGraph:
         """
         wiring_by_factor_type = collections.OrderedDict()
 
-        CONCATENATE_WIRING_BIS: Dict[nodes.Factor, Callable[..., nodes.Wiring]] = {
+        CONCATENATE_WIRING_BIS: Dict[Type, Callable[..., nodes.Wiring]] = {
             enumeration.EnumerationFactor: enumeration.concatenate_enumeration_wirings,
             logical.ORFactor: logical.concatenate_logical_wirings,
         }
@@ -262,7 +264,7 @@ class FactorGraph:
         return wiring_by_factor_type
 
     @cached_property
-    def log_potentials_by_factor_type(self) -> OrderedDict(type, np.ndarray):
+    def log_potentials_by_factor_type(self) -> OrderedDict[Type, np.ndarray]:
         """Function to compile potential array for belief propagation..
 
         If potential array has already beeen compiled, do nothing.
@@ -292,14 +294,19 @@ class FactorGraph:
         return log_potentials_by_factor_type
 
     @cached_property
-    def factors(
-        self,
-    ) -> Tuple[nodes.Factor, ...]:
-        """Tuple of individual factors in the factor graph"""
-        return tuple(self._variables_to_factors.values())
+    def factors(self) -> OrderedDict[Type, List[nodes.Factor]]:
+        """Mapping factor type to individual factors in the factor graph"""
+        factors: OrderedDict[Type, List[nodes.Factor]] = collections.OrderedDict()
+
+        for factor_type, factors_groups_by_type in self.factor_groups.items():
+            factors[factor_type] = []
+            for factors_groups in factors_groups_by_type:
+                for factor in factors_groups.factors:
+                    factors[factor_type].append(factor)
+        return factors
 
     @property
-    def factor_groups(self) -> OrderedDict[type, groups.FactorGroup]:
+    def factor_groups(self) -> OrderedDict[Type, List[groups.FactorGroup]]:
         """Tuple of factor groups in the factor graph"""
         return self._factor_types_to_groups
 
@@ -368,11 +375,11 @@ class FactorGraphState:
     total_factor_num_states: int
     variables_to_factors: Mapping[FrozenSet, nodes.Factor]
     named_factor_groups: Mapping[Hashable, groups.FactorGroup]
-    factor_group_to_potentials_starts: OrderedDict[Hashable, int]
-    factor_to_potentials_starts: OrderedDict[enumeration.EnumerationFactor, int]
+    factor_group_to_potentials_starts: OrderedDict[groups.FactorGroup, int]
+    factor_to_potentials_starts: OrderedDict[nodes.Factor, int]
     factor_to_msgs_starts: OrderedDict[nodes.Factor, int]
     factor_type_to_msgs_starts: OrderedDict[type, Tuple[int, int]]
-    log_potentials: OrderedDict[type, np.ndarray]
+    log_potentials: OrderedDict[type, None | np.ndarray]
     wiring_by_factor_type: OrderedDict[type, nodes.Wiring]
 
     def __post_init__(self):
@@ -403,13 +410,15 @@ class BPState:
     ftov_msgs: FToVMessages
     evidence: Evidence
 
-    # def __post_init__(self):
-    #     if (self.log_potentials.fg_state != self.ftov_msgs.fg_state) or (
-    #         self.ftov_msgs.fg_state != self.evidence.fg_state
-    #     ):
-    #         raise ValueError(
-    #             "log_potentials, ftov_msgs and evidence should be derived from the same fg_state."
-    #         )
+    def __post_init__(self):
+        # print(self.log_potentials.fg_state.wiring_by_factor_type, self.ftov_msgs.fg_state.wiring_by_factor_type)
+
+        if (self.log_potentials.fg_state != self.ftov_msgs.fg_state) or (
+            self.ftov_msgs.fg_state != self.evidence.fg_state
+        ):
+            raise ValueError(
+                "log_potentials, ftov_msgs and evidence should be derived from the same fg_state."
+            )
 
     @property
     def fg_state(self) -> FactorGraphState:
@@ -493,17 +502,24 @@ class LogPotentials:
     """
 
     fg_state: FactorGraphState
-    value: Optional[np.ndarray] = None
+    value: OrderedDict[Type, None | np.ndarray] = collections.OrderedDict()
 
     def __post_init__(self):
-        if self.value is None:
+        if len(self.value) == 0:
             object.__setattr__(self, "value", self.fg_state.log_potentials)
         else:
-            if not self.value.shape == self.fg_state.log_potentials.shape:
+            if not self.value.keys() == self.fg_state.log_potentials.keys():
                 raise ValueError(
-                    f"Expected log potentials shape {self.fg_state.log_potentials.shape}. "
-                    f"Got {self.value.shape}."
+                    f"Expected log potentials keys {self.fg_state.log_potentials.keys()}. "
+                    f"Got {self.value.keys()}."
                 )
+
+            for key in self.value.keys():
+                if not self.value[key].shape == self.fg_state.log_potentials[key].shape:
+                    raise ValueError(
+                        f"Expected log potentials keys {self.fg_state.log_potentials[key].shape}. "
+                        f"Got {self.value[key].shape}."
+                    )
 
             object.__setattr__(self, "value", self.value)
 
@@ -523,23 +539,16 @@ class LogPotentials:
 
         if name in self.fg_state.named_factor_groups:
             factor_group = self.fg_state.named_factor_groups[name]
-            if not isinstance(
-                factor_group,
-                (groups.EnumerationFactorGroup, groups.PairwiseFactorGroup),
-            ):
-                raise ValueError(
-                    f"The factor group {name} does not have log potentials"
-                )
 
+            assert factor_group.factor_group_log_potentials is not None
             start = self.fg_state.factor_group_to_potentials_starts[factor_group]
             log_potentials = value[
                 start : start + factor_group.factor_group_log_potentials.shape[0]
             ]
         elif frozenset(name) in self.fg_state.variables_to_factors:
             factor = self.fg_state.variables_to_factors[frozenset(name)]
-            if not isinstance(factor, enumeration.EnumerationFactor):
-                raise ValueError(f"The factor {name} does not have log potentials")
 
+            assert factor.log_potentials is not None
             start = self.fg_state.factor_to_potentials_starts[factor]
             log_potentials = value[start : start + factor.log_potentials.shape[0]]
         else:
@@ -622,9 +631,15 @@ def update_ftov_msgs(
                     f"shape {(variable.num_states,)} for variable {names}."
                 )
 
+            var_states_for_edges = np.concatenate(
+                [
+                    wiring_by_type.var_states_for_edges
+                    for wiring_by_type in fg_state.wiring_by_factor_type.values()
+                ]
+            )
+
             starts = np.nonzero(
-                fg_state.wiring.var_states_for_edges
-                == fg_state.vars_to_starts[variable]
+                var_states_for_edges == fg_state.vars_to_starts[variable]
             )[0]
             for start in starts:
                 ftov_msgs = ftov_msgs.at[start : start + variable.num_states].set(
@@ -918,7 +933,7 @@ def BP(
     )
 
     inference_arguments = {
-        factor_type: {**wiring[factor_type].inference_arguments}
+        factor_type: {**wiring[factor_type].inference_arguments}  # type: ignore
         for factor_type in wiring
     }
     factor_type_to_msgs_starts = bp_state.fg_state.factor_type_to_msgs_starts
@@ -964,7 +979,7 @@ def BP(
             ftov_msgs, edges_num_states, max_msg_size
         )
 
-        FAC_TO_VAR_UPDATES_BIS: Dict[str, Callable[..., jnp.ndarray]] = {
+        FAC_TO_VAR_UPDATES_BIS: Dict[Type, Callable[..., jnp.ndarray]] = {
             enumeration.EnumerationFactor: infer.pass_enum_fac_to_var_messages,
             logical.ORFactor: infer.pass_OR_fac_to_var_messages,
         }
@@ -1037,7 +1052,7 @@ def BP(
         """
         beliefs = bp_state.fg_state.variable_group.unflatten(
             jax.device_put(bp_arrays.evidence)
-            .at[jax.device_put(bp_state.fg_state.wiring.var_states_for_edges)]
+            .at[jax.device_put(var_states_for_edges)]
             .add(bp_arrays.ftov_msgs)
         )
         return beliefs

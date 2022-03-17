@@ -1068,7 +1068,7 @@ class ORFactorGroup(FactorGroup):
 
     def _get_variables_to_factors(
         self,
-    ) -> OrderedDict[FrozenSet, logical.LogicalFactor]:
+    ) -> OrderedDict[FrozenSet, logical.ORFactor]:
         """Function that generates a dictionary mapping set of connected variables to LogicalFactors.
 
         Returns:

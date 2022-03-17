@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """A module containing classes that specify the basic components of a Factor Graph."""
 
 from dataclasses import asdict, dataclass
@@ -57,9 +59,11 @@ class Factor:
 
     Args:
         variables: List of connected variables
+        log_potentials: None or array of log potentials
     """
 
     variables: Tuple[Variable, ...]
+    log_potentials: None | np.ndarray
 
     @utils.cached_property
     def edges_num_states(self) -> np.ndarray:

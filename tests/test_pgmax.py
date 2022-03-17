@@ -6,7 +6,7 @@ import numpy as np
 from numpy.random import default_rng
 from scipy.ndimage import gaussian_filter
 
-from pgmax.fg import graph, groups
+from pgmax.fg import graph, groups, nodes
 
 # Set random seed for rng
 rng = default_rng(23)
@@ -369,7 +369,7 @@ def test_e2e_sanity_check():
     # Run BP
     # Set the evidence
     bp_state = fg.bp_state
-    assert isinstance(fg.fg_state.wiring, graph.GraphWiring)
+    assert isinstance(fg.fg_state.wiring, nodes.Wiring)
     bp_state.evidence["grid_vars"] = grid_evidence_arr
     bp_state.evidence["additional_vars"] = additional_vars_evidence_dict
     run_bp, _, get_beliefs = graph.BP(bp_state, 100)
