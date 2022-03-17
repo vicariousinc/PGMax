@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """A module containing the classes for variable and factor groups in a Factor Graph."""
 
 import collections
@@ -608,9 +606,7 @@ class FactorGroup:
         )
 
     @cached_property
-    def factors(
-        self,
-    ) -> Tuple[nodes.Factor, ...]:
+    def factors(self) -> Tuple[nodes.Factor, ...]:
         """Returns all factors in the factor group."""
         return tuple(self._variables_to_factors.values())
 
@@ -619,11 +615,8 @@ class FactorGroup:
         """Function to compile potential array for the factor group
 
         Returns
-            None or a jnp array representing the log of the potential function for
+            A jnp array representing the log of the potential function for
             the factor group
-
-        Raises:
-            ValueError: if some factors have empty log potentials and others have non-empty ones
         """
         return np.concatenate([factor.log_potentials for factor in self.factors])
 
@@ -1004,64 +997,14 @@ class PairwiseFactorGroup(FactorGroup):
         return data
 
 
-# @dataclass(frozen=True, eq=False)
-# class LogicalFactorGroup(FactorGroup):
-#     """Class to represent a group of LogicalFactors.
-
-#     Args:
-#         variable_names_for_factors: A list of list of tuples, where each innermost tuple contains a
-#             name into variable_group. Each list within the outer list is taken to contain the names of variables
-#             neighboring a particular LogicalFactor to be added.
-#         logical_type: The logical condition supported by the factor
-#     """
-
-#     variable_names_for_factors: Sequence[List]
-#     logical_types: Union[str, Sequence[str]]
-
-#     def _get_variables_to_factors(
-#         self,
-#     ) -> OrderedDict[FrozenSet, logical.LogicalFactor]:
-#         """Function that generates a dictionary mapping set of connected variables to LogicalFactors.
-
-#         Returns:
-#             A dictionary mapping all possible set of connected variables to different LogicalFactors.
-#         """
-#         num_factors = len(self.variable_names_for_factors)
-
-#         if (
-#             not isinstance(self.logical_types, str)
-#             and len(self.logical_types) != num_factors
-#         ):
-#             raise ValueError(
-#                 f"Expected logical_type to be a string or a list of length {num_factors}."
-#                 f"Got a list of length {len(self.logical_types)}."
-#             )
-#         logical_types = np.broadcast_to(self.logical_types, (num_factors,))
-
-#         variables_to_factors = collections.OrderedDict(
-#             [
-#                 (
-#                     frozenset(self.variable_names_for_factors[ii]),
-#                     logical.LogicalFactor(
-#                         tuple(self.variable_group[self.variable_names_for_factors[ii]]),
-#                         logical_type=logical_types[ii],
-#                     ),
-#                 )
-#                 for ii in range(len(self.variable_names_for_factors))
-#             ]
-#         )
-#         return variables_to_factors
-
-
 @dataclass(frozen=True, eq=False)
 class ORFactorGroup(FactorGroup):
-    """Class to represent a group of LogicalFactors.
+    """Class to represent a group of ORFactors.
 
     Args:
         variable_names_for_factors: A list of list of tuples, where each innermost tuple contains a
             name into variable_group. Each list within the outer list is taken to contain the names of variables
-            neighboring a particular LogicalFactor to be added.
-        logical_type: The logical condition supported by the factor
+            neighboring a particular ORFactor to be added.
     """
 
     variable_names_for_factors: Sequence[List]
@@ -1069,10 +1012,10 @@ class ORFactorGroup(FactorGroup):
     def _get_variables_to_factors(
         self,
     ) -> OrderedDict[FrozenSet, logical.ORFactor]:
-        """Function that generates a dictionary mapping set of connected variables to LogicalFactors.
+        """Function that generates a dictionary mapping set of connected variables to ORFactors.
 
         Returns:
-            A dictionary mapping all possible set of connected variables to different LogicalFactors.
+            A dictionary mapping all possible set of connected variables to different ORFactors.
         """
         variables_to_factors = collections.OrderedDict(
             [

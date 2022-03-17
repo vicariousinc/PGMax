@@ -9,15 +9,15 @@ from pgmax.fg import graph, groups
 
 def test_run_bp_with_OR_factors():
     """
-    Tests the support of OR factor in a factor graph and the specialized inference by comparing two approaches:
-    (1) Defining the equivalent enumeration factors of the OR factors (by listing all the valid configurations)
-    and running inference with pass_fac_to_var_messages - which passes messages from enumeration factors to variables
-    (2) Explicitly defining the ORFactor with and running the specialized pass_OR_fac_to_var_messages inference.
+    Tests the support of ORFactors in a factor graph and the specialized inference by comparing two approaches:
+    (1) Defining the equivalent EnumerationFactors of the ORFactors (by listing all the valid OR configurations)
+    and running inference with pass_enum_fac_to_var_messages - which passes messages from EnumerationFactors to variables
+    (2) Explicitly defining the ORFactors and running the specialized pass_OR_fac_to_var_messages inference
     """
     for idx in range(10):
         np.random.seed(idx)
 
-        # Define OR factor and incoming messages
+        # Parameters
         num_factors = np.random.randint(3, 8)
         num_parents = np.random.randint(1, 6, num_factors)
         num_parents_cumsum = np.insert(np.cumsum(num_parents), 0, 0)
@@ -29,7 +29,7 @@ def test_run_bp_with_OR_factors():
         else:
             temperature = np.random.uniform(low=0.5, high=1.0)
 
-        # Graph 1: Defining OR factors as Enumeration Factor
+        # Graph 1: Define EnumerationFactors equivalent to the ORFactors
         parents_variables1 = groups.NDVariableArray(
             num_states=2, shape=(num_parents.sum(),)
         )
@@ -65,7 +65,7 @@ def test_run_bp_with_OR_factors():
                 log_potentials=np.zeros(valid_configs.shape[0]),
             )
 
-        # Graph 2: Explicitly defining OR factors
+        # Graph 2: Define the ORFactors
         parents_variables2 = groups.NDVariableArray(
             num_states=2, shape=(num_parents.sum(),)
         )
@@ -91,7 +91,7 @@ def test_run_bp_with_OR_factors():
             variable_names_for_factors=variables_names_for_OR_factors,
         )
 
-        # Test 1: Comparing both specialized inference functions
+        # Test 1: Compare both specialized inference functions
         vtof_msgs = np.random.normal(
             0, 1, size=(2 * (sum(num_parents) + len(num_parents)))
         )
@@ -136,7 +136,7 @@ def test_run_bp_with_OR_factors():
         assert np.allclose(ftochildren_msgs1, ftochildren_msgs2, atol=1e-4)
         assert np.allclose(ftoparents_msgs1, ftoparents_msgs2, atol=1e-4)
 
-        # Test 2: Running inference with graph.BP
+        # Test 2: Run inference with graph.BP
         run_bp1, _, _ = graph.BP(fg1.bp_state, 1)
         run_bp2, _, _ = graph.BP(fg2.bp_state, 1)
 

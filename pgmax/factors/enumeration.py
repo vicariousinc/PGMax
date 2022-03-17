@@ -22,8 +22,8 @@ class EnumerationWiring(nodes.Wiring):
         factor_configs_edge_states: Array of shape (num_factor_configs, 2)
             factor_configs_edge_states[ii] contains a pair of global enumeration factor_config and global edge_state indices
             factor_configs_edge_states[ii, 0] contains the global EnumerationFactor config index,
-            factor_configs_edge_states[ii, 1] contains the corresponding global edge_state index
-            Both indices only take into account the EnumerationFactors of the FactorGraph.
+            factor_configs_edge_states[ii, 1] contains the corresponding global edge_state index.
+            Both indices only take into account the EnumerationFactors of the FactorGraph
     """
 
     factor_configs_edge_states: Union[np.ndarray, jnp.ndarray]
@@ -149,16 +149,13 @@ class EnumerationFactor(nodes.Factor):
 def concatenate_enumeration_wirings(
     enum_wirings: Sequence[EnumerationWiring],
 ) -> EnumerationWiring:
-    """Concatenate a list of EnumerationWirings from individual EnumerationFactors
+    """Concatenate a list of EnumerationWirings
 
     Args:
-        enum_wirings: A list of EnumerationWirings, one for each individual EnumerationFactor
+        enum_wirings: A list of EnumerationWirings
 
     Returns:
         Concatenated EnumerationWirings
-
-    Raises:
-        ValueError: if the list of EnumerationWirings is empty
     """
     if len(enum_wirings) == 0:
         return EnumerationWiring(

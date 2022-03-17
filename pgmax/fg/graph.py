@@ -104,6 +104,7 @@ class FactorGraph:
         name: Optional[str] = None,
     ) -> None:
         """Function to add a single factor to the FactorGraph.
+
         Args:
             variable_names: A list containing the connected variable names.
                 Variable names are tuples of the type (variable_group_name, variable_name_within_variable_group)
@@ -200,9 +201,10 @@ class FactorGraph:
     @functools.lru_cache(None)
     def compute_offsets(self) -> None:
         """Compute factor messages offsets for the factor types, factor groups and factors
-        in the flattened array of message. Also compute log potentials offsets for factor groups and factors.
+        in the flattened array of message.
+        Also compute log potentials offsets for factor groups and factors.
 
-        See FactorGraphState for a description of the arguments used.
+        See FactorGraphState for documentation on the following fields
 
         If offsets have already beeen compiled, do nothing.
         """
@@ -223,7 +225,7 @@ class FactorGraph:
             factor_group_num_configs_start = factor_group_num_configs_cumsum
 
             # As inference will be run by chunking the flattened arrays of messages from variables
-            # to factors by factor types, this resets the offsets to 0 within a type
+            # to factors according to their factor types, this resets the offsets to 0 within a type
             factor_num_states_cumsum_by_type = 0
             factor_group_num_configs_cumsum_by_type = 0
 
@@ -300,12 +302,8 @@ class FactorGraph:
         If potential array has already beeen compiled, do nothing.
 
         Returns:
-            A dictionnary mapping each factor type to the log of the potential function for each
-                valid configuration
-
-        Raises:
-            ValueError: if within a factor type, some factor groups have empty log potentials
-                and others have non-empty log potentials
+            A dictionnary mapping each factor type to the array of the log of the potential
+                function for each valid configuration
         """
         log_potentials = collections.OrderedDict()
         for factor_type, factors_groups_by_type in self.factor_groups.items():
@@ -354,15 +352,15 @@ class FactorGraph:
             total_factor_num_states=self._total_factor_num_states,
             variables_to_factors=copy.copy(self._variables_to_factors),
             named_factor_groups=copy.copy(self._named_factor_groups),
+            factor_type_to_msgs_range=copy.copy(self._factor_type_to_msgs_range),
+            factor_type_to_potentials_range=copy.copy(
+                self._factor_type_to_potentials_range
+            ),
             factor_group_to_potentials_starts=copy.copy(
                 self._factor_group_to_potentials_starts
             ),
             factor_to_potentials_starts=copy.copy(self._factor_to_potentials_starts),
             factor_to_msgs_starts=copy.copy(self._factor_to_msgs_starts),
-            factor_type_to_msgs_range=copy.copy(self._factor_type_to_msgs_range),
-            factor_type_to_potentials_range=copy.copy(
-                self._factor_type_to_potentials_range
-            ),
             log_potentials=log_potentials,
             wiring=self.wiring,
         )
@@ -394,13 +392,13 @@ class FactorGraphState:
         variables_to_factors: Maps sets of connected variables (in the form of frozensets of
             variable names) to corresponding factors.
         named_factor_groups: Maps the names of named factor groups to the corresponding factor groups.
+        factor_type_to_msgs_range: Maps factors types to their start and end indices in the flat ftov messages.
+        factor_type_to_potentials_range: Maps factor types to their start and end indices in the flat log potentials.
         factor_group_to_potentials_starts: Maps factor groups to their starting indices in the flat log potentials.
-        factor_to_potentials_starts: Maps factors to their starting indices in the flat log potentials.
         factor_to_msgs_starts: Maps factors to their starting indices in the flat ftov messages.
-        CHANGE
-        factor_type_to_msgs_range: Maps factors types to their starting indices in the flat ftov messages.
-        log_potentials: Flat log potentials array for each each factor type
-        wiring: Wiring derived for each factor type
+        factor_to_potentials_starts: Maps factors to their starting indices in the flat log potentials.
+        log_potentials: Flat log potentials array concatenated for each factor type.
+        wiring: Wiring derived for each factor type.
     """
 
     variable_group: groups.VariableGroup

@@ -21,8 +21,8 @@ class LogicalWiring(nodes.Wiring):
 
     Args:
         parents_edge_states: Array of shape (num_parents, 2)
-            parents_edge_states[ii, 0] contains the global factor index,
-            parents_edge_states[ii, 1] contains the message index of the parent variable's state 0,
+            parents_edge_states[ii, 0] contains the global ORFactor index,
+            parents_edge_states[ii, 1] contains the message index of the parent variable's state 0.
             Both indices only take into account the LogicalFactors of the same subtype (OR/AND) of the FactorGraph.
             The parent variable's state 1 is parents_edge_states[ii, 2] + 1.
         children_edge_states: Array of shape (num_factors,)
@@ -138,17 +138,13 @@ class LogicalFactor(nodes.Factor):
 def concatenate_logical_wirings(
     logical_wirings: Sequence[LogicalWiring],
 ) -> LogicalWiring:
-    """Concatenate a list of LogicalWirings from individual LogicalFactors
+    """Concatenate a list of LogicalWirings
 
     Args:
-        logical_wirings: A list of LogicalWirings, one for each individual LogicalFactors.
-            All these wirings must have the same type, which is a subclass of LogicalWiring
+        logical_wirings: A list of LogicalWirings
 
     Returns:
         Concatenated LogicalWirings
-
-    Raises:
-        ValueError: if the list of LogicalWirings is empty
     """
     if len(logical_wirings) == 0:
         return LogicalWiring(
@@ -188,6 +184,8 @@ def concatenate_logical_wirings(
 
 @dataclass(frozen=True, eq=False)
 class ORFactor(LogicalFactor):
+    """An OR factor"""
+
     pass
 
 
@@ -203,7 +201,7 @@ def pass_OR_fac_to_var_messages(
     """Passes messages from ORFactors to Variables.
 
     Args:
-        vtof_msgs: Array of shape (num_edge_state,). This holds all the flattened variable to all the ORFactors messages,
+        vtof_msgs: Array of shape (num_edge_state,). This holds all the flattened variable to all the ORFactors messages.
         parents_edge_states: Array of shape (num_parents, 2)
             parents_edge_states[ii, 0] contains the global ORFactor index,
             parents_edge_states[ii, 1] contains the message index of the parent variable's state 0.
@@ -230,7 +228,7 @@ def pass_OR_fac_to_var_messages(
         vtof_msgs[children_edge_states + 1] - vtof_msgs[children_edge_states]
     )
 
-    # We treat the max-product case separately.
+    # Consider the max-product case separately.
     if temperature == 0.0:
         # Get the first and second argmaxes for the incoming parents messages of each factor
         _, first_parents_argmaxes = bp_utils.get_maxes_and_argmaxes(
@@ -273,7 +271,6 @@ def pass_OR_fac_to_var_messages(
     else:
 
         def g(x):
-            # assert jnp.all(x >= 0)
             return jnp.where(
                 x == 0.0,
                 0.0,
