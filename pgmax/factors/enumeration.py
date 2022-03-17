@@ -20,9 +20,8 @@ class EnumerationWiring(nodes.Wiring):
         factor_configs_edge_states: Array of shape (num_factor_configs, 2)
             factor_configs_edge_states[ii] contains a pair of global enumeration factor_config and global edge_state indices
             factor_configs_edge_states[ii, 0] contains the global EnumerationFactor config index,
-            which takes into account all the EnumerationFactors and LogicalFactors.
             factor_configs_edge_states[ii, 1] contains the corresponding global edge_state index
-            which takes into account all the EnumerationFactors.
+            Both indices only take into account the EnumerationFactors of the FactorGraph.
     """
 
     factor_configs_edge_states: Union[np.ndarray, jnp.ndarray]
@@ -98,9 +97,8 @@ class EnumerationFactor(nodes.Factor):
             Array of shape (num_factor_configs, 2)
             factor_configs_edge_states[ii] contains a pair of global factor_config and edge_state indices
             factor_configs_edge_states[ii, 0] contains the global factor config index,
-            which takes into account all the EnumerationFactors
             factor_configs_edge_states[ii, 1] contains the corresponding global edge_state index,
-            which takes into account all the EnumerationFactors and LogicalFactors
+            Both indices only take into account the EnumerationFactors of the FactorGraph
         """
         edges_starts = np.insert(self.edges_num_states.cumsum(), 0, 0)[:-1]
         factor_configs_edge_states = np.stack(
@@ -163,7 +161,7 @@ def concatenate_enumeration_wirings(
         0,
     )[:-1]
 
-    # Note: this correspomds to all the factor_to_msgs_starts for the EnumerationFactors
+    # Note: this correspomds to all the factor_to_msgs_starts of the EnumerationFactors
     num_edge_states_cumsum = np.insert(
         np.array([wiring.edges_num_states.sum() for wiring in enum_wirings]).cumsum(),
         0,

@@ -19,13 +19,12 @@ class LogicalWiring(nodes.Wiring):
     Args:
         parents_edge_states: Array of shape (num_parents, 2)
             parents_edge_states[ii, 0] contains the global factor index,
-            which takes into account all the LogicalFactors of the same subtype
             parents_edge_states[ii, 1] contains the message index of the parent variable's state 0,
-            which takes into account all the EnumerationFactors and LogicalFactors.
+            Both indices only take into account the LogicalFactors of the same subtype (OR/AND) of the FactorGraph.
             The parent variable's state 1 is parents_edge_states[ii, 2] + 1.
         children_edge_states: Array of shape (num_factors,)
             children_edge_states[ii] contains the message index of the child variable's state 0,
-            which takes into account all the EnumerationFactors and LogicalFactors.
+            which takes into account all the LogicalFactors of the same subtype (OR/AND) of the FactorGraph.
             The child variable's state 1 is children_edge_states[ii, 1] + 1.
 
     Raises:
@@ -65,9 +64,8 @@ class LogicalFactor(nodes.Factor):
 
     Raises:
         ValueError: If:
-            (1) The logical type is not supported
-            (2) The variables are not all binary
-            (3) There are less than 2 variables
+            (1) The variables are not all binary
+            (2) There are less than 2 variables
     """
 
     def __post_init__(self):
