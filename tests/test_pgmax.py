@@ -367,7 +367,12 @@ def test_e2e_sanity_check():
     # Run BP
     # Set the evidence
     bp_state = fg.bp_state
-    assert isinstance(fg.fg_state.wiring, nodes.Wiring)
+    assert np.all(
+        [
+            isinstance(this_wiring, nodes.Wiring)
+            for this_wiring in fg.fg_state.wiring.values()
+        ]
+    )
     bp_state.evidence["grid_vars"] = grid_evidence_arr
     bp_state.evidence["additional_vars"] = additional_vars_evidence_dict
     run_bp, _, get_beliefs = graph.BP(bp_state, 100)
@@ -426,7 +431,7 @@ def test_e2e_heretic():
     bp_state.evidence[0, 0, 0]
     bp_state.evidence[1, 0, 0]
     assert isinstance(bp_state.evidence.value, np.ndarray)
-    assert len(fg.factors) == 7056
+    assert len(sum(fg.factors.values(), [])) == 7056
     run_bp, _, get_beliefs = graph.BP(bp_state, 1, 1.0)
     marginals = graph.get_marginals(get_beliefs(run_bp()))
     assert jnp.allclose(jnp.sum(marginals[0], axis=-1), 1.0)
