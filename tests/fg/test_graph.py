@@ -13,7 +13,6 @@ def test_factor_graph():
     fg = graph.FactorGraph(variable_group)
     fg.add_factor(
         variable_names=[0],
-        factor_type="EnumerationFactor",
         factor_configs=np.arange(15)[:, None],
         name="test",
     )
@@ -23,7 +22,6 @@ def test_factor_graph():
     ):
         fg.add_factor(
             variable_names=[0],
-            factor_type="EnumerationFactor",
             factor_configs=np.arange(15)[:, None],
             name="test",
         )
@@ -36,7 +34,6 @@ def test_factor_graph():
     ):
         fg.add_factor(
             variable_names=[0],
-            factor_type="EnumerationFactor",
             factor_configs=np.arange(10)[:, None],
         )
 
@@ -46,14 +43,12 @@ def test_bp_state():
     fg0 = graph.FactorGraph(variable_group)
     fg0.add_factor(
         variable_names=[0],
-        factor_type="EnumerationFactor",
         factor_configs=np.arange(10)[:, None],
         name="test",
     )
     fg1 = graph.FactorGraph(variable_group)
     fg1.add_factor(
         variable_names=[0],
-        factor_type="EnumerationFactor",
         factor_configs=np.arange(15)[:, None],
         name="test",
     )
@@ -73,7 +68,6 @@ def test_log_potentials():
     fg = graph.FactorGraph(variable_group)
     fg.add_factor(
         variable_names=[0],
-        factor_type="EnumerationFactor",
         factor_configs=np.arange(10)[:, None],
         name="test",
     )
@@ -118,7 +112,6 @@ def test_ftov_msgs():
     fg = graph.FactorGraph(variable_group)
     fg.add_factor(
         variable_names=[0],
-        factor_type="EnumerationFactor",
         factor_configs=np.arange(10)[:, None],
         name="test",
     )
@@ -159,7 +152,6 @@ def test_evidence():
     fg = graph.FactorGraph(variable_group)
     fg.add_factor(
         variable_names=[0],
-        factor_type="EnumerationFactor",
         factor_configs=np.arange(10)[:, None],
         name="test",
     )
@@ -177,7 +169,6 @@ def test_bp():
     fg = graph.FactorGraph(variable_group)
     fg.add_factor(
         variable_names=[0],
-        factor_type="EnumerationFactor",
         factor_configs=np.arange(10)[:, None],
         name="test",
     )

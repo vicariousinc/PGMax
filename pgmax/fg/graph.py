@@ -96,7 +96,39 @@ class FactorGraph:
     def __hash__(self) -> int:
         return hash(tuple(sum(self.factor_groups.values(), [])))
 
-    def add_factor(self, variable_names: List, factor_type: type, **kwargs) -> None:
+    def add_factor(
+        self,
+        variable_names: List,
+        factor_configs: np.ndarray,
+        log_potentials: Optional[np.ndarray] = None,
+        name: Optional[str] = None,
+    ) -> None:
+        """Function to add a single factor to the FactorGraph.
+        Args:
+            variable_names: A list containing the connected variable names.
+                Variable names are tuples of the type (variable_group_name, variable_name_within_variable_group)
+            factor_configs: Array of shape (num_val_configs, num_variables)
+                An array containing explicit enumeration of all valid configurations.
+                If the connected variables have n1, n2, ... states, 1 <= num_val_configs <= n1 * n2 * ...
+                factor_configs[config_idx, variable_idx] represents the state of variable_names[variable_idx]
+                in the configuration factor_configs[config_idx].
+            log_potentials: Optional array of shape (num_val_configs,).
+                If specified, log_potentials[config_idx] contains the log of the potential value for
+                the valid configuration factor_configs[config_idx].
+                If None, it is assumed the log potential is uniform 0 and such an array is automatically
+                initialized.
+        """
+        factor_group = groups.EnumerationFactorGroup(
+            self._variable_group,
+            variable_names_for_factors=[variable_names],
+            factor_configs=factor_configs,
+            log_potentials=log_potentials,
+        )
+        self._register_factor_group(factor_group, name)
+
+    def add_factor_by_type(
+        self, variable_names: List, factor_type: type, **kwargs
+    ) -> None:
         """Function to add a single factor to the FactorGraph.
 
         Args:

@@ -296,7 +296,6 @@ def test_e2e_sanity_check():
             if row % 2 == 0:
                 fg.add_factor(
                     variable_names=curr_names,
-                    factor_type="EnumerationFactor",
                     factor_configs=valid_configs_non_supp,
                     log_potentials=np.zeros(
                         valid_configs_non_supp.shape[0], dtype=float
@@ -306,7 +305,6 @@ def test_e2e_sanity_check():
             else:
                 fg.add_factor(
                     variable_names=curr_names,
-                    factor_type="EnumerationFactor",
                     factor_configs=valid_configs_non_supp,
                     log_potentials=np.zeros(
                         valid_configs_non_supp.shape[0], dtype=float

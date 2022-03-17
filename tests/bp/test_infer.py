@@ -61,7 +61,6 @@ def test_run_bp_with_OR_factors():
             assert valid_configs.shape[0] == 2 ** this_num_parents
 
             fg1.add_factor(
-                factor_type="EnumerationFactor",
                 variable_names=variable_names,
                 factor_configs=valid_configs,
                 log_potentials=np.zeros(valid_configs.shape[0]),
