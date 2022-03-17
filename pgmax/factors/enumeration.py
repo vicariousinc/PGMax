@@ -30,9 +30,14 @@ class EnumerationWiring(nodes.Wiring):
 
     @property
     def inference_arguments(self) -> Mapping[str, Union[np.ndarray, int]]:
+        if self.factor_configs_edge_states.shape[0] == 0:
+            num_val_configs = 0
+        else:
+            num_val_configs = int(self.factor_configs_edge_states[-1, 0]) + 1
+
         return {
             "factor_configs_edge_states": self.factor_configs_edge_states,
-            "num_val_configs": int(self.factor_configs_edge_states[-1, 0]) + 1,
+            "num_val_configs": num_val_configs,
         }
 
 

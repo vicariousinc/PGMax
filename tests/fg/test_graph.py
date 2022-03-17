@@ -175,7 +175,7 @@ def test_bp():
     run_bp, get_bp_state, get_beliefs = graph.BP(fg.bp_state, 1)
     bp_arrays = replace(
         run_bp(ftov_msgs_updates={(frozenset([0]), 0): np.zeros(15)}),
-        log_potentials=np.zeros(10),
+        log_potentials=jnp.zeros((10)),
     )
     bp_state = get_bp_state(bp_arrays)
     assert bp_state.fg_state == fg.fg_state

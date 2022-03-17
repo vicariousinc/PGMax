@@ -197,7 +197,7 @@ class FactorGraph:
         if name is not None:
             self._named_factor_groups[name] = factor_group
 
-    @functools.lru_cache(maxsize=None)
+    @functools.lru_cache(None)
     def compute_offsets(self) -> None:
         """Compute factor messages offsets for the factor types, factor groups and factors
         in the flattened array of message. Also compute log potentials offsets for factor groups and factors.
@@ -446,8 +446,6 @@ class BPState:
     evidence: Evidence
 
     def __post_init__(self):
-        # print(self.log_potentials.fg_state.wiring, self.ftov_msgs.fg_state.wiring)
-
         if (self.log_potentials.fg_state != self.ftov_msgs.fg_state) or (
             self.ftov_msgs.fg_state != self.evidence.fg_state
         ):
@@ -541,18 +539,11 @@ class LogPotentials:
         if self.value is None:
             object.__setattr__(self, "value", self.fg_state.log_potentials)
         else:
-            if not self.value.keys() == self.fg_state.log_potentials.keys():
+            if not self.value.shape == self.fg_state.log_potentials.shape:
                 raise ValueError(
-                    f"Expected log potentials keys {self.fg_state.log_potentials.keys()}. "
-                    f"Got {self.value.keys()}."
+                    f"Expected log potentials shape {self.fg_state.log_potentials.shape}. "
+                    f"Got {self.value.shape}."
                 )
-
-            for key in self.value.keys():
-                if not self.value[key].shape == self.fg_state.log_potentials[key].shape:
-                    raise ValueError(
-                        f"Expected log potentials keys {self.fg_state.log_potentials[key].shape}. "
-                        f"Got {self.value[key].shape}."
-                    )
 
             object.__setattr__(self, "value", self.value)
 

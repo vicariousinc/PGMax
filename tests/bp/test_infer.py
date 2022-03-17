@@ -3,7 +3,6 @@ from itertools import product
 import jax
 import numpy as np
 
-from pgmax.bp import infer
 from pgmax.factors import enumeration, logical
 from pgmax.fg import graph, groups
 
@@ -96,13 +95,13 @@ def test_run_bp_with_OR_factors():
         vtof_msgs = np.random.normal(
             0, 1, size=(2 * (sum(num_parents) + len(num_parents)))
         )
-        factor_configs_edge_states = fg1.fg_state.wiring_by_factor_type[
+        factor_configs_edge_states = fg1.fg_state.wiring[
             enumeration.EnumerationFactor
         ].factor_configs_edge_states
-        log_potentials = fg1.fg_state.log_potentials[enumeration.EnumerationFactor]
+        log_potentials = fg1.fg_state.log_potentials
         num_val_configs = int(factor_configs_edge_states[-1, 0]) + 1
 
-        ftov_msgs1 = infer.pass_enum_fac_to_var_messages(
+        ftov_msgs1 = enumeration.pass_enum_fac_to_var_messages(
             vtof_msgs,
             factor_configs_edge_states,
             log_potentials,
@@ -110,14 +109,12 @@ def test_run_bp_with_OR_factors():
             temperature,
         )
 
-        parents_edge_states = fg2.fg_state.wiring_by_factor_type[
-            logical.ORFactor
-        ].parents_edge_states
-        children_edge_states = fg2.fg_state.wiring_by_factor_type[
+        parents_edge_states = fg2.fg_state.wiring[logical.ORFactor].parents_edge_states
+        children_edge_states = fg2.fg_state.wiring[
             logical.ORFactor
         ].children_edge_states
 
-        ftov_msgs2 = infer.pass_OR_fac_to_var_messages(
+        ftov_msgs2 = logical.pass_OR_fac_to_var_messages(
             vtof_msgs, parents_edge_states, children_edge_states, temperature
         )
         # Note: ftov_msgs1 and ftov_msgs2 are not normalized
