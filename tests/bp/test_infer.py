@@ -20,6 +20,8 @@ def test_run_bp_with_OR_factors():
 
     Inference for the EnumerationFactors will be run with pass_enum_fac_to_var_messages while
     inference for the ORFactors will be run with pass_OR_fac_to_var_messages.
+
+    Note: for the first seed, we add all the EnumerationFactors to FG1 and all the ORFactors to FG2
     """
     for idx in range(10):
         np.random.seed(idx)
@@ -84,12 +86,20 @@ def test_run_bp_with_OR_factors():
                     log_potentials=np.zeros(valid_configs.shape[0]),
                 )
             else:
-                # Add the second half of factors to FactorGraph2
-                fg2.add_factor(
-                    variable_names=variable_names,
-                    factor_configs=valid_configs,
-                    log_potentials=np.zeros(valid_configs.shape[0]),
-                )
+                if idx != 0:
+                    # Add the second half of factors to FactorGraph2
+                    fg2.add_factor(
+                        variable_names=variable_names,
+                        factor_configs=valid_configs,
+                        log_potentials=np.zeros(valid_configs.shape[0]),
+                    )
+                else:
+                    # Add all the EnumerationFactors to FactorGraph1 for the first iter
+                    fg1.add_factor(
+                        variable_names=variable_names,
+                        factor_configs=valid_configs,
+                        log_potentials=np.zeros(valid_configs.shape[0]),
+                    )
 
         # Option 2: Define the ORFactors
         num_parents_cumsum = np.insert(np.cumsum(num_parents), 0, 0)
@@ -114,11 +124,18 @@ def test_run_bp_with_OR_factors():
             factory=groups.ORFactorGroup,
             variable_names_for_factors=variables_names_for_OR_factors1,
         )
-        # Add the second half of factors to FactorGraph1
-        fg1.add_factor_group(
-            factory=groups.ORFactorGroup,
-            variable_names_for_factors=variables_names_for_OR_factors2,
-        )
+        if idx != 0:
+            # Add the second half of factors to FactorGraph1
+            fg1.add_factor_group(
+                factory=groups.ORFactorGroup,
+                variable_names_for_factors=variables_names_for_OR_factors2,
+            )
+        else:
+            # Add all the ORFactors to FactorGraph2 for the first iter
+            fg2.add_factor_group(
+                factory=groups.ORFactorGroup,
+                variable_names_for_factors=variables_names_for_OR_factors2,
+            )
 
         # Run inference
         run_bp1, _, get_beliefs1 = graph.BP(fg1.bp_state, 1, temperature)
