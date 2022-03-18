@@ -3,16 +3,23 @@ from itertools import product
 import jax
 import numpy as np
 
-from pgmax.factors import enumeration, logical
 from pgmax.fg import graph, groups
 
 
 def test_run_bp_with_OR_factors():
     """
-    Tests the support of ORFactors in a factor graph and the specialized inference by comparing two approaches:
-    (1) Defining the equivalent EnumerationFactors of the ORFactors (by listing all the valid OR configurations)
-    and running inference with pass_enum_fac_to_var_messages - which passes messages from EnumerationFactors to variables
-    (2) Explicitly defining the ORFactors and running the specialized pass_OR_fac_to_var_messages inference
+    Simultaneously test
+    (1) the support of ORFactors in a factor graph inference and their specialized inference
+    for different temperature
+    (2) the support of several factor types in a factor graph and during inference
+
+    To do so, observe that an ORFactor can be defined as an equivalent EnumerationFactor
+    (which list all the valid OR configurations) and define two equivalent factor graphs
+    FG1: first half of factors are defined as EnumerationFactors, second half are defined as ORFactors
+    FG2: first half of factors are defined as ORFactors, second half are defined as EnumerationFactors
+
+    Inference for the EnumerationFactors will be run with pass_enum_fac_to_var_messages while
+    inference for the ORFactors will be run with pass_OR_fac_to_var_messages.
     """
     for idx in range(10):
         np.random.seed(idx)
@@ -29,7 +36,7 @@ def test_run_bp_with_OR_factors():
         else:
             temperature = np.random.uniform(low=0.5, high=1.0)
 
-        # Graph 1: Define EnumerationFactors equivalent to the ORFactors
+        # Graph 1
         parents_variables1 = groups.NDVariableArray(
             num_states=2, shape=(num_parents.sum(),)
         )
@@ -38,6 +45,16 @@ def test_run_bp_with_OR_factors():
             variables=dict(parents=parents_variables1, children=children_variable1)
         )
 
+        # Graph 2
+        parents_variables2 = groups.NDVariableArray(
+            num_states=2, shape=(num_parents.sum(),)
+        )
+        children_variable2 = groups.NDVariableArray(num_states=2, shape=(num_factors,))
+        fg2 = graph.FactorGraph(
+            variables=dict(parents=parents_variables2, children=children_variable2)
+        )
+
+        # Option 1: Define EnumerationFactors equivalent to the ORFactors
         for factor_idx in range(num_factors):
             this_num_parents = num_parents[factor_idx]
             variable_names = [
@@ -59,22 +76,25 @@ def test_run_bp_with_OR_factors():
             )
             assert valid_configs.shape[0] == 2 ** this_num_parents
 
-            fg1.add_factor(
-                variable_names=variable_names,
-                factor_configs=valid_configs,
-                log_potentials=np.zeros(valid_configs.shape[0]),
-            )
+            if factor_idx < num_factors // 2:
+                # Add the first half of factors to FactorGraph1
+                fg1.add_factor(
+                    variable_names=variable_names,
+                    factor_configs=valid_configs,
+                    log_potentials=np.zeros(valid_configs.shape[0]),
+                )
+            else:
+                # Add the second half of factors to FactorGraph2
+                fg2.add_factor(
+                    variable_names=variable_names,
+                    factor_configs=valid_configs,
+                    log_potentials=np.zeros(valid_configs.shape[0]),
+                )
 
-        # Graph 2: Define the ORFactors
-        parents_variables2 = groups.NDVariableArray(
-            num_states=2, shape=(num_parents.sum(),)
-        )
-        children_variable2 = groups.NDVariableArray(num_states=2, shape=(num_factors,))
-        fg2 = graph.FactorGraph(
-            variables=dict(parents=parents_variables2, children=children_variable2)
-        )
+        # Option 2: Define the ORFactors
         num_parents_cumsum = np.insert(np.cumsum(num_parents), 0, 0)
-        variables_names_for_OR_factors = []
+        variables_names_for_OR_factors1 = []
+        variables_names_for_OR_factors2 = []
 
         for factor_idx in range(num_factors):
             variables_names_for_OR_factor = [
@@ -84,61 +104,25 @@ def test_run_bp_with_OR_factors():
                     num_parents_cumsum[factor_idx + 1],
                 )
             ] + [("children", factor_idx)]
-            variables_names_for_OR_factors.append(variables_names_for_OR_factor)
+            if factor_idx < num_factors // 2:
+                variables_names_for_OR_factors1.append(variables_names_for_OR_factor)
+            else:
+                variables_names_for_OR_factors2.append(variables_names_for_OR_factor)
 
+        # Add the second half of factors to FactorGraph2
         fg2.add_factor_group(
             factory=groups.ORFactorGroup,
-            variable_names_for_factors=variables_names_for_OR_factors,
+            variable_names_for_factors=variables_names_for_OR_factors1,
+        )
+        # Add the second half of factors to FactorGraph1
+        fg1.add_factor_group(
+            factory=groups.ORFactorGroup,
+            variable_names_for_factors=variables_names_for_OR_factors2,
         )
 
-        # Test 1: Compare both specialized inference functions
-        vtof_msgs = np.random.normal(
-            0, 1, size=(2 * (sum(num_parents) + len(num_parents)))
-        )
-        factor_configs_edge_states = fg1.fg_state.wiring[
-            enumeration.EnumerationFactor
-        ].factor_configs_edge_states
-        log_potentials = fg1.fg_state.log_potentials
-        num_val_configs = int(factor_configs_edge_states[-1, 0]) + 1
-
-        ftov_msgs1 = enumeration.pass_enum_fac_to_var_messages(
-            vtof_msgs,
-            factor_configs_edge_states,
-            log_potentials,
-            num_val_configs,
-            temperature,
-        )
-
-        parents_edge_states = fg2.fg_state.wiring[logical.ORFactor].parents_edge_states
-        children_edge_states = fg2.fg_state.wiring[
-            logical.ORFactor
-        ].children_edge_states
-
-        ftov_msgs2 = logical.pass_OR_fac_to_var_messages(
-            vtof_msgs, parents_edge_states, children_edge_states, temperature
-        )
-        # Note: ftov_msgs1 and ftov_msgs2 are not normalized
-        ftoparents_msgs1 = (
-            ftov_msgs1[parents_edge_states[..., 1] + 1]
-            - ftov_msgs1[parents_edge_states[..., 1]]
-        )
-        ftochildren_msgs1 = (
-            ftov_msgs1[children_edge_states + 1] - ftov_msgs1[children_edge_states]
-        )
-        ftoparents_msgs2 = (
-            ftov_msgs2[parents_edge_states[..., 1] + 1]
-            - ftov_msgs2[parents_edge_states[..., 1]]
-        )
-        ftochildren_msgs2 = (
-            ftov_msgs2[children_edge_states + 1] - ftov_msgs2[children_edge_states]
-        )
-
-        assert np.allclose(ftochildren_msgs1, ftochildren_msgs2, atol=1e-4)
-        assert np.allclose(ftoparents_msgs1, ftoparents_msgs2, atol=1e-4)
-
-        # Test 2: Run inference with graph.BP
-        run_bp1, _, _ = graph.BP(fg1.bp_state, 1)
-        run_bp2, _, _ = graph.BP(fg2.bp_state, 1)
+        # Run inference
+        run_bp1, _, get_beliefs1 = graph.BP(fg1.bp_state, 1, temperature)
+        run_bp2, _, get_beliefs2 = graph.BP(fg2.bp_state, 1, temperature)
 
         evidence_updates = {
             "parents": jax.device_put(np.random.gumbel(size=(sum(num_parents), 2))),
@@ -147,4 +131,10 @@ def test_run_bp_with_OR_factors():
 
         bp_arrays1 = run_bp1(evidence_updates=evidence_updates)
         bp_arrays2 = run_bp2(evidence_updates=evidence_updates)
-        assert np.allclose(bp_arrays1.ftov_msgs, bp_arrays2.ftov_msgs, atol=1e-4)
+
+        # Get beliefs
+        beliefs1 = get_beliefs1(bp_arrays1)
+        beliefs2 = get_beliefs2(bp_arrays2)
+
+        np.allclose(beliefs1["children"], beliefs2["children"], atol=1e-4)
+        np.allclose(beliefs1["parents"], beliefs2["parents"], atol=1e-4)
