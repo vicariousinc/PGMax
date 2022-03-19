@@ -17,6 +17,7 @@ from typing import (
     OrderedDict,
     Sequence,
     Tuple,
+    Type,
     Union,
 )
 
@@ -998,30 +999,36 @@ class PairwiseFactorGroup(FactorGroup):
 
 
 @dataclass(frozen=True, eq=False)
-class ORFactorGroup(FactorGroup):
-    """Class to represent a group of ORFactors.
+class LogicalFactorGroup(FactorGroup):
+    """Class to represent a group of LogicalFactors.
 
     Args:
         variable_names_for_factors: A list of list of tuples, where each innermost tuple contains a
             name into variable_group. Each list within the outer list is taken to contain the names of variables
-            neighboring a particular ORFactor to be added.
+            neighboring a particular LogicalFactor to be added.
     """
 
     variable_names_for_factors: Sequence[List]
 
+    @property
+    def logical_factor_type(self) -> Type:
+        raise NotImplementedError(
+            "Please subclass the LogicalFactorGroup class and override this method."
+        )
+
     def _get_variables_to_factors(
         self,
-    ) -> OrderedDict[FrozenSet, logical.ORFactor]:
-        """Function that generates a dictionary mapping set of connected variables to ORFactors.
+    ) -> OrderedDict[FrozenSet, nodes.Factor]:
+        """Function that generates a dictionary mapping set of connected variables to LogicalFactors.
 
         Returns:
-            A dictionary mapping all possible set of connected variables to different ORFactors.
+            A dictionary mapping all possible set of connected variables to different LogicalFactors.
         """
         variables_to_factors = collections.OrderedDict(
             [
                 (
                     frozenset(self.variable_names_for_factors[ii]),
-                    logical.ORFactor(
+                    self.logical_factor_type(
                         variables=tuple(
                             self.variable_group[self.variable_names_for_factors[ii]]
                         ),
@@ -1031,3 +1038,12 @@ class ORFactorGroup(FactorGroup):
             ]
         )
         return variables_to_factors
+
+
+@dataclass(frozen=True, eq=False)
+class ORFactorGroup(LogicalFactorGroup):
+    """Class to represent a group of ORFactors."""
+
+    @property
+    def logical_factor_type(self) -> Type:
+        return logical.ORFactor
