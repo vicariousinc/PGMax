@@ -153,5 +153,5 @@ def test_run_bp_with_OR_factors():
         beliefs1 = get_beliefs1(bp_arrays1)
         beliefs2 = get_beliefs2(bp_arrays2)
 
-        np.allclose(beliefs1["children"], beliefs2["children"], atol=1e-4)
-        np.allclose(beliefs1["parents"], beliefs2["parents"], atol=1e-4)
+        assert np.allclose(beliefs1["children"], beliefs2["children"], atol=1e-4)
+        assert np.allclose(beliefs1["parents"], beliefs2["parents"], atol=1e-4)
