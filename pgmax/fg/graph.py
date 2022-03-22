@@ -31,7 +31,7 @@ import numpy as np
 from jax.scipy.special import logsumexp
 
 from pgmax.bp import infer
-from pgmax.factors import FAC_TO_VAR_UPDATES, FACTOR_GROUP_FACTORY
+from pgmax.factors import FAC_TO_VAR_UPDATES
 from pgmax.fg import groups, nodes
 from pgmax.utils import cached_property
 
@@ -85,7 +85,7 @@ class FactorGraph:
         self._factor_types_to_groups: OrderedDict[
             Type, List[groups.FactorGroup]
         ] = collections.OrderedDict(
-            [(factor_type, []) for factor_type in FACTOR_GROUP_FACTORY]
+            [(factor_type, []) for factor_type in FAC_TO_VAR_UPDATES]
         )
 
     def __hash__(self) -> int:
@@ -134,14 +134,13 @@ class FactorGraph:
             kwargs: kwargs to be passed to the factory function, and an optional "name" argument
                 for specifying the name of a named factor group.
         """
-        if factor_type not in FACTOR_GROUP_FACTORY:
-            raise ValueError(
-                f"Factor type {factor_type} is not one of the supported types {FACTOR_GROUP_FACTORY.keys()}"
-            )
-
         name = kwargs.pop("name", None)
-        factor_group = FACTOR_GROUP_FACTORY[factor_type](
-            self._variable_group, variable_names_for_factors=[variable_names], **kwargs
+        variables = tuple(self._variable_group[variable_names])
+        factor = factor_type(variables, **kwargs)
+        factor_group = groups.SingleFactorGroup(
+            variable_group=self._variable_group,
+            variable_names=variable_names,
+            factor=factor,
         )
         self._register_factor_group(factor_group, name)
 

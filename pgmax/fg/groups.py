@@ -649,6 +649,44 @@ class FactorGroup:
 
 
 @dataclass(frozen=True, eq=False)
+class SingleFactorGroup(FactorGroup):
+
+    variable_names: List
+    factor: nodes.Factor
+
+    def _get_variables_to_factors(
+        self,
+    ) -> OrderedDict[FrozenSet, nodes.Factor]:
+        return OrderedDict([(frozenset(self.variable_names), self.factor)])
+
+    def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
+        """Function that turns meaningful structured data into a flat data array for internal use.
+
+        Args:
+            data: Meaningful structured data.
+
+        Returns:
+            A flat jnp.array for internal use
+        """
+        raise NotImplementedError(
+            "SingleFactorGroup does not support vectorized factor operations."
+        )
+
+    def unflatten(self, flat_data: Union[np.ndarray, jnp.ndarray]) -> Any:
+        """Function that recovers meaningful structured data from internal flat data array
+
+        Args:
+            flat_data: Internal flat data array.
+
+        Returns:
+            Meaningful structured data.
+        """
+        raise NotImplementedError(
+            "SingleFactorGroup does not support vectorized factor operations."
+        )
+
+
+@dataclass(frozen=True, eq=False)
 class EnumerationFactorGroup(FactorGroup):
     """Class to represent a group of EnumerationFactors.
 
