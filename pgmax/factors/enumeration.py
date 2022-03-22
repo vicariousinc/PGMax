@@ -155,7 +155,7 @@ class EnumerationFactor(nodes.Factor):
             wirings: A list of EnumerationWirings
 
         Returns:
-            Concatenated EnumerationWirings
+            Concatenated EnumerationWiring
         """
         if len(wirings) == 0:
             return EnumerationWiring(

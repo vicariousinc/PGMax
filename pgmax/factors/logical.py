@@ -144,7 +144,7 @@ class LogicalFactor(nodes.Factor):
             wirings: A list of LogicalWirings
 
         Returns:
-            Concatenated LogicalWirings
+            Concatenated LogicalWiring
         """
         if len(wirings) == 0:
             return LogicalWiring(

@@ -594,6 +594,16 @@ class FactorGroup:
 
         return self._variables_to_factors[variables]
 
+    @cached_property
+    def factor_group_log_potentials(self) -> np.ndarray:
+        """Function to compile potential array for the factor group
+
+        Returns
+            A jnp array representing the log of the potential function for
+            the factor group
+        """
+        return np.concatenate([factor.log_potentials for factor in self.factors])
+
     def _get_variables_to_factors(
         self,
     ) -> OrderedDict[FrozenSet, Any]:
@@ -610,16 +620,6 @@ class FactorGroup:
     def factors(self) -> Tuple[nodes.Factor, ...]:
         """Returns all factors in the factor group."""
         return tuple(self._variables_to_factors.values())
-
-    @cached_property
-    def factor_group_log_potentials(self) -> np.ndarray:
-        """Function to compile potential array for the factor group
-
-        Returns
-            A jnp array representing the log of the potential function for
-            the factor group
-        """
-        return np.concatenate([factor.log_potentials for factor in self.factors])
 
     def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
         """Function that turns meaningful structured data into a flat data array for internal use.
@@ -650,6 +650,13 @@ class FactorGroup:
 
 @dataclass(frozen=True, eq=False)
 class SingleFactorGroup(FactorGroup):
+    """Class to represent a FactorGroup with a single factor.
+    For internal use only. Should not be directly used to add FactorGroups to a factor graph.
+
+    Args:
+        variable_names: the names of the variables involved in the single factor.
+        factor: the single factor in the SingleFactorGroup
+    """
 
     variable_names: List
     factor: nodes.Factor
@@ -657,6 +664,11 @@ class SingleFactorGroup(FactorGroup):
     def _get_variables_to_factors(
         self,
     ) -> OrderedDict[FrozenSet, nodes.Factor]:
+        """Function that generates a dictionary mapping names to factors.
+
+        Returns:
+            A dictionary mapping all possible names to different factors.
+        """
         return OrderedDict([(frozenset(self.variable_names), self.factor)])
 
     def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:

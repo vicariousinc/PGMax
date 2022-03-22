@@ -100,6 +100,14 @@ class Factor:
 
     @staticmethod
     def concatenate_wirings(wirings: Sequence) -> Wiring:
+        """Concatenate a list of Wirings
+
+        Args:
+            wirings: A list of Wirings
+
+        Returns:
+            Concatenated Wiring
+        """
         raise NotImplementedError(
             "Please subclass the Wiring class and override this method."
         )

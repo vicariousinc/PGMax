@@ -1,3 +1,5 @@
+"""A sub-package containing different types of factors."""
+
 import collections
 from typing import Callable, OrderedDict, Type
 
