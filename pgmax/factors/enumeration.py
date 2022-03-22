@@ -15,6 +15,7 @@ from pgmax.bp import bp_utils
 from pgmax.fg import nodes
 
 
+@jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True, eq=False)
 class EnumerationWiring(nodes.Wiring):
     """Wiring for EnumerationFactors.
