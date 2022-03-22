@@ -143,11 +143,12 @@ class FactorGraph:
                 for specifying the name of a named factor group.
 
         Example:
-            To add an ORFactor to a FactorGraph fg, run
-            fg.add_factor_by_type(
-                variable_names=variables_names_for_OR_factor,
-                factor_type=logical.ORFactor
-            )
+            To add an ORFactor to a FactorGraph fg, run::
+
+                fg.add_factor_by_type(
+                    variable_names=variables_names_for_OR_factor,
+                    factor_type=logical.ORFactor
+                )
         """
         if factor_type not in FAC_TO_VAR_UPDATES:
             raise ValueError(
