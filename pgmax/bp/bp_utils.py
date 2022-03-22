@@ -1,6 +1,7 @@
 """A module containing helper functions used for belief propagation."""
 
 import functools
+from typing import Tuple
 
 import jax
 import jax.numpy as jnp
@@ -27,7 +28,6 @@ def segment_max_opt(
     Returns:
         An array of shape (num_segments,) that contains the maximum value from data of
             every segment sepcified by segments_lengths
-
     """
 
     @functools.partial(jax.vmap, in_axes=(None, 0, 0), out_axes=0)
@@ -50,3 +50,35 @@ def segment_max_opt(
     )[:-1]
     expanded_data = jnp.concatenate([data, jnp.zeros(max_segment_length)])
     return get_max(expanded_data, start_indices, segments_lengths)
+
+
+@functools.partial(jax.jit, static_argnames="num_labels")
+def get_maxes_and_argmaxes(
+    data: jnp.array, labels: jnp.array, num_labels: int
+) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    """
+    Given a flattened sequence of elements and their corresponding labels,
+    returns the maxes and argmaxes of each label.
+
+    Args:
+        data: Array of shape (a_len,) where a_len is an arbitrary integer.
+        labels: Label array of shape (a_len,), assigning a label to each entry.
+            Labels must be 0,..., num_labels - 1.
+        num_labels: Number of different labels.
+
+    Returns:
+        Maxes and argmaxes arrays
+    """
+    num_obs = data.shape[0]
+
+    maxes = jnp.full(shape=(num_labels,), fill_value=NEG_INF).at[labels].max(data)
+    only_maxes_pos = jnp.arange(num_obs) - num_obs * jnp.where(
+        data != maxes[labels], 1, 0
+    )
+
+    argmaxes = (
+        jnp.full(shape=(num_labels,), fill_value=NEG_INF, dtype=jnp.int32)
+        .at[labels]
+        .max(only_maxes_pos)
+    )
+    return maxes, argmaxes

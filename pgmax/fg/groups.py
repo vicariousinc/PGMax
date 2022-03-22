@@ -25,6 +25,7 @@ import jax.numpy as jnp
 import numpy as np
 
 import pgmax.fg.nodes as nodes
+from pgmax.factors import enumeration
 from pgmax.utils import cached_property
 
 
@@ -558,15 +559,10 @@ class FactorGroup:
 
     Attributes:
         _variables_to_factors: maps set of connected variables to the corresponding factors
-
-    Raises:
-        ValueError: if variable_names_for_factors is an empty list
     """
 
     variable_group: Union[CompositeVariableGroup, VariableGroup]
-    _variables_to_factors: Mapping[FrozenSet, nodes.EnumerationFactor] = field(
-        init=False
-    )
+    _variables_to_factors: Mapping[FrozenSet, nodes.Factor] = field(init=False)
 
     def __post_init__(self) -> None:
         """Initializes a tuple of all the factors contained within this FactorGroup."""
@@ -576,10 +572,7 @@ class FactorGroup:
             MappingProxyType(self._get_variables_to_factors()),
         )
 
-    def __getitem__(
-        self,
-        variables: Union[Sequence, Collection],
-    ) -> nodes.EnumerationFactor:
+    def __getitem__(self, variables: Union[Sequence, Collection]) -> nodes.Factor:
         """Function to query individual factors in the factor group
 
         Args:
@@ -604,36 +597,28 @@ class FactorGroup:
     def factor_group_log_potentials(self) -> np.ndarray:
         """Function to compile potential array for the factor group
 
-        Returns:
-            a jnp array representing the log of the potential function for
+        Returns
+            A jnp array representing the log of the potential function for
             the factor group
         """
         return np.concatenate([factor.log_potentials for factor in self.factors])
 
     def _get_variables_to_factors(
         self,
-    ) -> OrderedDict[FrozenSet, nodes.EnumerationFactor]:
+    ) -> OrderedDict[FrozenSet, Any]:
         """Function that generates a dictionary mapping names to factors.
 
         Returns:
-            a dictionary mapping all possible names to different factors.
+            A dictionary mapping all possible names to different factors.
         """
         raise NotImplementedError(
             "Please subclass the FactorGroup class and override this method"
         )
 
     @cached_property
-    def factors(self) -> Tuple[nodes.EnumerationFactor, ...]:
+    def factors(self) -> Tuple[nodes.Factor, ...]:
         """Returns all factors in the factor group."""
         return tuple(self._variables_to_factors.values())
-
-    @cached_property
-    def factor_num_states(self) -> np.ndarray:
-        """Returns the list of total number of edge states for factors in the factor group."""
-        factor_num_states = np.array(
-            [np.sum(factor.edges_num_states) for factor in self.factors], dtype=int
-        )
-        return factor_num_states
 
     def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
         """Function that turns meaningful structured data into a flat data array for internal use.
@@ -663,6 +648,56 @@ class FactorGroup:
 
 
 @dataclass(frozen=True, eq=False)
+class SingleFactorGroup(FactorGroup):
+    """Class to represent a FactorGroup with a single factor.
+    For internal use only. Should not be directly used to add FactorGroups to a factor graph.
+
+    Args:
+        variable_names: the names of the variables involved in the single factor.
+        factor: the single factor in the SingleFactorGroup
+    """
+
+    variable_names: List
+    factor: nodes.Factor
+
+    def _get_variables_to_factors(
+        self,
+    ) -> OrderedDict[FrozenSet, nodes.Factor]:
+        """Function that generates a dictionary mapping names to factors.
+
+        Returns:
+            A dictionary mapping all possible names to different factors.
+        """
+        return OrderedDict([(frozenset(self.variable_names), self.factor)])
+
+    def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
+        """Function that turns meaningful structured data into a flat data array for internal use.
+
+        Args:
+            data: Meaningful structured data.
+
+        Returns:
+            A flat jnp.array for internal use
+        """
+        raise NotImplementedError(
+            "SingleFactorGroup does not support vectorized factor operations."
+        )
+
+    def unflatten(self, flat_data: Union[np.ndarray, jnp.ndarray]) -> Any:
+        """Function that recovers meaningful structured data from internal flat data array
+
+        Args:
+            flat_data: Internal flat data array.
+
+        Returns:
+            Meaningful structured data.
+        """
+        raise NotImplementedError(
+            "SingleFactorGroup does not support vectorized factor operations."
+        )
+
+
+@dataclass(frozen=True, eq=False)
 class EnumerationFactorGroup(FactorGroup):
     """Class to represent a group of EnumerationFactors.
 
@@ -688,7 +723,7 @@ class EnumerationFactorGroup(FactorGroup):
 
     def _get_variables_to_factors(
         self,
-    ) -> OrderedDict[FrozenSet, nodes.EnumerationFactor]:
+    ) -> OrderedDict[FrozenSet, enumeration.EnumerationFactor]:
         """Function that generates a dictionary mapping set of connected variables to factors.
 
         Returns:
@@ -721,10 +756,12 @@ class EnumerationFactorGroup(FactorGroup):
             [
                 (
                     frozenset(self.variable_names_for_factors[ii]),
-                    nodes.EnumerationFactor(
-                        tuple(self.variable_group[self.variable_names_for_factors[ii]]),
-                        self.factor_configs,
-                        log_potentials[ii],
+                    enumeration.EnumerationFactor(
+                        variables=tuple(
+                            self.variable_group[self.variable_names_for_factors[ii]]
+                        ),
+                        configs=self.factor_configs,
+                        log_potentials=log_potentials[ii],
                     ),
                 )
                 for ii in range(len(self.variable_names_for_factors))
@@ -834,7 +871,7 @@ class PairwiseFactorGroup(FactorGroup):
 
     def _get_variables_to_factors(
         self,
-    ) -> OrderedDict[FrozenSet, nodes.EnumerationFactor]:
+    ) -> OrderedDict[FrozenSet, enumeration.EnumerationFactor]:
         """Function that generates a dictionary mapping set of connected variables to factors.
 
         Returns:
@@ -915,10 +952,12 @@ class PairwiseFactorGroup(FactorGroup):
             [
                 (
                     frozenset(self.variable_names_for_factors[ii]),
-                    nodes.EnumerationFactor(
-                        tuple(self.variable_group[self.variable_names_for_factors[ii]]),
-                        factor_configs,
-                        log_potential_matrix[
+                    enumeration.EnumerationFactor(
+                        variables=tuple(
+                            self.variable_group[self.variable_names_for_factors[ii]]
+                        ),
+                        configs=factor_configs,
+                        log_potentials=log_potential_matrix[
                             ii, factor_configs[:, 0], factor_configs[:, 1]
                         ],
                     ),
