@@ -89,7 +89,14 @@ class FactorGraph:
         )
 
     def __hash__(self) -> int:
-        return hash(tuple(sum(self.factor_groups.values(), [])))
+        all_factor_groups = tuple(
+            [
+                factor_group
+                for factor_groups_per_type in self.factor_groups.values()
+                for factor_group in factor_groups_per_type
+            ]
+        )
+        return hash(all_factor_groups)
 
     def add_factor(
         self,
@@ -131,13 +138,12 @@ class FactorGraph:
             variable_names: A list containing the connected variable names.
                 Variable names are tuples of the type (variable_group_name, variable_name_within_variable_group)
             factor_type: Type of factor to be added
-            args: Args to be passed to the factor type.
-            kwargs: kwargs to be passed to the factor type, and an optional "name" argument
+            args: Args to be passed to the factory function.
+            kwargs: kwargs to be passed to the factory function, and an optional "name" argument
                 for specifying the name of a named factor group.
 
         Example:
-            To add an ORFactor to a FactorGraph fg, use
-
+            To add an ORFactor to a FactorGraph fg, run
             fg.add_factor_by_type(
                 variable_names=variables_names_for_OR_factor,
                 factor_type=logical.ORFactor
@@ -330,13 +336,11 @@ class FactorGraph:
                 (
                     factor_type,
                     tuple(
-                        sum(
-                            [
-                                factor_group.factors
-                                for factor_group in self.factor_groups[factor_type]
-                            ],
-                            (),
-                        )
+                        [
+                            factor
+                            for factor_group in self.factor_groups[factor_type]
+                            for factor in factor_group.factors
+                        ]
                     ),
                 )
                 for factor_type in self.factor_groups
