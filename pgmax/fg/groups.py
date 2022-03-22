@@ -17,7 +17,6 @@ from typing import (
     OrderedDict,
     Sequence,
     Tuple,
-    Type,
     Union,
 )
 
@@ -26,7 +25,7 @@ import jax.numpy as jnp
 import numpy as np
 
 import pgmax.fg.nodes as nodes
-from pgmax.factors import enumeration, logical
+from pgmax.factors import enumeration
 from pgmax.utils import cached_property
 
 
