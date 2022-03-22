@@ -314,21 +314,36 @@ class FactorGraph:
         return log_potentials
 
     @cached_property
-    def factors(self) -> OrderedDict[Type, List[nodes.Factor]]:
+    def factors(self) -> OrderedDict[Type, Tuple[nodes.Factor, ...]]:
         """Mapping factor type to individual factors in the factor graph"""
-        factors: OrderedDict[Type, List[nodes.Factor]] = collections.OrderedDict()
-
-        for factor_type, factors_groups_by_type in self.factor_groups.items():
-            factors[factor_type] = []
-            for factors_groups in factors_groups_by_type:
-                for factor in factors_groups.factors:
-                    factors[factor_type].append(factor)
+        factors: OrderedDict[Type, Tuple[nodes.Factor, ...]] = collections.OrderedDict(
+            [
+                (
+                    factor_type,
+                    tuple(
+                        sum(
+                            [
+                                factor_group.factors
+                                for factor_group in self.factor_groups[factor_type]
+                            ],
+                            [],
+                        )
+                    ),
+                )
+                for factor_type in self.factor_groups
+            ]
+        )
         return factors
 
-    @property
-    def factor_groups(self) -> OrderedDict[Type, List[groups.FactorGroup]]:
+    @cached_property
+    def factor_groups(self) -> OrderedDict[Type, Tuple[groups.FactorGroup, ...]]:
         """Tuple of factor groups in the factor graph"""
-        return self._factor_types_to_groups
+        return collections.OrderedDict(
+            [
+                (factor_type, tuple(self._factor_types_to_groups[factor_type]))
+                for factor_type in self._factor_types_to_groups
+            ]
+        )
 
     @cached_property
     def fg_state(self) -> FactorGraphState:
@@ -468,7 +483,7 @@ def update_log_potentials(
 
     Raises: ValueError if
         (1) Provided log_potentials shape does not match the expected log_potentials shape.
-        (3) Provided name is not valid for log_potentials updates.
+        (2) Provided name is not valid for log_potentials updates.
     """
     for name in updates:
         data = updates[name]
@@ -548,16 +563,12 @@ class LogPotentials:
 
         if name in self.fg_state.named_factor_groups:
             factor_group = self.fg_state.named_factor_groups[name]
-
-            assert factor_group.factor_group_log_potentials is not None
             start = self.fg_state.factor_group_to_potentials_starts[factor_group]
             log_potentials = value[
                 start : start + factor_group.factor_group_log_potentials.shape[0]
             ]
         elif frozenset(name) in self.fg_state.variables_to_factors:
             factor = self.fg_state.variables_to_factors[frozenset(name)]
-
-            assert factor.log_potentials is not None
             start = self.fg_state.factor_to_potentials_starts[factor]
             log_potentials = value[start : start + factor.log_potentials.shape[0]]
         else:
@@ -933,14 +944,15 @@ def BP(
     """
     wiring = bp_state.fg_state.wiring
     edges_num_states = np.concatenate(
-        [wiring[factor_type].edges_num_states for factor_type in wiring]
+        [wiring[factor_type].edges_num_states for factor_type in FAC_TO_VAR_UPDATES]
     )
     max_msg_size = int(np.max(edges_num_states))
     var_states_for_edges = np.concatenate(
-        [wiring[factor_type].var_states_for_edges for factor_type in wiring]
+        [wiring[factor_type].var_states_for_edges for factor_type in FAC_TO_VAR_UPDATES]
     )
     inference_arguments: Dict[type, Mapping] = {
-        factor_type: wiring[factor_type].inference_arguments for factor_type in wiring
+        factor_type: wiring[factor_type].inference_arguments
+        for factor_type in FAC_TO_VAR_UPDATES
     }
     factor_type_to_msgs_range = bp_state.fg_state.factor_type_to_msgs_range
     factor_type_to_potentials_range = bp_state.fg_state.factor_type_to_potentials_range
@@ -995,7 +1007,7 @@ def BP(
                 var_states_for_edges,
             )
             ftov_msgs = jnp.zeros_like(vtof_msgs)
-            for factor_type in wiring:
+            for factor_type in FAC_TO_VAR_UPDATES:
                 msgs_start, msgs_end = factor_type_to_msgs_range[factor_type]
                 potentials_start, potentials_end = factor_type_to_potentials_range[
                     factor_type
