@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """Defines an enumeration factor"""
 
 import functools
@@ -13,7 +15,6 @@ from pgmax.bp import bp_utils
 from pgmax.fg import nodes
 
 
-@jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True, eq=False)
 class EnumerationWiring(nodes.Wiring):
     """Wiring for EnumerationFactors.
@@ -145,58 +146,58 @@ class EnumerationFactor(nodes.Factor):
             factor_configs_edge_states=self.factor_configs_edge_states,
         )
 
+    @staticmethod
+    def concatenate_wirings(wirings: Sequence[EnumerationWiring]) -> EnumerationWiring:
+        """Concatenate a list of EnumerationWirings
 
-def concatenate_enumeration_wirings(
-    enum_wirings: Sequence[EnumerationWiring],
-) -> EnumerationWiring:
-    """Concatenate a list of EnumerationWirings
+        Args:
+            wirings: A list of EnumerationWirings
 
-    Args:
-        enum_wirings: A list of EnumerationWirings
-
-    Returns:
-        Concatenated EnumerationWirings
-    """
-    if len(enum_wirings) == 0:
-        return EnumerationWiring(
-            edges_num_states=np.empty((0,), dtype=int),
-            var_states_for_edges=np.empty((0,), dtype=int),
-            factor_configs_edge_states=np.empty((0, 2), dtype=int),
-        )
-
-    factor_configs_cumsum = np.insert(
-        np.array(
-            [wiring.factor_configs_edge_states[-1, 0] + 1 for wiring in enum_wirings]
-        ).cumsum(),
-        0,
-        0,
-    )[:-1]
-
-    # Note: this correspomds to all the factor_to_msgs_starts of the EnumerationFactors
-    num_edge_states_cumsum = np.insert(
-        np.array([wiring.edges_num_states.sum() for wiring in enum_wirings]).cumsum(),
-        0,
-        0,
-    )[:-1]
-
-    factor_configs_edge_states = []
-    for ww, wiring in enumerate(enum_wirings):
-        factor_configs_edge_states.append(
-            wiring.factor_configs_edge_states
-            + np.array(
-                [[factor_configs_cumsum[ww], num_edge_states_cumsum[ww]]], dtype=int
+        Returns:
+            Concatenated EnumerationWirings
+        """
+        if len(wirings) == 0:
+            return EnumerationWiring(
+                edges_num_states=np.empty((0,), dtype=int),
+                var_states_for_edges=np.empty((0,), dtype=int),
+                factor_configs_edge_states=np.empty((0, 2), dtype=int),
             )
-        )
 
-    return EnumerationWiring(
-        edges_num_states=np.concatenate(
-            [wiring.edges_num_states for wiring in enum_wirings]
-        ),
-        var_states_for_edges=np.concatenate(
-            [wiring.var_states_for_edges for wiring in enum_wirings]
-        ),
-        factor_configs_edge_states=np.concatenate(factor_configs_edge_states, axis=0),
-    )
+        factor_configs_cumsum = np.insert(
+            np.array(
+                [wiring.factor_configs_edge_states[-1, 0] + 1 for wiring in wirings]
+            ).cumsum(),
+            0,
+            0,
+        )[:-1]
+
+        # Note: this correspomds to all the factor_to_msgs_starts of the EnumerationFactors
+        num_edge_states_cumsum = np.insert(
+            np.array([wiring.edges_num_states.sum() for wiring in wirings]).cumsum(),
+            0,
+            0,
+        )[:-1]
+
+        factor_configs_edge_states = []
+        for ww, wiring in enumerate(wirings):
+            factor_configs_edge_states.append(
+                wiring.factor_configs_edge_states
+                + np.array(
+                    [[factor_configs_cumsum[ww], num_edge_states_cumsum[ww]]], dtype=int
+                )
+            )
+
+        return EnumerationWiring(
+            edges_num_states=np.concatenate(
+                [wiring.edges_num_states for wiring in wirings]
+            ),
+            var_states_for_edges=np.concatenate(
+                [wiring.var_states_for_edges for wiring in wirings]
+            ),
+            factor_configs_edge_states=np.concatenate(
+                factor_configs_edge_states, axis=0
+            ),
+        )
 
 
 @functools.partial(jax.jit, static_argnames=("num_val_configs", "temperature"))

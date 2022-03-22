@@ -12,14 +12,6 @@ FACTOR_GROUP_FACTORY: OrderedDict[Type, Type] = collections.OrderedDict(
         (logical.ORFactor, groups.ORFactorGroup),
     ]
 )
-CONCATENATE_WIRING: OrderedDict[
-    Type, Callable[..., nodes.Wiring]
-] = collections.OrderedDict(
-    [
-        (enumeration.EnumerationFactor, enumeration.concatenate_enumeration_wirings),
-        (logical.ORFactor, logical.concatenate_logical_wirings),
-    ]
-)
 FAC_TO_VAR_UPDATES: OrderedDict[
     Type, Callable[..., jnp.ndarray]
 ] = collections.OrderedDict(

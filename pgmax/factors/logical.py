@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """Defines a logical factor"""
 
 import functools
@@ -14,7 +16,6 @@ from pgmax.bp import bp_utils
 from pgmax.fg import nodes
 
 
-@jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True, eq=False)
 class LogicalWiring(nodes.Wiring):
     """Wiring for LogicalFactors.
@@ -134,52 +135,48 @@ class LogicalFactor(nodes.Factor):
             children_edge_states=self.child_edge_state,
         )
 
+    @staticmethod
+    def concatenate_wirings(wirings: Sequence[LogicalWiring]) -> LogicalWiring:
+        """Concatenate a list of LogicalWirings
 
-def concatenate_logical_wirings(
-    logical_wirings: Sequence[LogicalWiring],
-) -> LogicalWiring:
-    """Concatenate a list of LogicalWirings
+        Args:
+            wirings: A list of LogicalWirings
 
-    Args:
-        logical_wirings: A list of LogicalWirings
+        Returns:
+            Concatenated LogicalWirings
+        """
+        if len(wirings) == 0:
+            return LogicalWiring(
+                edges_num_states=np.empty((0,), dtype=int),
+                var_states_for_edges=np.empty((0,), dtype=int),
+                parents_edge_states=np.empty((0, 2), dtype=int),
+                children_edge_states=np.empty((0,), dtype=int),
+            )
 
-    Returns:
-        Concatenated LogicalWirings
-    """
-    if len(logical_wirings) == 0:
+        # Note: this correspomds to all the factor_to_msgs_starts for the EnumerationFactors
+        num_edge_states_cumsum = np.insert(
+            np.array([wiring.edges_num_states.sum() for wiring in wirings]).cumsum(),
+            0,
+            0,
+        )[:-1]
+
+        parents_edge_states = []
+        children_edge_states = []
+        for ww, or_wiring in enumerate(wirings):
+            offsets = np.array([[ww, num_edge_states_cumsum[ww]]], dtype=int)
+            parents_edge_states.append(or_wiring.parents_edge_states + offsets)
+            children_edge_states.append(or_wiring.children_edge_states + offsets[:, 1])
+
         return LogicalWiring(
-            edges_num_states=np.empty((0,), dtype=int),
-            var_states_for_edges=np.empty((0,), dtype=int),
-            parents_edge_states=np.empty((0, 2), dtype=int),
-            children_edge_states=np.empty((0,), dtype=int),
+            edges_num_states=np.concatenate(
+                [wiring.edges_num_states for wiring in wirings]
+            ),
+            var_states_for_edges=np.concatenate(
+                [wiring.var_states_for_edges for wiring in wirings]
+            ),
+            parents_edge_states=np.concatenate(parents_edge_states, axis=0),
+            children_edge_states=np.concatenate(children_edge_states, axis=0),
         )
-
-    # Note: this correspomds to all the factor_to_msgs_starts for the EnumerationFactors
-    num_edge_states_cumsum = np.insert(
-        np.array(
-            [wiring.edges_num_states.sum() for wiring in logical_wirings]
-        ).cumsum(),
-        0,
-        0,
-    )[:-1]
-
-    parents_edge_states = []
-    children_edge_states = []
-    for ww, or_wiring in enumerate(logical_wirings):
-        offsets = np.array([[ww, num_edge_states_cumsum[ww]]], dtype=int)
-        parents_edge_states.append(or_wiring.parents_edge_states + offsets)
-        children_edge_states.append(or_wiring.children_edge_states + offsets[:, 1])
-
-    return LogicalWiring(
-        edges_num_states=np.concatenate(
-            [wiring.edges_num_states for wiring in logical_wirings]
-        ),
-        var_states_for_edges=np.concatenate(
-            [wiring.var_states_for_edges for wiring in logical_wirings]
-        ),
-        parents_edge_states=np.concatenate(parents_edge_states, axis=0),
-        children_edge_states=np.concatenate(children_edge_states, axis=0),
-    )
 
 
 @dataclass(frozen=True, eq=False)

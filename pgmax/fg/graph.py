@@ -31,7 +31,7 @@ import numpy as np
 from jax.scipy.special import logsumexp
 
 from pgmax.bp import infer
-from pgmax.factors import CONCATENATE_WIRING, FAC_TO_VAR_UPDATES, FACTOR_GROUP_FACTORY
+from pgmax.factors import FAC_TO_VAR_UPDATES, FACTOR_GROUP_FACTORY
 from pgmax.fg import groups, nodes
 from pgmax.utils import cached_property
 
@@ -279,7 +279,7 @@ class FactorGraph:
         )
         wiring = collections.OrderedDict(
             [
-                (factor_type, CONCATENATE_WIRING[factor_type](wiring[factor_type]))
+                (factor_type, factor_type.concatenate_wirings(wiring[factor_type]))
                 for factor_type in wiring
             ]
         )

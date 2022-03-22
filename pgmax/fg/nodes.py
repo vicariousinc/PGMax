@@ -3,7 +3,7 @@ from __future__ import annotations
 """A module containing classes that specify the basic components of a Factor Graph."""
 
 from dataclasses import asdict, dataclass
-from typing import Any, Mapping, Tuple, Union
+from typing import Any, Mapping, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -96,4 +96,10 @@ class Factor:
         """
         raise NotImplementedError(
             "Please subclass the Factor class and override this method"
+        )
+
+    @staticmethod
+    def concatenate_wirings(wirings: Sequence) -> Wiring:
+        raise NotImplementedError(
+            "Please subclass the Wiring class and override this method."
         )
