@@ -70,14 +70,14 @@ class LogicalWiring(nodes.Wiring):
 
 @dataclass(frozen=True, eq=False)
 class LogicalFactor(nodes.Factor):
-    r"""A logical OR/AND factor of the form
-    p1   p2   p3   p4
-    |    |    |    |
-     \   |    |    /
-       \  \   /   /
-            F
-            |
-            c
+    """A logical OR/AND factor of the form
+    p1    p2    p3   p4
+    ||    ||    ||    ||
+     \\   ||    ||   //
+       \\  \\  //  //
+             F
+            ||
+             c
     where p1... are the parents and c is the child.
 
     Raises:
@@ -196,14 +196,14 @@ class LogicalFactor(nodes.Factor):
 
 @dataclass(frozen=True, eq=False)
 class ORFactor(LogicalFactor):
-    r"""An OR factor of the form
-    p1   p2  ...   pn
-    |    |    |    |
-     \   |    |    /
-       \  \   /   /
-            F
-            |
-            c
+    """An OR factor of the form
+    p1    p2    p3   p4
+    ||    ||    ||    ||
+     \\   ||    ||   //
+       \\  \\  //  //
+             F
+            ||
+             c
     where p1... are the parents and c is the child.
 
     An OR factor is defined as:
