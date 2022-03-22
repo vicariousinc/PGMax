@@ -138,8 +138,8 @@ class FactorGraph:
             variable_names: A list containing the connected variable names.
                 Variable names are tuples of the type (variable_group_name, variable_name_within_variable_group)
             factor_type: Type of factor to be added
-            args: Args to be passed to the factory function.
-            kwargs: kwargs to be passed to the factory function, and an optional "name" argument
+            args: Args to be passed to the factor_type.
+            kwargs: kwargs to be passed to the factor_type, and an optional "name" argument
                 for specifying the name of a named factor group.
 
         Example:
@@ -170,7 +170,7 @@ class FactorGraph:
 
         Args:
             factory: Factory function that takes args and kwargs as input and outputs a factor group.
-            args: Args to be passed to the factor type function.
+            args: Args to be passed to the factory function.
             kwargs: kwargs to be passed to the factory function, and an optional "name" argument
                 for specifying the name of a named factor group.
         """
