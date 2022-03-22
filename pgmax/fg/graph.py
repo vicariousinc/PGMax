@@ -326,7 +326,7 @@ class FactorGraph:
                                 factor_group.factors
                                 for factor_group in self.factor_groups[factor_type]
                             ],
-                            [],
+                            (),
                         )
                     ),
                 )
@@ -335,15 +335,10 @@ class FactorGraph:
         )
         return factors
 
-    @cached_property
-    def factor_groups(self) -> OrderedDict[Type, Tuple[groups.FactorGroup, ...]]:
+    @property
+    def factor_groups(self) -> OrderedDict[Type, List[groups.FactorGroup]]:
         """Tuple of factor groups in the factor graph"""
-        return collections.OrderedDict(
-            [
-                (factor_type, tuple(self._factor_types_to_groups[factor_type]))
-                for factor_type in self._factor_types_to_groups
-            ]
-        )
+        return self._factor_types_to_groups
 
     @cached_property
     def fg_state(self) -> FactorGraphState:
