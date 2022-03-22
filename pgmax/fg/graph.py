@@ -134,6 +134,11 @@ class FactorGraph:
             kwargs: kwargs to be passed to the factory function, and an optional "name" argument
                 for specifying the name of a named factor group.
         """
+        if factor_type not in FAC_TO_VAR_UPDATES:
+            raise ValueError(
+                f"Type {factor_type} is not one of the supported factor types {FAC_TO_VAR_UPDATES.keys()}"
+            )
+
         name = kwargs.pop("name", None)
         variables = tuple(self._variable_group[variable_names])
         factor = factor_type(variables, **kwargs)
