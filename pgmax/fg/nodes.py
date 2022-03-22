@@ -47,6 +47,10 @@ class Wiring:
 
     @property
     def inference_arguments(self) -> Mapping[str, Any]:
+        """
+        Returns:
+            A dictionnary of elements used to run belief propagation.
+        """
         raise NotImplementedError(
             "Please subclass the Wiring class and override this method."
         )

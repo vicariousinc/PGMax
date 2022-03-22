@@ -39,7 +39,7 @@ from pgmax.utils import cached_property
 @dataclass
 class FactorGraph:
     """Class for representing a factor graph.
-    Factors in a graph are organized in factor groups, which are clustered in factor types.
+    Factors in a graph are clustered in factor groups, which are grouped according to their factor types.
 
     Args:
         variables: A single VariableGroup or a container containing variable groups.
@@ -123,7 +123,7 @@ class FactorGraph:
         self._register_factor_group(factor_group, name)
 
     def add_factor_by_type(
-        self, variable_names: List, factor_type: type, **kwargs
+        self, variable_names: List, factor_type: type, *args, **kwargs
     ) -> None:
         """Function to add a single factor to the FactorGraph.
 
@@ -131,6 +131,7 @@ class FactorGraph:
             variable_names: A list containing the connected variable names.
                 Variable names are tuples of the type (variable_group_name, variable_name_within_variable_group)
             factor_type: Type of factor to be added
+            args: Args to be passed to the factory function.
             kwargs: kwargs to be passed to the factory function, and an optional "name" argument
                 for specifying the name of a named factor group.
         """
@@ -141,7 +142,7 @@ class FactorGraph:
 
         name = kwargs.pop("name", None)
         variables = tuple(self._variable_group[variable_names])
-        factor = factor_type(variables, **kwargs)
+        factor = factor_type(variables, *args, **kwargs)
         factor_group = groups.SingleFactorGroup(
             variable_group=self._variable_group,
             variable_names=variable_names,
@@ -154,7 +155,7 @@ class FactorGraph:
 
         Args:
             factory: Factory function that takes args and kwargs as input and outputs a factor group.
-            args: Args to be passed to the factory function.
+            args: Args to be passed to the factor type function.
             kwargs: kwargs to be passed to the factory function, and an optional "name" argument
                 for specifying the name of a named factor group.
         """

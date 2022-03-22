@@ -32,6 +32,10 @@ class EnumerationWiring(nodes.Wiring):
 
     @property
     def inference_arguments(self) -> Mapping[str, Union[np.ndarray, int]]:
+        """
+        Returns:
+            A dictionnary of elements used to run belief propagation.
+        """
         if self.factor_configs_edge_states.shape[0] == 0:
             num_val_configs = 0
         else:
@@ -109,7 +113,7 @@ class EnumerationFactor(nodes.Factor):
             Array of shape (num_factor_configs, 2)
             factor_configs_edge_states[ii] contains a pair of global factor_config and edge_state indices
             factor_configs_edge_states[ii, 0] contains the global factor config index,
-            factor_configs_edge_states[ii, 1] contains the corresponding global edge_state index,
+            factor_configs_edge_states[ii, 1] contains the corresponding global edge_state index.
             Both indices only take into account the EnumerationFactors of the FactorGraph
         """
         edges_starts = np.insert(self.edges_num_states.cumsum(), 0, 0)[:-1]

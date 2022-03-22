@@ -34,8 +34,8 @@ class LogicalWiring(nodes.Wiring):
 
     Raises:
         ValueError: If:
-            (1) There is a factor index higher than num_logical_factors - 1
-            (2) The are no num_logical_factors different factor indices
+            (1) The are no num_logical_factors different factor indices
+            (2) There is a factor index higher than num_logical_factors - 1
     """
 
     parents_edge_states: Union[np.ndarray, jnp.ndarray]
@@ -58,6 +58,10 @@ class LogicalWiring(nodes.Wiring):
 
     @property
     def inference_arguments(self) -> Mapping[str, np.ndarray]:
+        """
+        Returns:
+            A dictionnary of elements used to run belief propagation.
+        """
         return {
             "parents_edge_states": self.parents_edge_states,
             "children_edge_states": self.children_edge_states,
@@ -66,13 +70,20 @@ class LogicalWiring(nodes.Wiring):
 
 @dataclass(frozen=True, eq=False)
 class LogicalFactor(nodes.Factor):
-    """A logical OR/AND factor
-    See https://arxiv.org/pdf/1611.02252.pdf Appendix B
+    r"""A logical OR/AND factor of the form
+    p1   p2   p3   p4
+    |    |    |    |
+     \   |    |    /
+       \  \   /   /
+            F
+            |
+            c
+    where p1... are the parents and c is the child.
 
     Raises:
         ValueError: If:
-            (1) The variables are not all binary
-            (2) There are less than 2 variables
+            (1) There are less than 2 variables
+            (2) The variables are not all binary
     """
 
     log_potentials: np.ndarray = field(init=False, default=np.empty((0,)))
@@ -90,7 +101,9 @@ class LogicalFactor(nodes.Factor):
     def parents_edge_states(self) -> np.ndarray:
         """
         Returns:
-            The parents variables edge states.
+            Array of shape (num_parents, 2)
+            parents_edge_states[ii, 0] contains the local ORFactor index,
+            parents_edge_states[ii, 1] contains the message index of the parent variable's state 0.
         """
         num_parents = len(self.variables) - 1
 
@@ -106,7 +119,8 @@ class LogicalFactor(nodes.Factor):
     def child_edge_state(self) -> np.ndarray:
         """
         Returns:
-            The child variable edge states.
+            Array of shape (num_factors,)
+            children_edge_states[ii] contains the message index of the child variable's state 0.
         """
         return np.array([2 * (len(self.variables) - 1)], dtype=int)
 
@@ -154,7 +168,7 @@ class LogicalFactor(nodes.Factor):
                 children_edge_states=np.empty((0,), dtype=int),
             )
 
-        # Note: this correspomds to all the factor_to_msgs_starts for the EnumerationFactors
+        # Note: this correspomds to all the factor_to_msgs_starts for the LogicalFactors
         num_edge_states_cumsum = np.insert(
             np.array([wiring.edges_num_states.sum() for wiring in wirings]).cumsum(),
             0,
@@ -182,7 +196,20 @@ class LogicalFactor(nodes.Factor):
 
 @dataclass(frozen=True, eq=False)
 class ORFactor(LogicalFactor):
-    """An OR factor"""
+    r"""An OR factor of the form
+    p1   p2  ...   pn
+    |    |    |    |
+     \   |    |    /
+       \  \   /   /
+            F
+            |
+            c
+    where p1... are the parents and c is the child.
+
+    An OR factor is defined as:
+    F(p1, p2, ..., pn, c) = 0 <=> c = OR(p1, p2, ..., pn)
+    F(p1, p2, ..., pn, c) = -inf o.w.
+    """
 
     pass
 
@@ -227,6 +254,7 @@ def pass_OR_fac_to_var_messages(
     )
 
     # Consider the max-product case separately.
+    # See https://arxiv.org/pdf/2111.02458.pdf, Appendix C.3
     if temperature == 0.0:
         # Get the first and second argmaxes for the incoming parents messages of each factor
         _, first_parents_argmaxes = bp_utils.get_maxes_and_argmaxes(
@@ -246,7 +274,6 @@ def pass_OR_fac_to_var_messages(
         )
 
         # Outgoing messages to parents variables
-        # See https://arxiv.org/pdf/2111.02458.pdf, Appendix C.3
         parents_msgs = jnp.minimum(
             children_tof_msgs[factor_indices]
             + sum_parents_tof_msgs_pos[factor_indices]
@@ -269,6 +296,7 @@ def pass_OR_fac_to_var_messages(
     else:
 
         def g(x):
+            "Useful function to implement belief propagation with a temperature > 0"
             return jnp.where(
                 x == 0.0,
                 0.0,

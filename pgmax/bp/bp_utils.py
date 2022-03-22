@@ -68,9 +68,6 @@ def get_maxes_and_argmaxes(
 
     Returns:
         Maxes and argmaxes arrays
-
-    Raises:
-        ValueError if the data and labels arrays do not have the same size.
     """
     num_obs = data.shape[0]
 

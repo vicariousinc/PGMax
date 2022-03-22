@@ -9,8 +9,7 @@ from pgmax.fg import graph, groups
 def test_run_bp_with_OR_factors():
     """
     Simultaneously test
-    (1) the support of ORFactors in a factor graph inference and their specialized inference
-    for different temperature
+    (1) the support of ORFactors in a factor graph and their specialized inference for different temperatures
     (2) the support of several factor types in a factor graph and during inference
 
     To do so, observe that an ORFactor can be defined as an equivalent EnumerationFactor
@@ -21,7 +20,7 @@ def test_run_bp_with_OR_factors():
     Inference for the EnumerationFactors will be run with pass_enum_fac_to_var_messages while
     inference for the ORFactors will be run with pass_OR_fac_to_var_messages.
 
-    Note: for the first seed, we add all the EnumerationFactors to FG1 and all the ORFactors to FG2
+    Note: for the first seed, add all the EnumerationFactors to FG1 and all the ORFactors to FG2
     """
     for idx in range(10):
         np.random.seed(idx)
