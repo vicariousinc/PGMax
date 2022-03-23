@@ -30,11 +30,14 @@ class LogicalWiring(nodes.Wiring):
             children_edge_states[ii] contains the message index of the child variable's state 0,
             which takes into account all the LogicalFactors of the same subtype (OR/AND) of the FactorGraph.
             The child variable's state 1 is children_edge_states[ii, 1] + 1.
+        edge_states_offset: Offset to go from a variable's relevant state to its other state
+            For ORFactors the edge_states_offset is 1, for ANDFactors the edge_states_offset is -1.
 
     Raises:
         ValueError: If:
             (1) The are no num_logical_factors different factor indices
             (2) There is a factor index higher than num_logical_factors - 1
+            (3) The edge_states_offset is not 1 or -1
     """
 
     parents_edge_states: Union[np.ndarray, jnp.ndarray]
@@ -79,6 +82,10 @@ class LogicalFactor(nodes.Factor):
     """A logical OR/AND factor of the form (p1,...,pn, c)
     where p1,...,pn are the parents variables and c is the child variable.
 
+    Args:
+        edge_states_offset: Offset to go from a variable's relevant state to its other state
+            For ORFactors the edge_states_offset is 1, for ANDFactors the edge_states_offset is -1.
+
     Raises:
         ValueError: If:
             (1) There are less than 2 variables
@@ -86,6 +93,7 @@ class LogicalFactor(nodes.Factor):
     """
 
     log_potentials: np.ndarray = field(init=False, default=np.empty((0,)))
+    edge_states_offset: int = field(init=False)
 
     def __post_init__(self):
         if len(self.variables) < 2:
@@ -149,7 +157,13 @@ class ORFactor(LogicalFactor):
     An OR factor is defined as:
     F(p1, p2, ..., pn, c) = 0 <=> c = OR(p1, p2, ..., pn)
     F(p1, p2, ..., pn, c) = -inf o.w.
+
+    Args:
+        edge_states_offset: Offset to go from a variable's relevant state to its other state
+            For ORFactors the edge_states_offset is 1.
     """
+
+    edge_states_offset: int = field(init=False, default=1)
 
     def compile_wiring(
         self, vars_to_starts: Mapping[nodes.Variable, int]
@@ -183,7 +197,7 @@ class ORFactor(LogicalFactor):
             var_states_for_edges=var_states_for_edges,
             parents_edge_states=parents_edge_states,
             children_edge_states=child_edge_state,
-            edge_states_offset=1,
+            edge_states_offset=self.edge_states_offset,
         )
 
 
@@ -195,7 +209,13 @@ class ANDFactor(LogicalFactor):
     An AND factor is defined as:
         F(p1, p2, ..., pn, c) = 0 <=> c = AND(p1, p2, ..., pn)
         F(p1, p2, ..., pn, c) = -inf o.w.
+
+    Args:
+        edge_states_offset: Offset to go from a variable's relevant state to its other state
+            For ANDFactors the edge_states_offset is -1.
     """
+
+    edge_states_offset: int = field(init=False, default=-1)
 
     def compile_wiring(
         self, vars_to_starts: Mapping[nodes.Variable, int]
@@ -229,7 +249,7 @@ class ANDFactor(LogicalFactor):
             var_states_for_edges=var_states_for_edges,
             parents_edge_states=parents_edge_states,
             children_edge_states=child_edge_state,
-            edge_states_offset=-1,
+            edge_states_offset=self.edge_states_offset,
         )
 
 

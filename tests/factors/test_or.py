@@ -19,7 +19,7 @@ def test_run_bp_with_OR_factors():
     FG2: first half of factors are defined as ORFactors, second half are defined as EnumerationFactors
 
     Inference for the EnumerationFactors will be run with pass_enum_fac_to_var_messages while
-    inference for the ORFactors will be run with pass_OR_fac_to_var_messages.
+    inference for the ORFactors will be run with pass_logical_fac_to_var_messages.
 
     Note: for the first seed, add all the EnumerationFactors to FG1 and all the ORFactors to FG2
     """

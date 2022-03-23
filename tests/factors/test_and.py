@@ -13,12 +13,15 @@ def test_run_bp_with_AND_factors():
     (1) the support of ANDFactors in a factor graph inference and their specialized inference
     for different temperature
     (2) the support of several factor types in a factor graph and during inference
+
     To do so, observe that an ANDFactor can be defined as an equivalent EnumerationFactor
     (which list all the valid AND configurations) and define two equivalent factor graphs
     FG1: first half of factors are defined as EnumerationFactors, second half are defined as ANDFactors
     FG2: first half of factors are defined as ANDFactors, second half are defined as EnumerationFactors
+
     Inference for the EnumerationFactors will be run with pass_enum_fac_to_var_messages while
-    inference for the ANDFactors will be run with pass_OR_fac_to_var_messages.
+    inference for the ANDFactors will be run with pass_logical_fac_to_var_messages.
+
     Note: for the first seed, we add all the EnumerationFactors to FG1 and all the ANDFactors to FG2
     """
     for idx in range(10):
