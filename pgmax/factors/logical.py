@@ -243,18 +243,22 @@ def pass_logical_fac_to_var_messages(
     log_potentials: Optional[jnp.ndarray] = None,
 ) -> jnp.ndarray:
 
-    """Passes messages from ORFactors to Variables.
+    """Passes messages from LogicalFactors to Variables.
 
     Args:
-        vtof_msgs: Array of shape (num_edge_state,). This holds all the flattened variable to all the ORFactors messages.
+        vtof_msgs: Array of shape (num_edge_state,). This holds all the flattened variable to all the LogicalFactors messages.
         parents_edge_states: Array of shape (num_parents, 2)
-            parents_edge_states[ii, 0] contains the global ORFactor index,
-            parents_edge_states[ii, 1] contains the message index of the parent variable's state 0.
-            Both indices only take into account the ORFactors of the FactorGraph
-            The parent variable's state 1 is parents_edge_states[ii, 2] + 1
+            parents_edge_states[ii, 0] contains the global LogicalFactor index,
+            parents_edge_states[ii, 1] contains the message index of the parent variable's relevant state.
+            For ORFactors the relevant state is 0, for ANDFactors the relevant state is 1.
+            Both indices only take into account the LogicalFactors of the FactorGraph
+            The parent variable's other state is parents_edge_states[ii, 2] + edge_states_offset
         children_edge_states: Array of shape (num_factors,)
-            children_edge_states[ii] contains the message index of the child variable's state 0
-            The child variable's state 1 is children_edge_states[ii, 1] + 1
+            children_edge_states[ii] contains the message index of the child variable's relevant state.
+            For ORFactors the relevant state is 0, for ANDFactors the relevant state is 1.
+            The child variable's other state is children_edge_states[ii, 1] + edge_states_offset
+        edge_states_offset: Offset to go from a variable's relevant state to its other state
+            For ORFactors the edge_states_offset is 1, for ANDFactors the edge_states_offset is -1.
         temperature: Temperature for loopy belief propagation.
             1.0 corresponds to sum-product, 0.0 corresponds to max-product.
 
