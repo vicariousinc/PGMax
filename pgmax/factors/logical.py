@@ -148,6 +148,42 @@ class LogicalFactor(nodes.Factor):
             edge_states_offset=wirings[0].edge_states_offset,
         )
 
+    def compile_wiring(
+        self, vars_to_starts: Mapping[nodes.Variable, int]
+    ) -> LogicalWiring:
+        """Compile LogicalWiring for the LogicalFactor
+
+        Args:
+            vars_to_starts: A dictionary that maps variables to their global starting indices
+                For an n-state variable, a global start index of m means the global indices
+                of its n variable states are m, m + 1, ..., m + n - 1
+
+        Returns:
+             LogicalWiring for the LogicalFactor
+        """
+        var_states_for_edges = np.concatenate(
+            [
+                np.arange(variable.num_states) + vars_to_starts[variable]
+                for variable in self.variables
+            ]
+        )
+        num_parents = len(self.variables) - 1
+        relevant_state = (-self.edge_states_offset + 1) / 2
+        parents_edge_states = np.vstack(
+            [
+                np.zeros(num_parents, dtype=int),
+                np.arange(relevant_state, 2 * num_parents, 2, dtype=int),
+            ],
+        ).T
+        child_edge_state = np.array([2 * num_parents + relevant_state], dtype=int)
+        return LogicalWiring(
+            edges_num_states=self.edges_num_states,
+            var_states_for_edges=var_states_for_edges,
+            parents_edge_states=parents_edge_states,
+            children_edge_states=child_edge_state,
+            edge_states_offset=self.edge_states_offset,
+        )
+
 
 @dataclass(frozen=True, eq=False)
 class ORFactor(LogicalFactor):
@@ -165,41 +201,6 @@ class ORFactor(LogicalFactor):
 
     edge_states_offset: int = field(init=False, default=1)
 
-    def compile_wiring(
-        self, vars_to_starts: Mapping[nodes.Variable, int]
-    ) -> LogicalWiring:
-        """Compile LogicalWiring for the ORFactor
-
-        Args:
-            vars_to_starts: A dictionary that maps variables to their global starting indices
-                For an n-state variable, a global start index of m means the global indices
-                of its n variable states are m, m + 1, ..., m + n - 1
-
-        Returns:
-             LogicalWiring for the ORFactor
-        """
-        var_states_for_edges = np.concatenate(
-            [
-                np.arange(variable.num_states) + vars_to_starts[variable]
-                for variable in self.variables
-            ]
-        )
-        num_parents = len(self.variables) - 1
-        parents_edge_states = np.vstack(
-            [
-                np.zeros(num_parents, dtype=int),
-                np.arange(0, 2 * num_parents, 2, dtype=int),
-            ],
-        ).T
-        child_edge_state = np.array([2 * num_parents], dtype=int)
-        return LogicalWiring(
-            edges_num_states=self.edges_num_states,
-            var_states_for_edges=var_states_for_edges,
-            parents_edge_states=parents_edge_states,
-            children_edge_states=child_edge_state,
-            edge_states_offset=self.edge_states_offset,
-        )
-
 
 @dataclass(frozen=True, eq=False)
 class ANDFactor(LogicalFactor):
@@ -216,41 +217,6 @@ class ANDFactor(LogicalFactor):
     """
 
     edge_states_offset: int = field(init=False, default=-1)
-
-    def compile_wiring(
-        self, vars_to_starts: Mapping[nodes.Variable, int]
-    ) -> LogicalWiring:
-        """Compile LogicalWiring for the ANDFactor
-
-        Args:
-            vars_to_starts: A dictionary that maps variables to their global starting indices
-                For an n-state variable, a global start index of m means the global indices
-                of its n variable states are m, m + 1, ..., m + n - 1
-
-        Returns:
-             LogicalWiring for the ANDFactor
-        """
-        var_states_for_edges = np.concatenate(
-            [
-                np.arange(variable.num_states) + vars_to_starts[variable]
-                for variable in self.variables
-            ]
-        )
-        num_parents = len(self.variables) - 1
-        parents_edge_states = np.vstack(
-            [
-                np.zeros(num_parents, dtype=int),
-                np.arange(1, 2 * num_parents, 2, dtype=int),
-            ],
-        ).T
-        child_edge_state = np.array([2 * num_parents + 1], dtype=int)
-        return LogicalWiring(
-            edges_num_states=self.edges_num_states,
-            var_states_for_edges=var_states_for_edges,
-            parents_edge_states=parents_edge_states,
-            children_edge_states=child_edge_state,
-            edge_states_offset=self.edge_states_offset,
-        )
 
 
 @functools.partial(jax.jit, static_argnames=("temperature"))
