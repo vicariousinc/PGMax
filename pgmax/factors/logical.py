@@ -177,12 +177,12 @@ class ORFactor(LogicalFactor):
                 np.arange(0, 2 * num_parents, 2, dtype=int),
             ],
         ).T
-        child_edge_states = np.array([2 * num_parents], dtype=int)
+        child_edge_state = np.array([2 * num_parents], dtype=int)
         return LogicalWiring(
             edges_num_states=self.edges_num_states,
             var_states_for_edges=var_states_for_edges,
             parents_edge_states=parents_edge_states,
-            children_edge_states=child_edge_states,
+            children_edge_states=child_edge_state,
             edge_states_offset=1,
         )
 
@@ -223,12 +223,12 @@ class ANDFactor(LogicalFactor):
                 np.arange(1, 2 * num_parents, 2, dtype=int),
             ],
         ).T
-        child_edge_states = np.array([2 * num_parents + 1], dtype=int)
+        child_edge_state = np.array([2 * num_parents + 1], dtype=int)
         return LogicalWiring(
             edges_num_states=self.edges_num_states,
             var_states_for_edges=var_states_for_edges,
             parents_edge_states=parents_edge_states,
-            children_edge_states=child_edge_states,
+            children_edge_states=child_edge_state,
             edge_states_offset=-1,
         )
 
