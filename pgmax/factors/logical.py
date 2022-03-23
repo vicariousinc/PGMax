@@ -154,7 +154,7 @@ class ORFactor(LogicalFactor):
     def compile_wiring(
         self, vars_to_starts: Mapping[nodes.Variable, int]
     ) -> LogicalWiring:
-        """Compile LogicalWiring for the LogicalFactor
+        """Compile LogicalWiring for the ORFactor
 
         Args:
             vars_to_starts: A dictionary that maps variables to their global starting indices
@@ -162,7 +162,7 @@ class ORFactor(LogicalFactor):
                 of its n variable states are m, m + 1, ..., m + n - 1
 
         Returns:
-             LogicalWiring for the LogicalFactor
+             LogicalWiring for the ORFactor
         """
         var_states_for_edges = np.concatenate(
             [
@@ -190,17 +190,17 @@ class ORFactor(LogicalFactor):
 @dataclass(frozen=True, eq=False)
 class ANDFactor(LogicalFactor):
     """An AND factor of the form (p1,...,pn, c)
-    where p1,...,pn are the parents variables and c is the child variable.
+        where p1,...,pn are the parents variables and c is the child variable.
 
-    An OR factor is defined as:
-    F(p1, p2, ..., pn, c) = 0 <=> c = OR(p1, p2, ..., pn)
-    F(p1, p2, ..., pn, c) = -inf o.w.
+    An AND factor is defined as:
+        F(p1, p2, ..., pn, c) = 0 <=> c = AND(p1, p2, ..., pn)
+        F(p1, p2, ..., pn, c) = -inf o.w.
     """
 
     def compile_wiring(
         self, vars_to_starts: Mapping[nodes.Variable, int]
     ) -> LogicalWiring:
-        """Compile LogicalWiring for the LogicalFactor
+        """Compile LogicalWiring for the ANDFactor
 
         Args:
             vars_to_starts: A dictionary that maps variables to their global starting indices
@@ -208,7 +208,7 @@ class ANDFactor(LogicalFactor):
                 of its n variable states are m, m + 1, ..., m + n - 1
 
         Returns:
-             LogicalWiring for the LogicalFactor
+             LogicalWiring for the ANDFactor
         """
         var_states_for_edges = np.concatenate(
             [
