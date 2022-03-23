@@ -228,53 +228,39 @@ class FactorGraph:
         self._factor_type_to_potentials_range = collections.OrderedDict()
         self._factor_group_to_potentials_starts = collections.OrderedDict()
         self._factor_to_potentials_starts = collections.OrderedDict()
-        factor_group_num_configs_cumsum = 0
+        factor_num_configs_cumsum = 0
 
         for factor_type, factors_groups_by_type in self.factor_groups.items():
-            factor_num_states_start = factor_num_states_cumsum
-            factor_group_num_configs_start = factor_group_num_configs_cumsum
-
-            # As inference will be run by chunking the flattened arrays of messages from variables
-            # to factors according to their factor types, this resets the offsets to 0 within a type
-            factor_num_states_cumsum_by_type = 0
-            factor_group_num_configs_cumsum_by_type = 0
-
+            factor_type_num_states_start = factor_num_states_cumsum
+            factor_type_num_configs_start = factor_num_configs_cumsum
             for factor_group in factors_groups_by_type:
                 self._factor_group_to_msgs_starts[
                     factor_group
-                ] = factor_num_states_cumsum_by_type
+                ] = factor_num_states_cumsum
                 self._factor_group_to_potentials_starts[
                     factor_group
-                ] = factor_group_num_configs_cumsum_by_type
+                ] = factor_num_configs_cumsum
 
                 for factor in factor_group.factors:
-                    self._factor_to_msgs_starts[
-                        factor
-                    ] = factor_num_states_cumsum_by_type
+                    self._factor_to_msgs_starts[factor] = factor_num_states_cumsum
                     self._factor_to_potentials_starts[
                         factor
-                    ] = factor_group_num_configs_cumsum_by_type
+                    ] = factor_num_configs_cumsum
 
-                    factor_num_states_cumsum_by_type += np.sum(factor.edges_num_states)
-                    if factor.log_potentials is not None:
-                        factor_group_num_configs_cumsum_by_type += (
-                            factor.log_potentials.shape[0]
-                        )
+                    factor_num_states_cumsum += np.sum(factor.edges_num_states)
+                    factor_num_configs_cumsum += factor.log_potentials.shape[0]
 
-            # Add global offsets
-            factor_num_states_cumsum += factor_num_states_cumsum_by_type
-            factor_group_num_configs_cumsum += factor_group_num_configs_cumsum_by_type
             self._factor_type_to_msgs_range[factor_type] = (
-                factor_num_states_start,
+                factor_type_num_states_start,
                 factor_num_states_cumsum,
             )
             self._factor_type_to_potentials_range[factor_type] = (
-                factor_group_num_configs_start,
-                factor_group_num_configs_cumsum,
+                factor_type_num_configs_start,
+                factor_num_configs_cumsum,
             )
 
         self._total_factor_num_states = factor_num_states_cumsum
-        self._total_factor_num_configs = factor_group_num_configs_cumsum
+        self._total_factor_num_configs = factor_num_configs_cumsum
 
     @cached_property
     def wiring(self) -> OrderedDict[Type, nodes.Wiring]:
