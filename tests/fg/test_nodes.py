@@ -80,13 +80,22 @@ def test_logical_factor():
     logical_factor = logical.LogicalFactor(
         variables=(parent, child),
     )
+    num_parents = len(logical_factor.variables) - 1
+    parents_edge_states = np.vstack(
+        [
+            np.zeros(num_parents, dtype=int),
+            np.arange(0, 2 * num_parents, 2, dtype=int),
+        ],
+    ).T
+    child_edge_state = np.array([2 * num_parents], dtype=int)
 
     with pytest.raises(ValueError, match="The highest LogicalFactor index must be 0"):
         logical.LogicalWiring(
             edges_num_states=logical_factor.edges_num_states,
             var_states_for_edges=None,
-            parents_edge_states=logical_factor.parents_edge_states + np.array([[1, 0]]),
-            children_edge_states=logical_factor.child_edge_state,
+            parents_edge_states=parents_edge_states + np.array([[1, 0]]),
+            children_edge_states=child_edge_state,
+            edge_states_offset=1,
         )
 
     with pytest.raises(
@@ -96,7 +105,21 @@ def test_logical_factor():
         logical.LogicalWiring(
             edges_num_states=logical_factor.edges_num_states,
             var_states_for_edges=None,
-            parents_edge_states=logical_factor.parents_edge_states
-            + np.array([[0], [1]]),
-            children_edge_states=logical_factor.child_edge_state,
+            parents_edge_states=parents_edge_states + np.array([[0], [1]]),
+            children_edge_states=child_edge_state,
+            edge_states_offset=1,
+        )
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "The LogicalWiring's edge_states_offset must be 1 (for OR) and -1 (for AND), but is 0"
+        ),
+    ):
+        logical.LogicalWiring(
+            edges_num_states=logical_factor.edges_num_states,
+            var_states_for_edges=None,
+            parents_edge_states=parents_edge_states,
+            children_edge_states=child_edge_state,
+            edge_states_offset=0,
         )
