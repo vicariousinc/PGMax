@@ -109,3 +109,17 @@ def test_logical_factor():
             children_edge_states=child_edge_state,
             edge_states_offset=1,
         )
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "The LogicalWiring's edge_states_offset must be 1 (for OR) and -1 (for AND), but is 0"
+        ),
+    ):
+        logical.LogicalWiring(
+            edges_num_states=logical_factor.edges_num_states,
+            var_states_for_edges=None,
+            parents_edge_states=parents_edge_states,
+            children_edge_states=child_edge_state,
+            edge_states_offset=0,
+        )
