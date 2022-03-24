@@ -18,9 +18,9 @@
 #
 # The original implementation is available on the [GitHub repository of the paper.](https://github.com/vicariousinc/perturb_and_max_product/blob/master/experiments/exp6_convor.py)
 
+# %%
 import functools
 
-# %%
 import jax
 import numpy as np
 from plot_images import plot_images
