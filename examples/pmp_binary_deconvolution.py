@@ -247,7 +247,7 @@ map_states = graph.decode_map_states(beliefs)
 # %% [markdown]
 # Visualizing the MAP decoding, we see that we have 4 good random samples (one per row) from the posterior!
 #
-# Because we have used one extra feature for inference, each sample recovers the 4 basic features used to simulate S, and includes an extra symbol.
+# Because we have used one extra feature for inference, each posterior sample recovers the 4 basic features used to generate the images, and includes an extra symbol.
 
 # %%
 _ = plot_images(map_states["W"].reshape(-1, feat_height, feat_width), nr=n_samples)
