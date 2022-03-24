@@ -24,6 +24,7 @@ import functools
 import jax
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.special import logit
 from tqdm.notebook import tqdm
 
 from pgmax.factors import logical
@@ -67,39 +68,76 @@ def plot_images(images, display=True, nr=None):
 # ### Load the data
 
 # %% [markdown]
-# We extract the data from the PMP paper, only keeping the first 20 images here for the sake of speed.
+# Our binary 2D convolution generative model uses two set of binary variables to form a set of binary images X:
+#  - a set W of 2D binary features shared across images
+#  - a set S of binary indicator variables representing whether each feature is present at each possible image location.
+#
+# Each binary entry of W and S is modeled with an independent Bernoulli prior. S and W are then combined by convolution, placing the features defined by W at the locations specified by S in order to form the image.
+#
+# We load the dataset of 100 images used in the PMP paper.
+# We only keep the first 20 images here for the sake of speed.
 
 # %%
-data = np.load("example_data/conv_problem.npz")["X"]
-data = data[:20]
+data = np.load("example_data/conv_problem.npz")
+W_gt = data["W"]
+X_gt = data["X"]
+X_gt = X_gt[:20]
 
-_ = plot_images(data[:, 0], nr=4)
+_ = plot_images(X_gt[:, 0], nr=4)
+
+# %% [markdown]
+# We also visualize the four 2D binary features used to generate the images above.
+#
+# We aim at recovering these binary features using PGMax.
+
+# %%
+_ = plot_images(W_gt[0], nr=1)
 
 # %% [markdown]
 # ### Construct variable grid, initialize factor graph, and add factors
 
 # %% [markdown]
-# We build a factor graph equivalent to the one in the PMP paper.
+# Our factor graph naturally includes the binary features W, the binary indicators of features locations S and the binary images obtained by convolution X.
+#
+# To generative X from W and S, we observe that a binary convolution can be represented by two set of logical factors:
+#  - a first set of ANDFactors, which combine the joint activations in S and W. We store the children of these ANDFactors in an auxiliary variable SW
+#  - a second set of ORFactors, which maps SW to X and model feature binary overlapping.
+#
+# See Section 5.6 of the [PMP paper](https://proceedings.neurips.cc/paper/2021/hash/07b1c04a30f798b5506c1ec5acfb9031-Abstract.html) for more details.
 
 # %%
-n_images, n_chan, im_height, im_width = data.shape
+# The dimensions of W used for the generation of X were (4, 5, 5,) but we set them to (5, 6, 6)
+# to simulate a more realistic scenario in which we do not know their ground truth values
 n_feat, feat_height, feat_width = 5, 6, 6
+
+n_images, n_chan, im_height, im_width = X_gt.shape
 s_height = im_height - feat_height + 1
 s_width = im_width - feat_width + 1
 
-S = groups.NDVariableArray(num_states=2, shape=(n_images, n_feat, s_height, s_width))
+# Binary features
 W = groups.NDVariableArray(
     num_states=2, shape=(n_chan, n_feat, feat_height, feat_width)
 )
+
+# Binary indicators of features locations
+S = groups.NDVariableArray(num_states=2, shape=(n_images, n_feat, s_height, s_width))
+
+# Auxiliary binary variables combining S and W
 SW = groups.NDVariableArray(
     num_states=2,
     shape=(n_images, n_chan, im_height, im_width, n_feat, feat_height, feat_width),
 )
-X = groups.NDVariableArray(num_states=2, shape=data.shape)
 
+# Binary images obtained by convolution
+X = groups.NDVariableArray(num_states=2, shape=X_gt.shape)
+
+# Factor graph
 fg = graph.FactorGraph(variables=dict(S=S, W=W, SW=SW, X=X))
 
 # %%
+# Note: although the factor adding is currently handled via for loops,
+# we have plans in the future to make this more efficient in the near future
+
 variable_names_for_OR_factors = {}
 
 # Add ANDFactors
@@ -162,28 +200,31 @@ for factor_type, factors in fg.factors.items():
 
 # %% [markdown]
 # PMP perturbs the model by adding Gumbel noise to unary potentials, then samples from the joint posterior *p(S,W | X)*.
+#
+# Note that the posterior is highly multimodal: permuting the first dimension of W and the second dimension of S
+# in the same manner does not change X, so this naturally results in multiple equivalent modes.
 
 # %%
 run_bp, get_bp_state, get_beliefs = graph.BP(fg.bp_state, 3000)
 
 # %% [markdown]
-# We first compute the evidence without perturbation, similarly to the PMP paper
+# We first compute the evidence without perturbation, similar to the PMP paper.
 
 # %%
-from scipy.special import logit as invsigmoid
-
 pe = 1e-100
-pS = 1e-100
+pS = 1e-72
 pW = 0.25
 
+# Sparsity inducing priors for S and W
 uS = np.zeros((S.shape) + (2,))
-uS[..., 1] = invsigmoid(pS)
+uS[..., 1] = logit(pS)
 
 uW = np.zeros((W.shape) + (2,))
-uW[..., 1] = invsigmoid(pW)
+uW[..., 1] = logit(pW)
 
-uX = np.zeros((data.shape) + (2,))
-uX[..., 0] = (2 * data - 1) * invsigmoid(pe)
+# Likelihood of X given the binary images
+uX = np.zeros((X_gt.shape) + (2,))
+uX[..., 0] = (2 * X_gt - 1) * logit(pe)
 
 # %% [markdown]
 # We draw a batch of samples from the posterior in parallel by transforming `run_bp`/`get_beliefs` with `jax.vmap`
@@ -204,7 +245,9 @@ beliefs = jax.vmap(get_beliefs, in_axes=0, out_axes=0)(bp_arrays)
 map_states = graph.decode_map_states(beliefs)
 
 # %% [markdown]
-# Visualizing the MAP decoding, we see that we have 4 samples from the posterior!
+# Visualizing the MAP decoding, we see that we have 4 good random samples (one per row) from the posterior!
+#
+# Because we have used one extra feature for inference, each sample recovers the 4 basic features used to simulate S, and includes an extra symbol.
 
 # %%
 _ = plot_images(map_states["W"].reshape(-1, feat_height, feat_width), nr=n_samples)
