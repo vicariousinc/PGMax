@@ -72,7 +72,7 @@ def plot_images(images, display=True, nr=None):
 #  - a set W of 2D binary features shared across images
 #  - a set S of binary indicator variables representing whether each feature is present at each possible image location.
 #
-# Each binary entry of W and S is modeled with an independent Bernoulli prior. S and W are then combined by convolution, placing the features defined by W at the locations specified by S in order to form the image.
+# Each binary entry of W and S is modeled with an independent Bernoulli prior. W and S are then combined by convolution, placing the features defined by W at the locations specified by S in order to form the image.
 #
 # We load the dataset of 100 images used in the PMP paper.
 # We only keep the first 20 images here for the sake of speed.
@@ -99,14 +99,14 @@ _ = plot_images(W_gt[0], nr=1)
 # %% [markdown]
 # Our factor graph naturally includes the binary features W, the binary indicators of features locations S and the binary images obtained by convolution X.
 #
-# To generative X from W and S, we observe that a binary convolution can be represented by two set of logical factors:
-#  - a first set of ANDFactors, which combine the joint activations in S and W. We store the children of these ANDFactors in an auxiliary variable SW
-#  - a second set of ORFactors, which maps SW to X and model feature binary overlapping.
+# To generate X from W and S, we observe that a binary convolution can be represented by two set of logical factors:
+#  - a first set of ANDFactors, which combine the joint activations in W and S. We store the children of these ANDFactors in an auxiliary variable SW
+#  - a second set of ORFactors, which maps SW to X and model (binary) features overlapping.
 #
 # See Section 5.6 of the [PMP paper](https://proceedings.neurips.cc/paper/2021/hash/07b1c04a30f798b5506c1ec5acfb9031-Abstract.html) for more details.
 
 # %%
-# The dimensions of W used for the generation of X were (4, 5, 5,) but we set them to (5, 6, 6)
+# The dimensions of W used for the generation of X were (4, 5, 5) but we set them to (5, 6, 6)
 # to simulate a more realistic scenario in which we do not know their ground truth values
 n_feat, feat_height, feat_width = 5, 6, 6
 
@@ -122,7 +122,7 @@ W = groups.NDVariableArray(
 # Binary indicators of features locations
 S = groups.NDVariableArray(num_states=2, shape=(n_images, n_feat, s_height, s_width))
 
-# Auxiliary binary variables combining S and W
+# Auxiliary binary variables combining W and S
 SW = groups.NDVariableArray(
     num_states=2,
     shape=(n_images, n_chan, im_height, im_width, n_feat, feat_height, feat_width),
@@ -135,10 +135,10 @@ X = groups.NDVariableArray(num_states=2, shape=X_gt.shape)
 fg = graph.FactorGraph(variables=dict(S=S, W=W, SW=SW, X=X))
 
 # %%
-# Note: although the factor adding is currently handled via for loops,
-# we have plans in the future to make this more efficient in the near future
+# Note: although adding Factors is currently handled via for loops,
+# we have plans to make this more efficient in the near future through the use of FactorGroups
 
-variable_names_for_OR_factors = {}
+variable_names_for_ORFactors = {}
 
 # Add ANDFactors
 for idx_img in tqdm(range(n_images)):
@@ -179,16 +179,16 @@ for idx_img in tqdm(range(n_images)):
                             )
 
                             X_var = (idx_img, idx_chan, idx_img_height, idx_img_width)
-                            if X_var not in variable_names_for_OR_factors:
-                                variable_names_for_OR_factors[X_var] = [SW_var]
+                            if X_var not in variable_names_for_ORFactors:
+                                variable_names_for_ORFactors[X_var] = [SW_var]
                             else:
-                                variable_names_for_OR_factors[X_var].append(SW_var)
+                                variable_names_for_ORFactors[X_var].append(SW_var)
 
 
 # Add ORFactors
-for X_var, variable_names_for_OR_factor in variable_names_for_OR_factors.items():
+for X_var, variable_names_for_ORFactor in variable_names_for_ORFactors.items():
     fg.add_factor_by_type(
-        variable_names=variable_names_for_OR_factor + [("X",) + X_var],  # type: ignore
+        variable_names=variable_names_for_ORFactor + [("X",) + X_var],  # type: ignore
         factor_type=logical.ORFactor,
     )
 
@@ -199,9 +199,9 @@ for factor_type, factors in fg.factors.items():
 # ### Run inference and visualize results
 
 # %% [markdown]
-# PMP perturbs the model by adding Gumbel noise to unary potentials, then samples from the joint posterior *p(S,W | X)*.
+# PMP perturbs the model by adding Gumbel noise to unary potentials, then samples from the joint posterior *p(W, S | X)*.
 #
-# Note that the posterior is highly multimodal: permuting the first dimension of W and the second dimension of S
+# Note that this posterior is highly multimodal: permuting the first dimension of W and the second dimension of S
 # in the same manner does not change X, so this naturally results in multiple equivalent modes.
 
 # %%
@@ -211,20 +211,20 @@ run_bp, get_bp_state, get_beliefs = graph.BP(fg.bp_state, 3000)
 # We first compute the evidence without perturbation, similar to the PMP paper.
 
 # %%
-pe = 1e-100
-pS = 1e-72
 pW = 0.25
+pS = 1e-72
+pX = 1e-100
 
-# Sparsity inducing priors for S and W
-uS = np.zeros((S.shape) + (2,))
-uS[..., 1] = logit(pS)
-
+# Sparsity inducing priors for W and S
 uW = np.zeros((W.shape) + (2,))
 uW[..., 1] = logit(pW)
 
-# Likelihood of X given the binary images
+uS = np.zeros((S.shape) + (2,))
+uS[..., 1] = logit(pS)
+
+# Likelihood the binary images given X
 uX = np.zeros((X_gt.shape) + (2,))
-uX[..., 0] = (2 * X_gt - 1) * logit(pe)
+uX[..., 0] = (2 * X_gt - 1) * logit(pX)
 
 # %% [markdown]
 # We draw a batch of samples from the posterior in parallel by transforming `run_bp`/`get_beliefs` with `jax.vmap`
@@ -251,5 +251,3 @@ map_states = graph.decode_map_states(beliefs)
 
 # %%
 _ = plot_images(map_states["W"].reshape(-1, feat_height, feat_width), nr=n_samples)
-
-# %%
