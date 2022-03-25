@@ -13,6 +13,8 @@ PGMax implements general [factor graphs](https://en.wikipedia.org/wiki/Factor_gr
 
 See our [blog post](https://www.vicarious.com/posts/pgmax-factor-graphs-for-discrete-probabilistic-graphical-models-and-loopy-belief-propagation-in-jax/) and [companion paper](https://arxiv.org/abs/2202.04110) for more details.
 
+PGMax is under active development. APIs may change without notice, and expect rough edges.
+
 [**Installation**](#installation)
 | [**Getting started**](#getting-started)
 
