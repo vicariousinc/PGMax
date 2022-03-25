@@ -25,7 +25,7 @@ class LogicalWiring(nodes.Wiring):
             parents_edge_states[ii, 0] contains the global ORFactor index,
             parents_edge_states[ii, 1] contains the message index of the parent variable's state 0.
             Both indices only take into account the LogicalFactors of the same subtype (OR/AND) of the FactorGraph.
-            The parent variable's state 1 is parents_edge_states[ii, 2] + 1.
+            The parent variable's state 1 is parents_edge_states[ii, 1] + 1.
         children_edge_states: Array of shape (num_factors,)
             children_edge_states[ii] contains the message index of the child variable's state 0,
             which takes into account all the LogicalFactors of the same subtype (OR/AND) of the FactorGraph.
@@ -168,7 +168,7 @@ class LogicalFactor(nodes.Factor):
             ]
         )
         num_parents = len(self.variables) - 1
-        relevant_state = (-self.edge_states_offset + 1) / 2
+        relevant_state = (-self.edge_states_offset + 1) // 2
         parents_edge_states = np.vstack(
             [
                 np.zeros(num_parents, dtype=int),
@@ -238,7 +238,7 @@ def pass_logical_fac_to_var_messages(
             parents_edge_states[ii, 1] contains the message index of the parent variable's relevant state.
             For ORFactors the relevant state is 0, for ANDFactors the relevant state is 1.
             Both indices only take into account the LogicalFactors of the FactorGraph
-            The parent variable's other state is parents_edge_states[ii, 2] + edge_states_offset
+            The parent variable's other state is parents_edge_states[ii, 1] + edge_states_offset
         children_edge_states: Array of shape (num_factors,)
             children_edge_states[ii] contains the message index of the child variable's relevant state.
             For ORFactors the relevant state is 0, for ANDFactors the relevant state is 1.

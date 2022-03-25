@@ -50,8 +50,7 @@ Here are a few self-contained Colab notebooks to help you get started on using P
 - [Tutorial on basic PGMax usage](https://colab.research.google.com/drive/1PQ9eVaOg336XzPqko-v_us3izEbjvWMW?usp=sharing)
 - [Implementing max-product LBP](https://colab.research.google.com/drive/1mSffrA1WgQwgIiJQd2pLULPa5YKAOJOX?usp=sharing) for [Recursive Cortical Networks](https://www.science.org/doi/10.1126/science.aag2612)
 - [End-to-end differentiable LBP for gradient-based PGM training](https://colab.research.google.com/drive/1yxDCLwhX0PVgFS7NHUcXG3ptMAY1CxMC?usp=sharing)
-
-
+- [2D binary deconvolution](https://colab.research.google.com/drive/1w_ufQz0u18V_paM8pI97CO11965MduO4?usp=sharing)
 
 ## Citing PGMax
 
