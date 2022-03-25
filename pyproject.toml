@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pgmax"
-version = "0.2.3"
+version = "0.3.0"
 description = "Loopy belief propagation for factor graphs on discrete variables, in JAX!"
 authors = ["Stannis Zhou <stannis@vicarious.com>", "Nishanth Kumar <njk@csail.mit.edu>", "Miguel Lazaro-Gredilla <miguel@vicarious.com>", "Dileep George <dileep@vicarious.com>"]
 maintainers = ["Stannis Zhou <stannis@vicarious.com>", "Nishanth Kumar <njk@csail.mit.edu>"]
@@ -19,8 +19,8 @@ keywords = ["PGMax", "jax"]
 python = ">=3.7,<3.11"
 jupyter = "^1.0.0"
 matplotlib = "^3.2.0"
-jax = "^0.2.14"
-jaxlib = "^0.1.67"
+jax = ">=0.2.25"
+jaxlib = ">=0.1.74"
 numpy = "^1.19.0"
 scipy = "^1.2.3"
 jupytext = "^1.11.3"
