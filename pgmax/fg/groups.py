@@ -52,13 +52,46 @@ class VariableGroup:
             MappingProxyType(self._get_names_to_variables()),
         )
 
-    @typing.overload
-    def __getitem__(self, name: Hashable) -> nodes.Variable:
-        """This function is a typing overload and is overwritten by the implemented __getitem__"""
+    # @typing.overload
+    # def __getitem__(self, name: Hashable) -> nodes.Variable:
+    #     """This function is a typing overload and is overwritten by the implemented __getitem__"""
 
-    @typing.overload
-    def __getitem__(self, name: List) -> List[nodes.Variable]:
-        """This function is a typing overload and is overwritten by the implemented __getitem__"""
+    # @typing.overload
+    # def __getitem__(self, name: List) -> List[nodes.Variable]:
+    #     """This function is a typing overload and is overwritten by the implemented __getitem__"""
+
+    # def __getitem__(self, name):
+    #     """Given a name, retrieve the associated Variable.
+
+    #     Args:
+    #         name: a single name corresponding to a single variable, or a list of such names
+
+    #     Returns:
+    #         A single variable if the name is not a list. A list of variables if name is a list
+
+    #     Raises:
+    #         ValueError: if the name is not found in the group
+    #     """
+    #     if isinstance(name, List):
+    #         names_list = name
+    #     else:
+    #         names_list = [name]
+
+    #     vars_list = []
+    #     for curr_name in names_list:
+    #         var = self._names_to_variables.get(curr_name)
+    #         if var is None:
+    #             raise ValueError(
+    #                 f"The name {curr_name} is not present in the VariableGroup {type(self)}; please ensure "
+    #                 "it's been added to the VariableGroup before trying to query it."
+    #             )
+
+    #         vars_list.append(var)
+
+    #     if isinstance(name, List):
+    #         return vars_list
+    #     else:
+    #         return vars_list[0]
 
     def __getitem__(self, name):
         """Given a name, retrieve the associated Variable.
@@ -72,26 +105,7 @@ class VariableGroup:
         Raises:
             ValueError: if the name is not found in the group
         """
-        if isinstance(name, List):
-            names_list = name
-        else:
-            names_list = [name]
-
-        vars_list = []
-        for curr_name in names_list:
-            var = self._names_to_variables.get(curr_name)
-            if var is None:
-                raise ValueError(
-                    f"The name {curr_name} is not present in the VariableGroup {type(self)}; please ensure "
-                    "it's been added to the VariableGroup before trying to query it."
-                )
-
-            vars_list.append(var)
-
-        if isinstance(name, List):
-            return vars_list
-        else:
-            return vars_list[0]
+        return self._names_to_variables[name]
 
     def _get_names_to_variables(self) -> OrderedDict[Any, nodes.Variable]:
         """Function that generates a dictionary mapping names to variables.
@@ -185,49 +199,63 @@ class CompositeVariableGroup(VariableGroup):
             MappingProxyType(self._get_names_to_variables()),
         )
 
-    @typing.overload
-    def __getitem__(self, name: Hashable) -> nodes.Variable:
-        """This function is a typing overload and is overwritten by the implemented __getitem__"""
+    # @typing.overload
+    # def __getitem__(self, name: Hashable) -> nodes.Variable:
+    #     """This function is a typing overload and is overwritten by the implemented __getitem__"""
 
-    @typing.overload
-    def __getitem__(self, name: List) -> List[nodes.Variable]:
-        """This function is a typing overload and is overwritten by the implemented __getitem__"""
+    # @typing.overload
+    # def __getitem__(self, name: List) -> List[nodes.Variable]:
+    #     """This function is a typing overload and is overwritten by the implemented __getitem__"""
+
+    # def __getitem__(self, name):
+    #     """Given a name, retrieve the associated Variable from the associated VariableGroup.
+
+    #     Args:
+    #         name: a single name corresponding to a single Variable within a VariableGroup, or a list
+    #             of such names
+
+    #     Returns:
+    #         A single variable if the name is not a list. A list of variables if name is a list
+
+    #     Raises:
+    #         ValueError: if the name does not have the right format (tuples with at least two elements).
+    #     """
+    #     if isinstance(name, List):
+    #         names_list = name
+    #     else:
+    #         names_list = [name]
+
+    #     vars_list = []
+    #     for curr_name in names_list:
+    #         if len(curr_name) < 2:
+    #             raise ValueError(
+    #                 "The name needs to have at least 2 elements to index from a composite variable group."
+    #             )
+
+    #         variable_group = self.variable_group_container[curr_name[0]]
+    #         if len(curr_name) == 2:
+    #             vars_list.append(variable_group[curr_name[1]])
+    #         else:
+    #             vars_list.append(variable_group[curr_name[1:]])
+
+    #     if isinstance(name, List):
+    #         return vars_list
+    #     else:
+    #         return vars_list[0]
 
     def __getitem__(self, name):
-        """Given a name, retrieve the associated Variable from the associated VariableGroup.
+        """Given a name, retrieve the associated Variable.
 
         Args:
-            name: a single name corresponding to a single Variable within a VariableGroup, or a list
-                of such names
+            name: a single name corresponding to a single variable, or a list of such names
 
         Returns:
             A single variable if the name is not a list. A list of variables if name is a list
 
         Raises:
-            ValueError: if the name does not have the right format (tuples with at least two elements).
+            ValueError: if the name is not found in the group
         """
-        if isinstance(name, List):
-            names_list = name
-        else:
-            names_list = [name]
-
-        vars_list = []
-        for curr_name in names_list:
-            if len(curr_name) < 2:
-                raise ValueError(
-                    "The name needs to have at least 2 elements to index from a composite variable group."
-                )
-
-            variable_group = self.variable_group_container[curr_name[0]]
-            if len(curr_name) == 2:
-                vars_list.append(variable_group[curr_name[1]])
-            else:
-                vars_list.append(variable_group[curr_name[1:]])
-
-        if isinstance(name, List):
-            return vars_list
-        else:
-            return vars_list[0]
+        return self.variable_group_container[name[0]][name[1]]
 
     def _get_names_to_variables(self) -> OrderedDict[Hashable, nodes.Variable]:
         """Function that generates a dictionary mapping names to variables.
@@ -751,22 +779,43 @@ class EnumerationFactorGroup(FactorGroup):
                 self.log_potentials, (num_factors, self.factor_configs.shape[0])
             )
 
-        variables_to_factors = collections.OrderedDict(
-            [
-                (
-                    frozenset(self.variable_names_for_factors[ii]),
-                    enumeration.EnumerationFactor(
-                        variables=tuple(
-                            self.variable_group[self.variable_names_for_factors[ii]]
-                        ),
-                        configs=self.factor_configs,
-                        log_potentials=log_potentials[ii],
-                    ),
-                )
-                for ii in range(len(self.variable_names_for_factors))
-            ]
+        log_potential_for_factors = [
+            log_potentials[ii] for ii in range(len(self.variable_names_for_factors))
+        ]
+        object.__setattr__(self, "log_potential_for_factors", log_potential_for_factors)
+        return {}
+
+    def compile_wiring(
+        self, vars_to_starts: Mapping[nodes.Variable, int]
+    ) -> enumeration.EnumerationWiring:
+        return compile_factor_wiring(
+            self.variable_names_for_factors,
+            self.variable_group,
+            self.factor_configs,
+            vars_to_starts,
         )
-        return variables_to_factors
+
+    @cached_property
+    def factor_type(self) -> Type:
+        """Factor type."""
+        return enumeration.EnumerationFactor
+
+        # variables_to_factors = collections.OrderedDict(
+        #     [
+        #         (
+        #             frozenset(self.variable_names_for_factors[ii]),
+        #             enumeration.EnumerationFactor(
+        #                 variables=tuple(
+        #                     self.variable_group[self.variable_names_for_factors[ii]]
+        #                 ),
+        #                 configs=self.factor_configs,
+        #                 log_potentials=log_potentials[ii],
+        #             ),
+        #         )
+        #         for ii in range(len(self.variable_names_for_factors))
+        #     ]
+        # )
+        # return variables_to_factors
 
     def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
         """Function that turns meaningful structured data into a flat data array for internal use.
@@ -951,6 +1000,12 @@ class PairwiseFactorGroup(FactorGroup):
             log_potential_matrix,
             (len(self.variable_names_for_factors),) + log_potential_matrix.shape[-2:],
         )
+
+        log_potential_for_factors = [
+            log_potential_matrix[ii, factor_configs[:, 0], factor_configs[:, 1]]
+            for ii in range(len(self.variable_names_for_factors))
+        ]
+        object.__setattr__(self, "log_potential_for_factors", log_potential_for_factors)
         return {}
         # variables_to_factors = collections.OrderedDict(
         #     [
@@ -974,50 +1029,11 @@ class PairwiseFactorGroup(FactorGroup):
     def compile_wiring(
         self, vars_to_starts: Mapping[nodes.Variable, int]
     ) -> enumeration.EnumerationWiring:
-        import time
-
-        start = time.time()
-        edges_num_states = np.array(
-            [
-                [
-                    self.variable_group[variable_name].num_states
-                    for variable_name in variable_names_for_factor
-                ]
-                for variable_names_for_factor in self.variable_names_for_factors
-            ]
-        )
-        print(time.time() - start)
-        var_states_for_edges = np.concatenate(
-            [
-                np.arange(self.variable_group[variable_name].num_states)
-                + vars_to_starts[self.variable_group[variable_name]]
-                for variable_names_for_factor in self.variable_names_for_factors
-                for variable_name in variable_names_for_factor
-            ]
-        )
-        print(time.time() - start)
-        edges_starts = np.insert(edges_num_states.cumsum(), 0, 0)[:-1].reshape(
-            edges_num_states.shape
-        )
-
-        factor_configs_edge_states = np.stack(
-            [
-                np.repeat(
-                    np.arange(
-                        self.factor_configs.shape[0]
-                        * len(self.variable_names_for_factors)
-                    ),
-                    self.factor_configs.shape[1],
-                ),
-                (self.factor_configs[None] + edges_starts[:, None, :]).flatten(),
-            ],
-            axis=1,
-        )
-        print(time.time() - start)
-        return enumeration.EnumerationWiring(
-            edges_num_states=np.concatenate(edges_num_states),
-            var_states_for_edges=var_states_for_edges,
-            factor_configs_edge_states=factor_configs_edge_states,
+        return compile_factor_wiring(
+            self.variable_names_for_factors,
+            self.variable_group,
+            self.factor_configs,
+            vars_to_starts,
         )
 
     @cached_property
@@ -1103,3 +1119,53 @@ class PairwiseFactorGroup(FactorGroup):
             )
 
         return data
+
+
+def compile_factor_wiring(
+    variable_names_for_factors, variable_group, factor_configs, vars_to_starts
+):
+    import time
+
+    start = time.time()
+
+    edges_starts = 0
+    edges_num_states = []
+    var_states_for_edges = []
+
+    for variable_names_for_factor in variable_names_for_factors:
+        edges_starts_for_factor = []
+        for variable_name in variable_names_for_factor:
+            variable = variable_group[variable_name]
+            num_states = variable.num_states
+
+            edges_starts_for_factor.append(edges_starts)
+            this_var_states_for_edges = np.arange(
+                vars_to_starts[variable], vars_to_starts[variable] + num_states
+            )
+            var_states_for_edges.append(this_var_states_for_edges)
+
+            edges_starts += num_states
+        edges_num_states.append(edges_starts_for_factor)
+    print(time.time() - start)
+
+    edges_num_states = np.array(edges_num_states)
+    edges_starts = np.insert(edges_num_states.cumsum(), 0, 0)[:-1].reshape(
+        edges_num_states.shape
+    )
+
+    factor_configs_edge_states = np.stack(
+        [
+            np.repeat(
+                np.arange(factor_configs.shape[0] * len(variable_names_for_factors)),
+                factor_configs.shape[1],
+            ),
+            (factor_configs[None] + edges_starts[:, None, :]).flatten(),
+        ],
+        axis=1,
+    )
+    print(time.time() - start)
+    return enumeration.EnumerationWiring(
+        edges_num_states=np.concatenate(edges_num_states),
+        var_states_for_edges=var_states_for_edges,
+        factor_configs_edge_states=factor_configs_edge_states,
+    )

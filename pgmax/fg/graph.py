@@ -203,8 +203,8 @@ class FactorGraph:
                 )
             self._variables_to_factors[variables] = factor
 
-        factor_type = type(factor)
-        self._factor_types_to_groups[factor_type].append(factor_group)
+        factor_group_type = factor_group.factor_type
+        self._factor_types_to_groups[factor_group_type].append(factor_group)
         if name is not None:
             self._named_factor_groups[name] = factor_group
 
@@ -276,8 +276,8 @@ class FactorGraph:
                 (
                     factor_type,
                     [
-                        factor.compile_wiring(self._vars_to_starts)
-                        for factor in self.factors[factor_type]
+                        factor_group.compile_wiring(self._vars_to_starts)
+                        for factor_group in self.factor_groups[factor_type]
                     ],
                 )
                 for factor_type in self.factors
