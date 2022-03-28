@@ -784,7 +784,7 @@ class FToVMessages:
         )
 
 
-@functools.partial(jax.jit, static_argnames="fg_state")
+# @functools.partial(jax.jit, static_argnames="fg_state")
 def update_evidence(
     evidence: jnp.ndarray, updates: Dict[Any, jnp.ndarray], fg_state: FactorGraphState
 ) -> jnp.ndarray:
@@ -811,13 +811,15 @@ def update_evidence(
 
             start_index = fg_state.vars_to_starts[variable_group.variables[0]]
             flat_data = variable_group.flatten(data)
-            evidence = evidence.at[start_index : start_index + flat_data.shape[0]].set(
-                flat_data
-            )
+            # evidence = evidence.at[start_index : start_index + flat_data.shape[0]].set(
+            #     flat_data
+            # )
+            evidence[start_index : start_index + flat_data.shape[0]] = flat_data
         else:
             var = fg_state.variable_group[name]
             start_index = fg_state.vars_to_starts[var]
-            evidence = evidence.at[start_index : start_index + var.num_states].set(data)
+            # evidence = evidence.at[start_index : start_index + var.num_states].set(data)
+            evidence[start_index : start_index + var.num_states] = data
     return evidence
 
 
@@ -942,9 +944,11 @@ def BP(
         [wiring[factor_type].edges_num_states for factor_type in FAC_TO_VAR_UPDATES]
     )
     max_msg_size = int(np.max(edges_num_states))
+
     var_states_for_edges = np.concatenate(
         [wiring[factor_type].var_states_for_edges for factor_type in FAC_TO_VAR_UPDATES]
     )
+    print(var_states_for_edges)
     inference_arguments: Dict[type, Mapping] = {
         factor_type: wiring[factor_type].inference_arguments
         for factor_type in FAC_TO_VAR_UPDATES
