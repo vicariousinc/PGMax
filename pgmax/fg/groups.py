@@ -17,6 +17,7 @@ from typing import (
     OrderedDict,
     Sequence,
     Tuple,
+    Type,
     Union,
 )
 
@@ -71,7 +72,6 @@ class VariableGroup:
         Raises:
             ValueError: if the name is not found in the group
         """
-
         if isinstance(name, List):
             names_list = name
         else:
@@ -263,7 +263,6 @@ class CompositeVariableGroup(VariableGroup):
         Args:
             data: Meaningful structured data.
                 The structure of data should match self.variable_group_container.
-
 
         Returns:
             A flat jnp.array for internal use
@@ -943,29 +942,88 @@ class PairwiseFactorGroup(FactorGroup):
             .transpose((1, 2, 0))
             .reshape((-1, 2))
         )
-        object.__setattr__(self, "log_potential_matrix", log_potential_matrix)
+        object.__setattr__(self, "factor_configs", factor_configs)
+
+        object.__setattr__(
+            self, "log_potential_matrix", log_potential_matrix
+        )  # why before broadcast?
         log_potential_matrix = np.broadcast_to(
             log_potential_matrix,
             (len(self.variable_names_for_factors),) + log_potential_matrix.shape[-2:],
         )
-        variables_to_factors = collections.OrderedDict(
+        return {}
+        # variables_to_factors = collections.OrderedDict(
+        #     [
+        #         (
+        #             frozenset(self.variable_names_for_factors[ii]),
+        #             enumeration.EnumerationFactor(
+        #                 variables=tuple(
+        #                     self.variable_group[self.variable_names_for_factors[ii]]
+        #                 ),
+        #                 configs=factor_configs,
+        #                 log_potentials=log_potential_matrix[
+        #                     ii, factor_configs[:, 0], factor_configs[:, 1]
+        #                 ],
+        #             ),
+        #         )
+        #         for ii in range(len(self.variable_names_for_factors))
+        #     ]
+        # )
+        # return variables_to_factors
+
+    def compile_wiring(
+        self, vars_to_starts: Mapping[nodes.Variable, int]
+    ) -> enumeration.EnumerationWiring:
+        import time
+
+        start = time.time()
+        edges_num_states = np.array(
             [
-                (
-                    frozenset(self.variable_names_for_factors[ii]),
-                    enumeration.EnumerationFactor(
-                        variables=tuple(
-                            self.variable_group[self.variable_names_for_factors[ii]]
-                        ),
-                        configs=factor_configs,
-                        log_potentials=log_potential_matrix[
-                            ii, factor_configs[:, 0], factor_configs[:, 1]
-                        ],
-                    ),
-                )
-                for ii in range(len(self.variable_names_for_factors))
+                [
+                    self.variable_group[variable_name].num_states
+                    for variable_name in variable_names_for_factor
+                ]
+                for variable_names_for_factor in self.variable_names_for_factors
             ]
         )
-        return variables_to_factors
+        print(time.time() - start)
+        var_states_for_edges = np.concatenate(
+            [
+                np.arange(self.variable_group[variable_name].num_states)
+                + vars_to_starts[self.variable_group[variable_name]]
+                for variable_names_for_factor in self.variable_names_for_factors
+                for variable_name in variable_names_for_factor
+            ]
+        )
+        print(time.time() - start)
+        edges_starts = np.insert(edges_num_states.cumsum(), 0, 0)[:-1].reshape(
+            edges_num_states.shape
+        )
+
+        factor_configs_edge_states = np.stack(
+            [
+                np.repeat(
+                    np.arange(
+                        self.factor_configs.shape[0]
+                        * len(self.variable_names_for_factors)
+                    ),
+                    self.factor_configs.shape[1],
+                ),
+                (self.factor_configs[None] + edges_starts[:, None, :]).flatten(),
+            ],
+            axis=1,
+        )
+        print(time.time() - start)
+        return enumeration.EnumerationWiring(
+            edges_num_states=np.concatenate(edges_num_states),
+            var_states_for_edges=var_states_for_edges,
+            factor_configs_edge_states=factor_configs_edge_states,
+        )
+
+    @cached_property
+    def factor_type(self) -> Type:
+        """Factor type."""
+        return enumeration.EnumerationFactor
 
     def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
         """Function that turns meaningful structured data into a flat data array for internal use.
