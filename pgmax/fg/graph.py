@@ -200,7 +200,7 @@ class FactorGraph:
                 f"A factor group with the name {name} already exists. Please choose a different name!"
             )
 
-        factor_group_type = groups.GROUPS_TO_TYPES[type(factor_group)]
+        factor_group_type = GROUPS_TO_TYPES[type(factor_group)]
         self._factor_types_to_groups[factor_group_type].append(factor_group)
         if name is not None:
             self._named_factor_groups[name] = factor_group
