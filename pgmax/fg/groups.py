@@ -755,16 +755,7 @@ class EnumerationFactorGroup(FactorGroup):
     factor_configs: np.ndarray
     log_potentials: Optional[np.ndarray] = None
 
-    @cached_property
-    def factor_group_log_potentials_full(self) -> np.ndarray:
-        """Function to compile potential array for the factor group
-
-        Returns:
-            An array of log potentials for the factor groups.
-
-        Raises:
-            ValueError: if the specified log_potentials is not of the right shape
-        """
+    def __post_init__(self):
         num_factors = len(self.variable_names_for_factors)
         num_val_configs = self.factor_configs.shape[0]
         if self.log_potentials is None:
@@ -784,9 +775,23 @@ class EnumerationFactorGroup(FactorGroup):
             log_potentials = np.broadcast_to(
                 self.log_potentials, (num_factors, self.factor_configs.shape[0])
             )
+        object.__setattr__(self, "log_potentials", log_potentials)
 
+    @cached_property
+    def factor_group_log_potentials_full(self) -> np.ndarray:
+        """Function to compile potential array for the factor group
+
+        Returns:
+            An array of log potentials for the factor groups.
+
+        Raises:
+            ValueError: if the specified log_potentials is not of the right shape
+        """
         factor_group_log_potentials_full = np.array(
-            [log_potentials[ii] for ii in range(len(self.variable_names_for_factors))]
+            [
+                self.log_potentials[ii]
+                for ii in range(len(self.variable_names_for_factors))
+            ]
         )
         return factor_group_log_potentials_full
 
@@ -921,29 +926,6 @@ class PairwiseFactorGroup(FactorGroup):
         log_potential_matrix: array of shape (var1.num_states, var2.num_states),
             where var1 and var2 are the 2 VariableGroups (that may refer to the same
             VariableGroup) whose names are present in each sub-list from self.variable_names_for_factors.
-    """
-
-    variable_names_for_factors: Sequence[List]
-    log_potential_matrix: Optional[np.ndarray] = None
-
-    def __post_init__(self):
-        factor_configs = (
-            np.mgrid[
-                : self.log_potential_matrix.shape[-2],
-                : self.log_potential_matrix.shape[-1],
-            ]
-            .transpose((1, 2, 0))
-            .reshape((-1, 2))
-        )
-        object.__setattr__(self, "factor_configs", factor_configs)
-
-    @cached_property
-    def factor_group_log_potentials_full(self) -> np.ndarray:
-        """Function to compile potential array for the factor group
-
-        Returns:
-            An array of log potentials for the factor groups.
-
         Raises:
             ValueError if:
                 (1) The specified log_potential_matrix is not a 2D or 3D array.
@@ -951,7 +933,12 @@ class PairwiseFactorGroup(FactorGroup):
                 (3) The specified log_potential_matrix does not match the number of factors.
                 (4) The specified log_potential_matrix does not match the number of variable states of the
                     variables in the factors.
-        """
+    """
+
+    variable_names_for_factors: Sequence[List]
+    log_potential_matrix: Optional[np.ndarray] = None
+
+    def __post_init__(self):
         if self.log_potential_matrix is None:
             log_potential_matrix = np.zeros(
                 (
@@ -1013,9 +1000,28 @@ class PairwiseFactorGroup(FactorGroup):
                 )
         object.__setattr__(self, "log_potential_matrix", log_potential_matrix)
 
+        factor_configs = (
+            np.mgrid[
+                : self.log_potential_matrix.shape[-2],
+                : self.log_potential_matrix.shape[-1],
+            ]
+            .transpose((1, 2, 0))
+            .reshape((-1, 2))
+        )
+        object.__setattr__(self, "factor_configs", factor_configs)
+
+    @cached_property
+    def factor_group_log_potentials_full(self) -> np.ndarray:
+        """Function to compile potential array for the factor group
+
+        Returns:
+            An array of log potentials for the factor groups.
+        """
+
         log_potential_matrix = np.broadcast_to(
-            log_potential_matrix,
-            (len(self.variable_names_for_factors),) + log_potential_matrix.shape[-2:],
+            self.log_potential_matrix,
+            (len(self.variable_names_for_factors),)
+            + self.log_potential_matrix.shape[-2:],
         )
 
         factor_group_log_potentials_full = np.array(

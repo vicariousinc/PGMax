@@ -17,10 +17,3 @@ FAC_TO_VAR_UPDATES: OrderedDict[
         (logical.ANDFactor, logical.pass_logical_fac_to_var_messages),
     ]
 )
-
-GROUPS_TO_TYPES: OrderedDict[Type, Type] = collections.OrderedDict(
-    [
-        (groups.PairwiseFactorGroup, enumeration.EnumerationFactor),
-        (groups.EnumerationFactorGroup, enumeration.EnumerationFactor),
-    ]
-)
