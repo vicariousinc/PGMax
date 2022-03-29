@@ -230,13 +230,15 @@ from pgmax.utils import cached_property
 class LogicalFactorGroup(FactorGroup):
     """Class to represent a group of LogicalFactors.
 
-    All factors in the group are assumed to have the same edge_states_offset, ie
-    they are all ORFactors or ANDFactors.
+    All factors in the group are assumed to have the same edge_states_offset.
+    Consequently, the factors are all ORFactors or ANDFactors.
 
     Args:
         variable_names_for_factors: A list of list of variable names, where each innermost element is the
             name of a variable in variable_group. Each list within the outer list is taken to contain
             the names of the variables connected to a factor.
+        edge_states_offset: Offset to go from a variable's relevant state to its other state
+            For ORFactors the edge_states_offset is 1, for ANDFactors the edge_states_offset is -1.
     """
 
     # TODO: Add variable_names_for_factors to FactorGroup

@@ -6,7 +6,6 @@ from typing import Callable, OrderedDict, Type
 import jax.numpy as jnp
 
 from pgmax.factors import enumeration, logical
-from pgmax.fg import groups
 
 FAC_TO_VAR_UPDATES: OrderedDict[
     Type, Callable[..., jnp.ndarray]

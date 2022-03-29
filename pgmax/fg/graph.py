@@ -970,7 +970,6 @@ def BP(
     var_states_for_edges = np.concatenate(
         [wiring[factor_type].var_states_for_edges for factor_type in FAC_TO_VAR_UPDATES]
     )
-    print(var_states_for_edges)
     inference_arguments: Dict[type, Mapping] = {
         factor_type: wiring[factor_type].inference_arguments
         for factor_type in FAC_TO_VAR_UPDATES

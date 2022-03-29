@@ -92,20 +92,6 @@ class VariableGroup:
         else:
             return vars_list[0]
 
-    # def __getitem__(self, name):
-    #     """Given a name, retrieve the associated Variable.
-
-    #     Args:
-    #         name: a single name corresponding to a single variable, or a list of such names
-
-    #     Returns:
-    #         A single variable if the name is not a list. A list of variables if name is a list
-
-    #     Raises:
-    #         ValueError: if the name is not found in the group
-    #     """
-    #     return self._names_to_variables[name]
-
     def _get_names_to_variables(self) -> OrderedDict[Any, nodes.Variable]:
         """Function that generates a dictionary mapping names to variables.
 
@@ -241,20 +227,6 @@ class CompositeVariableGroup(VariableGroup):
             return vars_list
         else:
             return vars_list[0]
-
-    # def __getitem__(self, name):
-    #     """Given a name, retrieve the associated Variable.
-
-    #     Args:
-    #         name: a single name corresponding to a single variable, or a list of such names
-
-    #     Returns:
-    #         A single variable if the name is not a list. A list of variables if name is a list
-
-    #     Raises:
-    #         ValueError: if the name is not found in the group
-    #     """
-    #     return self.variable_group_container[name[0]][name[1]]
 
     def _get_names_to_variables(self) -> OrderedDict[Hashable, nodes.Variable]:
         """Function that generates a dictionary mapping names to variables.
@@ -824,7 +796,18 @@ class EnumerationFactorGroup(FactorGroup):
     def compile_wiring(
         self, vars_to_starts: Mapping[nodes.Variable, int]
     ) -> enumeration.EnumerationWiring:
-        return compile_factor_wiring(
+        """Compile EnumerationWiring for the EnumerationFactorGroup
+
+        Args:
+            vars_to_starts: A dictionary that maps variables to their global starting indices
+                For an n-state variable, a global start index of m means the global indices
+                of its n variable states are m, m + 1, ..., m + n - 1
+
+        Returns:
+             EnumerationWiring for the EnumerationFactorGroup
+        """
+
+        return _compile_factor_group_wiring(
             self.variable_names_for_factors,
             self.variable_group,
             self.factor_configs,
@@ -939,7 +922,7 @@ class PairwiseFactorGroup(FactorGroup):
     log_potential_matrix: Optional[np.ndarray] = None
 
     def __post_init__(self):
-        # TODO: move test from EnumerationFactor to here
+        # TODO: move all asserts from EnumerationFactor to here
 
         if self.log_potential_matrix is None:
             log_potential_matrix = np.zeros(
@@ -1065,7 +1048,18 @@ class PairwiseFactorGroup(FactorGroup):
     def compile_wiring(
         self, vars_to_starts: Mapping[nodes.Variable, int]
     ) -> enumeration.EnumerationWiring:
-        return compile_factor_wiring(
+        """Compile EnumerationWiring for the PairwiseFactorGroup
+
+        Args:
+            vars_to_starts: A dictionary that maps variables to their global starting indices
+                For an n-state variable, a global start index of m means the global indices
+                of its n variable states are m, m + 1, ..., m + n - 1
+
+        Returns:
+             EnumerationWiring for the PairwiseFactorGroup
+        """
+
+        return _compile_factor_group_wiring(
             self.variable_names_for_factors,
             self.variable_group,
             self.factor_configs,
@@ -1152,15 +1146,13 @@ class PairwiseFactorGroup(FactorGroup):
         return data
 
 
-def compile_factor_wiring(
+def _compile_factor_group_wiring(
     variable_names_for_factors, variable_group, factor_configs, vars_to_starts
 ):
-    edges_starts = 0
     edges_num_states = []
     var_states_for_edges = []
 
     for variable_names_for_factor in variable_names_for_factors:
-        edges_starts_for_factor = []
         for variable_name in variable_names_for_factor:
             if isinstance(variable_group, VariableGroup):
                 variable = variable_group._names_to_variables[variable_name]
@@ -1169,19 +1161,16 @@ def compile_factor_wiring(
                     variable_name[1]
                 ]
             num_states = variable.num_states
+            edges_num_states.append(num_states)
 
-            edges_starts_for_factor.append(edges_starts)
             this_var_states_for_edges = np.arange(
                 vars_to_starts[variable], vars_to_starts[variable] + num_states
             )
             var_states_for_edges.append(this_var_states_for_edges)
 
-            edges_starts += num_states
-        edges_num_states.append(edges_starts_for_factor)
-
     edges_num_states = np.array(edges_num_states)
     edges_starts = np.insert(edges_num_states.cumsum(), 0, 0)[:-1].reshape(
-        edges_num_states.shape
+        -1, factor_configs.shape[1]
     )
 
     factor_configs_edge_states = np.stack(
@@ -1195,7 +1184,7 @@ def compile_factor_wiring(
         axis=1,
     )
     return enumeration.EnumerationWiring(
-        edges_num_states=np.concatenate(edges_num_states),
+        edges_num_states=edges_num_states,
         var_states_for_edges=np.concatenate(var_states_for_edges),
         factor_configs_edge_states=factor_configs_edge_states,
     )
