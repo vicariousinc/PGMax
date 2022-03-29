@@ -6,6 +6,7 @@ from typing import Callable, OrderedDict, Type
 import jax.numpy as jnp
 
 from pgmax.factors import enumeration, logical
+from pgmax.fg import groups
 
 FAC_TO_VAR_UPDATES: OrderedDict[
     Type, Callable[..., jnp.ndarray]
@@ -14,5 +15,12 @@ FAC_TO_VAR_UPDATES: OrderedDict[
         (enumeration.EnumerationFactor, enumeration.pass_enum_fac_to_var_messages),
         (logical.ORFactor, logical.pass_logical_fac_to_var_messages),
         (logical.ANDFactor, logical.pass_logical_fac_to_var_messages),
+    ]
+)
+
+GROUPS_TO_TYPES: OrderedDict[Type, Type] = collections.OrderedDict(
+    [
+        (groups.PairwiseFactorGroup, enumeration.EnumerationFactor),
+        (groups.EnumerationFactorGroup, enumeration.EnumerationFactor),
     ]
 )

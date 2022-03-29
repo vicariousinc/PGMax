@@ -17,7 +17,6 @@ from typing import (
     OrderedDict,
     Sequence,
     Tuple,
-    Type,
     Union,
 )
 
@@ -583,21 +582,9 @@ class FactorGroup:
         variable_group: either a VariableGroup or - if the elements of more than one VariableGroup
             are connected to this FactorGroup - then a CompositeVariableGroup. This holds
             all the variables that are connected to this FactorGroup
-
-    Attributes:
-        _variables_to_factors: maps set of connected variables to the corresponding factors
     """
 
     variable_group: Union[CompositeVariableGroup, VariableGroup]
-    _variables_to_factors: Mapping[FrozenSet, nodes.Factor] = field(init=False)
-
-    def __post_init__(self) -> None:
-        """Initializes a tuple of all the factors contained within this FactorGroup."""
-        object.__setattr__(
-            self,
-            "_variables_to_factors",
-            MappingProxyType(self._get_variables_to_factors()),
-        )
 
     def __getitem__(self, variables: Union[Sequence, Collection]) -> nodes.Factor:
         """Function to query individual factors in the factor group
@@ -621,19 +608,44 @@ class FactorGroup:
         return self._variables_to_factors[variables]
 
     @cached_property
+    def factors(self) -> Tuple[nodes.Factor, ...]:
+        """Returns all factors in the factor group.
+        This function is only called on demand when the user requires it."""
+        return tuple(self._variables_to_factors.values())
+
+    @cached_property
+    def _variables_to_factors(self) -> Mapping[FrozenSet, nodes.Factor]:
+        """Function to compile potential array for the factor group.
+        This function is only called on demand when the user requires it.
+
+        Returns:
+            A dictionnary mapping set of connected variables to the corresponding factors
+        """
+        return self._get_variables_to_factors()
+
+    @cached_property
     def factor_group_log_potentials(self) -> np.ndarray:
+        """Flattened array of log potentials"""
+        return self.factor_group_log_potentials_full.flatten()
+
+    @cached_property
+    def factor_group_log_potentials_full(self) -> np.ndarray:
         """Function to compile potential array for the factor group
 
         Returns
             A jnp array representing the log of the potential function for
             the factor group
         """
-        return np.concatenate([self.log_potential_for_factors.flatten()])
+        raise NotImplementedError(
+            "Please subclass the FactorGroup class and override this method"
+        )
+        # return np.empty((0,))
 
     def _get_variables_to_factors(
         self,
     ) -> OrderedDict[FrozenSet, Any]:
         """Function that generates a dictionary mapping names to factors.
+        This function is only called on demand when the user requires it.
 
         Returns:
             A dictionary mapping all possible names to different factors.
@@ -641,11 +653,6 @@ class FactorGroup:
         raise NotImplementedError(
             "Please subclass the FactorGroup class and override this method"
         )
-
-    @cached_property
-    def factors(self) -> Tuple[nodes.Factor, ...]:
-        """Returns all factors in the factor group."""
-        return tuple(self._variables_to_factors.values())
 
     def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
         """Function that turns meaningful structured data into a flat data array for internal use.
@@ -748,13 +755,12 @@ class EnumerationFactorGroup(FactorGroup):
     factor_configs: np.ndarray
     log_potentials: Optional[np.ndarray] = None
 
-    def _get_variables_to_factors(
-        self,
-    ) -> OrderedDict[FrozenSet, enumeration.EnumerationFactor]:
-        """Function that generates a dictionary mapping set of connected variables to factors.
+    @cached_property
+    def factor_group_log_potentials_full(self) -> np.ndarray:
+        """Function to compile potential array for the factor group
 
         Returns:
-            a dictionary mapping all possible set of connected variables to different factors.
+            An array of log potentials for the factor groups.
 
         Raises:
             ValueError: if the specified log_potentials is not of the right shape
@@ -779,27 +785,36 @@ class EnumerationFactorGroup(FactorGroup):
                 self.log_potentials, (num_factors, self.factor_configs.shape[0])
             )
 
-        log_potential_for_factors = np.array(
+        factor_group_log_potentials_full = np.array(
             [log_potentials[ii] for ii in range(len(self.variable_names_for_factors))]
         )
-        object.__setattr__(self, "log_potential_for_factors", log_potential_for_factors)
-        return {}
-        # variables_to_factors = collections.OrderedDict(
-        #     [
-        #         (
-        #             frozenset(self.variable_names_for_factors[ii]),
-        #             enumeration.EnumerationFactor(
-        #                 variables=tuple(
-        #                     self.variable_group[self.variable_names_for_factors[ii]]
-        #                 ),
-        #                 configs=self.factor_configs,
-        #                 log_potentials=log_potentials[ii],
-        #             ),
-        #         )
-        #         for ii in range(len(self.variable_names_for_factors))
-        #     ]
-        # )
-        # return variables_to_factors
+        return factor_group_log_potentials_full
+
+    def _get_variables_to_factors(
+        self,
+    ) -> OrderedDict[FrozenSet, enumeration.EnumerationFactor]:
+        """Function that generates a dictionary mapping set of connected variables to factors.
+        This function is only called on demand when the user requires it.
+
+        Returns:
+            A dictionary mapping all possible set of connected variables to different factors.
+        """
+        variables_to_factors = collections.OrderedDict(
+            [
+                (
+                    frozenset(self.variable_names_for_factors[ii]),
+                    enumeration.EnumerationFactor(
+                        variables=tuple(
+                            self.variable_group[self.variable_names_for_factors[ii]]
+                        ),
+                        configs=self.factor_configs,
+                        log_potentials=self.factor_group_log_potentials_full[ii],
+                    ),
+                )
+                for ii in range(len(self.variable_names_for_factors))
+            ]
+        )
+        return variables_to_factors
 
     def compile_wiring(
         self, vars_to_starts: Mapping[nodes.Variable, int]
@@ -810,11 +825,6 @@ class EnumerationFactorGroup(FactorGroup):
             self.factor_configs,
             vars_to_starts,
         )
-
-    @cached_property
-    def factor_type(self) -> Type:
-        """Factor type."""
-        return enumeration.EnumerationFactor
 
     def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
         """Function that turns meaningful structured data into a flat data array for internal use.
@@ -916,13 +926,23 @@ class PairwiseFactorGroup(FactorGroup):
     variable_names_for_factors: Sequence[List]
     log_potential_matrix: Optional[np.ndarray] = None
 
-    def _get_variables_to_factors(
-        self,
-    ) -> OrderedDict[FrozenSet, enumeration.EnumerationFactor]:
-        """Function that generates a dictionary mapping set of connected variables to factors.
+    def __post_init__(self):
+        factor_configs = (
+            np.mgrid[
+                : self.log_potential_matrix.shape[-2],
+                : self.log_potential_matrix.shape[-1],
+            ]
+            .transpose((1, 2, 0))
+            .reshape((-1, 2))
+        )
+        object.__setattr__(self, "factor_configs", factor_configs)
+
+    @cached_property
+    def factor_group_log_potentials_full(self) -> np.ndarray:
+        """Function to compile potential array for the factor group
 
         Returns:
-            a dictionary mapping all possible set of connected variables to different factors.
+            An array of log potentials for the factor groups.
 
         Raises:
             ValueError if:
@@ -968,6 +988,7 @@ class PairwiseFactorGroup(FactorGroup):
                     f" {len(fac_list)} variables ({fac_list})."
                 )
 
+            # num_states0 = self.variable_group[fac_list[0]] is 2x slower
             if isinstance(self.variable_group, VariableGroup):
                 num_states0 = self.variable_group._names_to_variables[
                     fac_list[0]
@@ -990,51 +1011,48 @@ class PairwiseFactorGroup(FactorGroup):
                     f"configurations) does not match the specified log_potential_matrix "
                     f"(with {log_potential_matrix.shape[-2:]} configurations)."
                 )
+        object.__setattr__(self, "log_potential_matrix", log_potential_matrix)
 
-        factor_configs = (
-            np.mgrid[
-                : log_potential_matrix.shape[-2],
-                : log_potential_matrix.shape[-1],
-            ]
-            .transpose((1, 2, 0))
-            .reshape((-1, 2))
-        )
-        object.__setattr__(self, "factor_configs", factor_configs)
-
-        object.__setattr__(
-            self, "log_potential_matrix", log_potential_matrix
-        )  # why before broadcast?
         log_potential_matrix = np.broadcast_to(
             log_potential_matrix,
             (len(self.variable_names_for_factors),) + log_potential_matrix.shape[-2:],
         )
 
-        log_potential_for_factors = np.array(
+        factor_group_log_potentials_full = np.array(
             [
-                log_potential_matrix[ii, factor_configs[:, 0], factor_configs[:, 1]]
+                log_potential_matrix[
+                    ii, self.factor_configs[:, 0], self.factor_configs[:, 1]
+                ]
                 for ii in range(len(self.variable_names_for_factors))
             ]
         )
-        object.__setattr__(self, "log_potential_for_factors", log_potential_for_factors)
-        return {}
-        # variables_to_factors = collections.OrderedDict(
-        #     [
-        #         (
-        #             frozenset(self.variable_names_for_factors[ii]),
-        #             enumeration.EnumerationFactor(
-        #                 variables=tuple(
-        #                     self.variable_group[self.variable_names_for_factors[ii]]
-        #                 ),
-        #                 configs=factor_configs,
-        #                 log_potentials=log_potential_matrix[
-        #                     ii, factor_configs[:, 0], factor_configs[:, 1]
-        #                 ],
-        #             ),
-        #         )
-        #         for ii in range(len(self.variable_names_for_factors))
-        #     ]
-        # )
-        # return variables_to_factors
+        return factor_group_log_potentials_full
+
+    def _get_variables_to_factors(
+        self,
+    ) -> OrderedDict[FrozenSet, enumeration.EnumerationFactor]:
+        """Function that generates a dictionary mapping set of connected variables to factors.
+        This function is only called on demand when the user requires it.
+
+        Returns:
+            A dictionary mapping all possible set of connected variables to different factors.
+        """
+        variables_to_factors = collections.OrderedDict(
+            [
+                (
+                    frozenset(self.variable_names_for_factors[ii]),
+                    enumeration.EnumerationFactor(
+                        variables=tuple(
+                            self.variable_group[self.variable_names_for_factors[ii]]
+                        ),
+                        configs=self.factor_configs,
+                        log_potentials=self.factor_group_log_potentials_full[ii],
+                    ),
+                )
+                for ii in range(len(self.variable_names_for_factors))
+            ]
+        )
+        return variables_to_factors
 
     def compile_wiring(
         self, vars_to_starts: Mapping[nodes.Variable, int]
@@ -1045,11 +1063,6 @@ class PairwiseFactorGroup(FactorGroup):
             self.factor_configs,
             vars_to_starts,
         )
-
-    @cached_property
-    def factor_type(self) -> Type:
-        """Factor type."""
-        return enumeration.EnumerationFactor
 
     def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
         """Function that turns meaningful structured data into a flat data array for internal use.
@@ -1157,7 +1170,6 @@ def compile_factor_wiring(
 
             edges_starts += num_states
         edges_num_states.append(edges_starts_for_factor)
-    # print(time.time() - start)
 
     edges_num_states = np.array(edges_num_states)
     edges_starts = np.insert(edges_num_states.cumsum(), 0, 0)[:-1].reshape(
@@ -1174,7 +1186,6 @@ def compile_factor_wiring(
         ],
         axis=1,
     )
-    # print(time.time() - start)
     return enumeration.EnumerationWiring(
         edges_num_states=np.concatenate(edges_num_states),
         var_states_for_edges=np.concatenate(var_states_for_edges),

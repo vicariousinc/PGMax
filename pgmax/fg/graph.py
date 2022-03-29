@@ -31,7 +31,7 @@ import numpy as np
 from jax.scipy.special import logsumexp
 
 from pgmax.bp import infer
-from pgmax.factors import FAC_TO_VAR_UPDATES
+from pgmax.factors import FAC_TO_VAR_UPDATES, GROUPS_TO_TYPES
 from pgmax.fg import groups, nodes
 from pgmax.utils import cached_property
 
@@ -79,9 +79,6 @@ class FactorGraph:
             }
         )
         self._named_factor_groups: Dict[Hashable, groups.FactorGroup] = {}
-        self._variables_to_factors: OrderedDict[
-            FrozenSet, nodes.Factor
-        ] = collections.OrderedDict()
         self._factor_types_to_groups: OrderedDict[
             Type, List[groups.FactorGroup]
         ] = collections.OrderedDict(
@@ -92,7 +89,7 @@ class FactorGraph:
         all_factor_groups = tuple(
             [
                 factor_group
-                for factor_groups_per_type in self.factor_groups.values()
+                for factor_groups_per_type in self._factor_types_to_groups.values()
                 for factor_group in factor_groups_per_type
             ]
         )
@@ -196,14 +193,7 @@ class FactorGraph:
                 f"A factor group with the name {name} already exists. Please choose a different name!"
             )
 
-        for variables, factor in factor_group._variables_to_factors.items():
-            if variables in self._variables_to_factors:
-                raise ValueError(
-                    f"A factor involving variables {variables} already exists. Please merge the corresponding factors."
-                )
-            self._variables_to_factors[variables] = factor
-
-        factor_group_type = factor_group.factor_type
+        factor_group_type = GROUPS_TO_TYPES[type(factor_group)]
         self._factor_types_to_groups[factor_group_type].append(factor_group)
         if name is not None:
             self._named_factor_groups[name] = factor_group
@@ -230,7 +220,7 @@ class FactorGraph:
         self._factor_to_potentials_starts = collections.OrderedDict()
         factor_num_configs_cumsum = 0
 
-        for factor_type, factors_groups_by_type in self.factor_groups.items():
+        for factor_type, factors_groups_by_type in self._factor_types_to_groups.items():
             factor_type_num_states_start = factor_num_states_cumsum
             factor_type_num_configs_start = factor_num_configs_cumsum
             for factor_group in factors_groups_by_type:
@@ -241,6 +231,7 @@ class FactorGraph:
                     factor_group
                 ] = factor_num_configs_cumsum
 
+                ## CHANGE
                 for factor in factor_group.factors:
                     self._factor_to_msgs_starts[factor] = factor_num_states_cumsum
                     self._factor_to_potentials_starts[
@@ -277,10 +268,10 @@ class FactorGraph:
                     factor_type,
                     [
                         factor_group.compile_wiring(self._vars_to_starts)
-                        for factor_group in self.factor_groups[factor_type]
+                        for factor_group in self._factor_types_to_groups[factor_type]
                     ],
                 )
-                for factor_type in self.factors
+                for factor_type in self._factor_types_to_groups
             ]
         )
         wiring = collections.OrderedDict(
@@ -302,7 +293,7 @@ class FactorGraph:
                 function for each valid configuration
         """
         log_potentials = collections.OrderedDict()
-        for factor_type, factors_groups_by_type in self.factor_groups.items():
+        for factor_type, factors_groups_by_type in self._factor_types_to_groups.items():
             if len(factors_groups_by_type) == 0:
                 log_potentials[factor_type] = np.empty((0,))
             else:
@@ -317,7 +308,8 @@ class FactorGraph:
 
     @cached_property
     def factors(self) -> OrderedDict[Type, Tuple[nodes.Factor, ...]]:
-        """Mapping factor type to individual factors in the factor graph"""
+        """Mapping factor type to individual factors in the factor graph.
+        This function is only called on demand when the user requires it."""
         factors: OrderedDict[Type, Tuple[nodes.Factor, ...]] = collections.OrderedDict(
             [
                 (
@@ -340,6 +332,22 @@ class FactorGraph:
         """Tuple of factor groups in the factor graph"""
         return self._factor_types_to_groups
 
+    @functools.lru_cache(None)
+    def to_remove(self):
+        """ "Maps sets of connected variables (in the form of frozensets of variable names) to corresponding factors."""
+        self._variables_to_factors: OrderedDict[
+            FrozenSet, nodes.Factor
+        ] = collections.OrderedDict()
+
+        for factor_groups in self.factor_groups.values():
+            for factor_group in factor_groups:
+                for variables, factor in factor_group._variables_to_factors.items():
+                    if variables in self._variables_to_factors:
+                        raise ValueError(
+                            f"A factor involving variables {variables} already exists. Please merge the corresponding factors."
+                        )
+                    self._variables_to_factors[variables] = factor
+
     @cached_property
     def fg_state(self) -> FactorGraphState:
         """Current factor graph state given the added factors."""
@@ -348,6 +356,7 @@ class FactorGraph:
         log_potentials = np.concatenate(
             [self.log_potentials[factor_type] for factor_type in self.log_potentials]
         )
+        self.to_remove()
 
         return FactorGraphState(
             variable_group=self._variable_group,
