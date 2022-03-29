@@ -219,6 +219,181 @@ class ANDFactor(LogicalFactor):
     edge_states_offset: int = field(init=False, default=-1)
 
 
+import collections
+from typing import FrozenSet, List, OrderedDict
+
+from pgmax.fg.groups import CompositeVariableGroup, FactorGroup, VariableGroup
+from pgmax.utils import cached_property
+
+
+@dataclass(frozen=True, eq=False)
+class LogicalFactorGroup(FactorGroup):
+    """Class to represent a group of LogicalFactors.
+
+    All factors in the group are assumed to have the same edge_states_offset, ie
+    they are all ORFactors or ANDFactors.
+
+    Args:
+        variable_names_for_factors: A list of list of variable names, where each innermost element is the
+            name of a variable in variable_group. Each list within the outer list is taken to contain
+            the names of the variables connected to a factor.
+    """
+
+    # TODO: Add variable_names_for_factors to FactorGroup
+    variable_names_for_factors: Sequence[List]
+    log_potentials: np.ndarray = field(init=False, default=np.empty((0,)))
+    edge_states_offset: int = field(init=False)
+
+    def __post_init__(self):
+        # TODO: move all asserts from EnumerationFactor to here
+        pass
+
+    @cached_property
+    def factor_group_log_potentials_full(self) -> np.ndarray:
+        return self.log_potentials
+
+    def compile_wiring(self, vars_to_starts) -> LogicalWiring:
+        """Compile LogicalWiring for the LogicalFactorGroup
+
+        Args:
+            vars_to_starts: A dictionary that maps variables to their global starting indices
+                For an n-state variable, a global start index of m means the global indices
+                of its n variable states are m, m + 1, ..., m + n - 1
+
+        Returns:
+             LogicalWiring for the LogicalFactorGroup
+        """
+        relevant_state = (-self.edge_states_offset + 1) // 2
+
+        edges_num_states_cumsum = 0
+        edges_num_states = []
+        var_states_for_edges = []
+        parents_edge_states = []
+        children_edge_states = []
+
+        # TODO: can we make this faster
+        for factor_idx, variable_names_for_factor in enumerate(
+            self.variable_names_for_factors
+        ):
+            num_parents = len(variable_names_for_factor) - 1
+
+            # Note: edges_num_states_cumsum correspomds to the factor_to_msgs_start for the LogicalFactor
+            this_parents_edge_states = np.vstack(
+                [
+                    np.full(num_parents, fill_value=factor_idx, dtype=int),
+                    np.arange(
+                        edges_num_states_cumsum + relevant_state,
+                        edges_num_states_cumsum + 2 * num_parents,
+                        2,
+                        dtype=int,
+                    ),
+                ],
+            ).T
+            this_child_edge_state = (
+                edges_num_states_cumsum + 2 * num_parents + relevant_state
+            )
+
+            parents_edge_states.append(this_parents_edge_states)
+            children_edge_states.append(this_child_edge_state)
+
+            for variable_name in variable_names_for_factor:
+                if isinstance(self.variable_group, VariableGroup):
+                    variable = self.variable_group._names_to_variables[variable_name]
+                elif isinstance(self.variable_group, CompositeVariableGroup):
+                    variable = self.variable_group.variable_group_container[
+                        variable_name[0]
+                    ][variable_name[1]]
+                num_states = variable.num_states
+
+                edges_num_states.append(num_states)
+                this_var_states_for_edges = np.arange(
+                    vars_to_starts[variable], vars_to_starts[variable] + num_states
+                )
+                var_states_for_edges.append(this_var_states_for_edges)
+
+                edges_num_states_cumsum += num_states
+
+        return LogicalWiring(
+            edges_num_states=np.array(edges_num_states),
+            var_states_for_edges=np.concatenate(var_states_for_edges),
+            parents_edge_states=np.concatenate(parents_edge_states),
+            children_edge_states=np.array(children_edge_states),
+            edge_states_offset=self.edge_states_offset,
+        )
+
+
+@dataclass(frozen=True, eq=False)
+class ORFactorGroup(LogicalFactorGroup):
+    """Class to represent a group of ORFactors.
+
+    Args:
+        edge_states_offset: Offset to go from a variable's relevant state to its other state
+            For ORFactors the edge_states_offset is 1.
+    """
+
+    edge_states_offset: int = field(init=False, default=1)
+
+    def _get_variables_to_factors(
+        self,
+    ) -> OrderedDict[FrozenSet, LogicalFactor]:
+        """Function that generates a dictionary mapping set of connected variables to factors.
+        This function is only called on demand when the user requires it.
+
+        Returns:
+            A dictionary mapping all possible set of connected variables to different factors.
+        """
+        variables_to_factors = collections.OrderedDict(
+            [
+                (
+                    frozenset(self.variable_names_for_factors[ii]),
+                    ORFactor(
+                        variables=tuple(
+                            self.variable_group[self.variable_names_for_factors[ii]]
+                        ),
+                    ),
+                )
+                for ii in range(len(self.variable_names_for_factors))
+            ]
+        )
+        return variables_to_factors
+
+
+@dataclass(frozen=True, eq=False)
+class ANDFactorGroup(LogicalFactorGroup):
+    """Class to represent a group of ANDFactors.
+
+    Args:
+        edge_states_offset: Offset to go from a variable's relevant state to its other state
+            For ANDFactors the edge_states_offset is -1.
+    """
+
+    edge_states_offset: int = field(init=False, default=-1)
+
+    def _get_variables_to_factors(
+        self,
+    ) -> OrderedDict[FrozenSet, LogicalFactor]:
+        """Function that generates a dictionary mapping set of connected variables to factors.
+        This function is only called on demand when the user requires it.
+
+        Returns:
+            A dictionary mapping all possible set of connected variables to different factors.
+        """
+        variables_to_factors = collections.OrderedDict(
+            [
+                (
+                    frozenset(self.variable_names_for_factors[ii]),
+                    ANDFactor(
+                        variables=tuple(
+                            self.variable_group[self.variable_names_for_factors[ii]]
+                        ),
+                    ),
+                )
+                for ii in range(len(self.variable_names_for_factors))
+            ]
+        )
+        return variables_to_factors
+
+
 @functools.partial(jax.jit, static_argnames=("temperature"))
 def pass_logical_fac_to_var_messages(
     vtof_msgs: jnp.ndarray,

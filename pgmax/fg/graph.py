@@ -31,7 +31,7 @@ import numpy as np
 from jax.scipy.special import logsumexp
 
 from pgmax.bp import infer
-from pgmax.factors import FAC_TO_VAR_UPDATES, enumeration
+from pgmax.factors import FAC_TO_VAR_UPDATES, enumeration, logical
 from pgmax.fg import groups, nodes
 from pgmax.utils import cached_property
 
@@ -39,6 +39,8 @@ GROUPS_TO_TYPES: OrderedDict[Type, Type] = collections.OrderedDict(
     [
         (groups.PairwiseFactorGroup, enumeration.EnumerationFactor),
         (groups.EnumerationFactorGroup, enumeration.EnumerationFactor),
+        (logical.ORFactorGroup, logical.ORFactor),
+        (logical.ANDFactorGroup, logical.ANDFactor),
     ]
 )
 
@@ -238,7 +240,7 @@ class FactorGraph:
                     factor_group
                 ] = factor_num_configs_cumsum
 
-                # CHANGE
+                # TODO: Change as this is factor specific
                 for factor in factor_group.factors:
                     self._factor_to_msgs_starts[factor] = factor_num_states_cumsum
                     self._factor_to_potentials_starts[
@@ -317,6 +319,10 @@ class FactorGraph:
     def factors(self) -> OrderedDict[Type, Tuple[nodes.Factor, ...]]:
         """Mapping factor type to individual factors in the factor graph.
         This function is only called on demand when the user requires it."""
+        print(
+            "Factors have not been added to the factor graph yet, this may take a while..."
+        )
+
         factors: OrderedDict[Type, Tuple[nodes.Factor, ...]] = collections.OrderedDict(
             [
                 (

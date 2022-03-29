@@ -939,6 +939,8 @@ class PairwiseFactorGroup(FactorGroup):
     log_potential_matrix: Optional[np.ndarray] = None
 
     def __post_init__(self):
+        # TODO: move test from EnumerationFactor to here
+
         if self.log_potential_matrix is None:
             log_potential_matrix = np.zeros(
                 (
