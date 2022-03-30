@@ -707,7 +707,7 @@ class FToVMessages:
         )
 
 
-# @functools.partial(jax.jit, static_argnames="fg_state")
+@functools.partial(jax.jit, static_argnames="fg_state")
 def update_evidence(
     evidence: jnp.ndarray, updates: Dict[Any, jnp.ndarray], fg_state: FactorGraphState
 ) -> jnp.ndarray:
@@ -734,15 +734,13 @@ def update_evidence(
 
             start_index = fg_state.vars_to_starts[variable_group.variables[0]]
             flat_data = variable_group.flatten(data)
-            # evidence = evidence.at[start_index : start_index + flat_data.shape[0]].set(
-            #     flat_data
-            # )
-            evidence[start_index : start_index + flat_data.shape[0]] = flat_data
+            evidence = evidence.at[start_index : start_index + flat_data.shape[0]].set(
+                flat_data
+            )
         else:
             var = fg_state.variable_group[name]
             start_index = fg_state.vars_to_starts[var]
-            # evidence = evidence.at[start_index : start_index + var.num_states].set(data)
-            evidence[start_index : start_index + var.num_states] = data
+            evidence = evidence.at[start_index : start_index + var.num_states].set(data)
     return evidence
 
 
