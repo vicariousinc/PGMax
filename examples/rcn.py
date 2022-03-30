@@ -6,7 +6,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.13.2
+#       jupytext_version: 1.13.7
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -38,7 +38,8 @@ from scipy.ndimage import maximum_filter
 from scipy.signal import fftconvolve
 from sklearn.datasets import fetch_openml
 
-from pgmax.fg import graph, groups
+from pgmax.fg import graph
+from pgmax.groups import enumeration, variables
 
 memory = Memory("./example_data/tmp")
 fetch_openml_cached = memory.cache(fetch_openml)
@@ -154,7 +155,6 @@ img_idx = 4
 model_img = np.ones((200, 200))
 fig, ax = plt.subplots(1, 2, figsize=(20, 10))
 
-
 frc, edge, train_img = frcs[img_idx], edges[img_idx], train_set[img_idx]
 ax[0].imshow(train_img[pad : 200 - pad, pad : 200 - pad], cmap="gray")
 ax[0].axis("off")
@@ -214,7 +214,7 @@ M = (2 * hps + 1) * (
 variables_all_models = {}
 for idx in range(frcs.shape[0]):
     frc = frcs[idx]
-    variables_all_models[idx] = groups.NDVariableArray(
+    variables_all_models[idx] = variables.NDVariableArray(
         num_states=M, shape=(frc.shape[0],)
     )
 

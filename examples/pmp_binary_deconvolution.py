@@ -193,7 +193,7 @@ print("Time", time.time() - start)
 
 # Add ORFactors
 for X_var, variable_names_for_ORFactor in variable_names_for_ORFactors_dict.items():
-    variable_names_for_ORFactors.append(variable_names_for_ORFactor + [("X",) + X_var])
+    variable_names_for_ORFactors.append(variable_names_for_ORFactor + [("X",) + X_var])  # type: ignore
 
 start = time.time()
 fg.add_factor_group(

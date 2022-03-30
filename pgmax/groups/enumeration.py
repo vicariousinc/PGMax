@@ -46,10 +46,10 @@ class EnumerationFactorGroup(groups.FactorGroup):
                     f"Expected log potentials shape: {(num_val_configs,)} or {(self.num_factors, num_val_configs)}. "
                     f"Got {self.log_potentials.shape}."
                 )
+            log_potentials = np.broadcast_to(
+                self.log_potentials, (self.num_factors, num_val_configs)
+            )
 
-        log_potentials = np.broadcast_to(
-            self.log_potentials, (self.num_factors, self.factor_configs.shape[0])
-        )
         object.__setattr__(self, "log_potentials", log_potentials)
 
     def _get_variables_to_factors(
