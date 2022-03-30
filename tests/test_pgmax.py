@@ -213,13 +213,13 @@ def test_e2e_sanity_check():
     # We create a NDVariableArray such that the [0,i,j] entry corresponds to the vertical cut variable (i.e, the one
     # attached horizontally to the factor) that's at that location in the image, and the [1,i,j] entry corresponds to
     # the horizontal cut variable (i.e, the one attached vertically to the factor) that's at that location
-    grid_vars_group = groups.NDVariableArray(3, (2, M - 1, N - 1))
+    grid_vars_group = variables.NDVariableArray(3, (2, M - 1, N - 1))
 
     # Make a group of additional variables for the edges of the grid
     extra_row_names: List[Tuple[Any, ...]] = [(0, row, N - 1) for row in range(M - 1)]
     extra_col_names: List[Tuple[Any, ...]] = [(1, M - 1, col) for col in range(N - 1)]
     additional_names = tuple(extra_row_names + extra_col_names)
-    additional_names_group = groups.VariableDict(3, additional_names)
+    additional_names_group = variables.VariableDict(3, additional_names)
 
     # Combine these two VariableGroups into one CompositeVariableGroup
     composite_grid_group = groups.CompositeVariableGroup(
@@ -353,9 +353,7 @@ def test_e2e_sanity_check():
     # Add the suppression factors to the graph via kwargs
     fg.add_factor_group(
         factory=enumeration.EnumerationFactorGroup,
-        variable_names_for_factors={
-            idx: names for idx, names in enumerate(vert_suppression_names)
-        },
+        variable_names_for_factors=vert_suppression_names,
         factor_configs=valid_configs_supp,
     )
     fg.add_factor_group(

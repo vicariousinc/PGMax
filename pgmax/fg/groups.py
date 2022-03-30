@@ -512,7 +512,6 @@ class SingleFactorGroup(FactorGroup):
     factor: nodes.Factor
 
     def __post_init__(self):
-        # TODO: should we remove SingleFactorGroup as it has no compile_wiring?
         super().__post_init__()
 
         if not len(self.variable_names_for_factors) == 1:

@@ -199,7 +199,7 @@ class FactorGraph:
                 f"A factor group with the name {name} already exists. Please choose a different name!"
             )
 
-        # TODO: remove this for speed
+        # TODO: do we want to remove this for speed?
         factor_type = factor_group.factor_type
         for var_names_for_factor in factor_group.variable_names_for_factors:
             tuple_var_names_for_factor = tuple(var_names_for_factor)

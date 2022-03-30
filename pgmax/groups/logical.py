@@ -26,7 +26,7 @@ class LogicalFactorGroup(groups.FactorGroup):
     edge_states_offset: int = field(init=False)
 
     def __post_init__(self):
-        # TODO: move all asserts from EnumerationFactor to here
+        # TODO: move all asserts from LogicalFactor to here
         super().__post_init__()
         pass
 
