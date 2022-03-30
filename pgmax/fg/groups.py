@@ -554,9 +554,34 @@ class FactorGroup:
         variable_group: either a VariableGroup or - if the elements of more than one VariableGroup
             are connected to this FactorGroup - then a CompositeVariableGroup. This holds
             all the variables that are connected to this FactorGroup
+        variable_names_for_factors: A list of list of variable names, where each innermost element is the
+            name of a variable in variable_group. Each list within the outer list is taken to contain
+            the names of the variables connected to a factor.
     """
 
     variable_group: Union[CompositeVariableGroup, VariableGroup]
+    variable_names_for_factors: Sequence[List]
+
+    def __post_init__(self):
+        object.__setattr__(self, "num_factors", len(self.variable_names_for_factors))
+
+        edges_num_states = []
+        variables_and_num_states = []
+
+        for variable_names_for_factor in self.variable_names_for_factors:
+            for variable_name in variable_names_for_factor:
+                if isinstance(self.variable_group, VariableGroup):
+                    variable = self.variable_group._names_to_variables[variable_name]
+                elif isinstance(self.variable_group, CompositeVariableGroup):
+                    variable = self.variable_group.variable_group_container[
+                        variable_name[0]
+                    ][variable_name[1]]
+                num_states = variable.num_states
+                edges_num_states.append(num_states)
+                variables_and_num_states.append((variable, num_states))
+
+        object.__setattr__(self, "factor_edges_num_states", np.array(edges_num_states))
+        object.__setattr__(self, "variables_and_num_states", variables_and_num_states)
 
     def __getitem__(self, variables: Union[Sequence, Collection]) -> nodes.Factor:
         """Function to query individual factors in the factor group
@@ -572,7 +597,7 @@ class FactorGroup:
             ValueError: if the queried factor is not present in the factor group
         """
         variables = frozenset(variables)
-        if variables not in self._variables_to_factors:
+        if variables not in self._variables_to_factors():
             raise ValueError(
                 f"The queried factor connected to the set of variables {variables} is not present in the factor group."
             )
@@ -659,12 +684,18 @@ class SingleFactorGroup(FactorGroup):
     For internal use only. Should not be directly used to add FactorGroups to a factor graph.
 
     Args:
-        variable_names: the names of the variables involved in the single factor.
         factor: the single factor in the SingleFactorGroup
     """
 
-    variable_names: List
     factor: nodes.Factor
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        if not len(self.variable_names_for_factors) == 0:
+            raise ValueError(
+                f"SingleFactorGroup should only contain one factor. Got {len(self.variable_names_for_factors)}"
+            )
 
     def _get_variables_to_factors(
         self,
@@ -674,7 +705,9 @@ class SingleFactorGroup(FactorGroup):
         Returns:
             A dictionary mapping all possible names to different factors.
         """
-        return OrderedDict([(frozenset(self.variable_names), self.factor)])
+        return OrderedDict(
+            [(frozenset(self.variable_names_for_factors[0]), self.factor)]
+        )
 
     def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
         """Function that turns meaningful structured data into a flat data array for internal use.
@@ -712,9 +745,6 @@ class EnumerationFactorGroup(FactorGroup):
     uniform 0 unless the inheriting class includes a log_potentials argument.
 
     Args:
-        variable_names_for_factors: A list of list of variable names, where each innermost element is the
-            name of a variable in variable_group. Each list within the outer list is taken to contain
-            the names of the variables connected to a factor.
         factor_configs: Array of shape (num_val_configs, num_variables)
             An array containing explicit enumeration of all valid configurations
         log_potentials: Optional array of shape (num_val_configs,) or (num_factors, num_val_configs).
@@ -723,29 +753,29 @@ class EnumerationFactorGroup(FactorGroup):
             initialized.
     """
 
-    variable_names_for_factors: Sequence[List]
     factor_configs: np.ndarray
     log_potentials: Optional[np.ndarray] = None
 
     def __post_init__(self):
-        num_factors = len(self.variable_names_for_factors)
+        super().__post_init__()
+
         num_val_configs = self.factor_configs.shape[0]
         if self.log_potentials is None:
-            log_potentials = np.zeros((num_factors, num_val_configs), dtype=float)
+            log_potentials = np.zeros((self.num_factors, num_val_configs), dtype=float)
         else:
             if self.log_potentials.shape != (
                 num_val_configs,
             ) and self.log_potentials.shape != (
-                num_factors,
+                self.num_factors,
                 num_val_configs,
             ):
                 raise ValueError(
-                    f"Expected log potentials shape: {(num_val_configs,)} or {(num_factors, num_val_configs)}. "
+                    f"Expected log potentials shape: {(num_val_configs,)} or {(self.num_factors, num_val_configs)}. "
                     f"Got {self.log_potentials.shape}."
                 )
 
             log_potentials = np.broadcast_to(
-                self.log_potentials, (num_factors, self.factor_configs.shape[0])
+                self.log_potentials, (self.num_factors, self.factor_configs.shape[0])
             )
         object.__setattr__(self, "log_potentials", log_potentials)
 
@@ -806,12 +836,12 @@ class EnumerationFactorGroup(FactorGroup):
         Returns:
              EnumerationWiring for the EnumerationFactorGroup
         """
-
         return _compile_factor_group_wiring(
-            self.variable_names_for_factors,
-            self.variable_group,
-            self.factor_configs,
-            vars_to_starts,
+            factor_edges_num_states=self.factor_edges_num_states,
+            variables_and_num_states=self.variables_and_num_states,
+            num_factors=self.num_factors,
+            factor_configs=self.factor_configs,
+            vars_to_starts=vars_to_starts,
         )
 
     def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
@@ -903,9 +933,6 @@ class PairwiseFactorGroup(FactorGroup):
     one CompositeVariableGroup.
 
     Args:
-        variable_names_for_factors: A list of list of tuples, where each innermost tuple contains a
-            name into variable_group. Each list within the outer list is taken to contain the names of variables
-            neighboring a particular factor to be added.
         log_potential_matrix: array of shape (var1.num_states, var2.num_states),
             where var1 and var2 are the 2 VariableGroups (that may refer to the same
             VariableGroup) whose names are present in each sub-list from self.variable_names_for_factors.
@@ -918,10 +945,10 @@ class PairwiseFactorGroup(FactorGroup):
                     variables in the factors.
     """
 
-    variable_names_for_factors: Sequence[List]
     log_potential_matrix: Optional[np.ndarray] = None
 
     def __post_init__(self):
+        super().__post_init__()
         # TODO: move all asserts from EnumerationFactor to here
 
         if self.log_potential_matrix is None:
@@ -1060,10 +1087,11 @@ class PairwiseFactorGroup(FactorGroup):
         """
 
         return _compile_factor_group_wiring(
-            self.variable_names_for_factors,
-            self.variable_group,
-            self.factor_configs,
-            vars_to_starts,
+            factor_edges_num_states=self.factor_edges_num_states,
+            variables_and_num_states=self.variables_and_num_states,
+            num_factors=self.num_factors,
+            factor_configs=self.factor_configs,
+            vars_to_starts=vars_to_starts,
         )
 
     def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
@@ -1147,36 +1175,28 @@ class PairwiseFactorGroup(FactorGroup):
 
 
 def _compile_factor_group_wiring(
-    variable_names_for_factors, variable_group, factor_configs, vars_to_starts
+    factor_edges_num_states,
+    variables_and_num_states,
+    factor_configs,
+    vars_to_starts,
+    num_factors,
 ):
-    edges_num_states = []
     var_states_for_edges = []
+    for variable_and_num_states in variables_and_num_states:
+        variable, num_states = variable_and_num_states
+        this_var_states_for_edges = np.arange(
+            vars_to_starts[variable], vars_to_starts[variable] + num_states
+        )
+        var_states_for_edges.append(this_var_states_for_edges)
 
-    for variable_names_for_factor in variable_names_for_factors:
-        for variable_name in variable_names_for_factor:
-            if isinstance(variable_group, VariableGroup):
-                variable = variable_group._names_to_variables[variable_name]
-            elif isinstance(variable_group, CompositeVariableGroup):
-                variable = variable_group.variable_group_container[variable_name[0]][
-                    variable_name[1]
-                ]
-            num_states = variable.num_states
-            edges_num_states.append(num_states)
-
-            this_var_states_for_edges = np.arange(
-                vars_to_starts[variable], vars_to_starts[variable] + num_states
-            )
-            var_states_for_edges.append(this_var_states_for_edges)
-
-    edges_num_states = np.array(edges_num_states)
-    edges_starts = np.insert(edges_num_states.cumsum(), 0, 0)[:-1].reshape(
+    edges_starts = np.insert(factor_edges_num_states.cumsum(), 0, 0)[:-1].reshape(
         -1, factor_configs.shape[1]
     )
 
     factor_configs_edge_states = np.stack(
         [
             np.repeat(
-                np.arange(factor_configs.shape[0] * len(variable_names_for_factors)),
+                np.arange(factor_configs.shape[0] * num_factors),
                 factor_configs.shape[1],
             ),
             (factor_configs[None] + edges_starts[:, None, :]).flatten(),
@@ -1184,7 +1204,7 @@ def _compile_factor_group_wiring(
         axis=1,
     )
     return enumeration.EnumerationWiring(
-        edges_num_states=edges_num_states,
+        edges_num_states=factor_edges_num_states,
         var_states_for_edges=np.concatenate(var_states_for_edges),
         factor_configs_edge_states=factor_configs_edge_states,
     )

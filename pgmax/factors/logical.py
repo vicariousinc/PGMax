@@ -220,9 +220,9 @@ class ANDFactor(LogicalFactor):
 
 
 import collections
-from typing import FrozenSet, List, OrderedDict
+from typing import FrozenSet, OrderedDict
 
-from pgmax.fg.groups import CompositeVariableGroup, FactorGroup, VariableGroup
+from pgmax.fg.groups import FactorGroup
 from pgmax.utils import cached_property
 
 
@@ -234,20 +234,16 @@ class LogicalFactorGroup(FactorGroup):
     Consequently, the factors are all ORFactors or ANDFactors.
 
     Args:
-        variable_names_for_factors: A list of list of variable names, where each innermost element is the
-            name of a variable in variable_group. Each list within the outer list is taken to contain
-            the names of the variables connected to a factor.
         edge_states_offset: Offset to go from a variable's relevant state to its other state
             For ORFactors the edge_states_offset is 1, for ANDFactors the edge_states_offset is -1.
     """
 
-    # TODO: Add variable_names_for_factors to FactorGroup
-    variable_names_for_factors: Sequence[List]
     log_potentials: np.ndarray = field(init=False, default=np.empty((0,)))
     edge_states_offset: int = field(init=False)
 
     def __post_init__(self):
         # TODO: move all asserts from EnumerationFactor to here
+        super().__post_init__()
         pass
 
     @cached_property
@@ -267,13 +263,17 @@ class LogicalFactorGroup(FactorGroup):
         """
         relevant_state = (-self.edge_states_offset + 1) // 2
 
-        edges_num_states_cumsum = 0
-        edges_num_states = []
         var_states_for_edges = []
+        for variable_and_num_states in self.variables_and_num_states:
+            variable, num_states = variable_and_num_states
+            this_var_states_for_edges = np.arange(
+                vars_to_starts[variable], vars_to_starts[variable] + num_states
+            )
+            var_states_for_edges.append(this_var_states_for_edges)
+
+        edges_num_states_cumsum = 0
         parents_edge_states = []
         children_edge_states = []
-
-        # TODO: can we make this faster
         for factor_idx, variable_names_for_factor in enumerate(
             self.variable_names_for_factors
         ):
@@ -297,26 +297,10 @@ class LogicalFactorGroup(FactorGroup):
 
             parents_edge_states.append(this_parents_edge_states)
             children_edge_states.append(this_child_edge_state)
-
-            for variable_name in variable_names_for_factor:
-                if isinstance(self.variable_group, VariableGroup):
-                    variable = self.variable_group._names_to_variables[variable_name]
-                elif isinstance(self.variable_group, CompositeVariableGroup):
-                    variable = self.variable_group.variable_group_container[
-                        variable_name[0]
-                    ][variable_name[1]]
-                num_states = variable.num_states
-
-                edges_num_states.append(num_states)
-                this_var_states_for_edges = np.arange(
-                    vars_to_starts[variable], vars_to_starts[variable] + num_states
-                )
-                var_states_for_edges.append(this_var_states_for_edges)
-
-                edges_num_states_cumsum += num_states
+            edges_num_states_cumsum += 2 * (num_parents + 1)
 
         return LogicalWiring(
-            edges_num_states=np.array(edges_num_states),
+            edges_num_states=self.factor_edges_num_states,
             var_states_for_edges=np.concatenate(var_states_for_edges),
             parents_edge_states=np.concatenate(parents_edge_states),
             children_edge_states=np.array(children_edge_states),
