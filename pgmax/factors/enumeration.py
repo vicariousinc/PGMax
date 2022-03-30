@@ -106,6 +106,7 @@ class EnumerationFactor(nodes.Factor):
     @utils.cached_property
     def factor_configs_edge_states(self) -> np.ndarray:
         """Array containing factor configs and edge states pairs
+
         Returns:
             Array of shape (num_factor_configs, 2)
             factor_configs_edge_states[ii] contains a pair of global factor_config and edge_state indices
@@ -127,10 +128,12 @@ class EnumerationFactor(nodes.Factor):
         self, vars_to_starts: Mapping[nodes.Variable, int]
     ) -> EnumerationWiring:
         """Compile EnumerationWiring for the EnumerationFactor
+
         Args:
             vars_to_starts: A dictionary that maps variables to their global starting indices
                 For an n-state variable, a global start index of m means the global indices
                 of its n variable states are m, m + 1, ..., m + n - 1
+
         Returns:
             EnumerationWiring for the EnumerationFactor
         """
