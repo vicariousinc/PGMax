@@ -32,6 +32,7 @@ from jax.scipy.special import logsumexp
 from pgmax.bp import infer
 from pgmax.factors import FAC_TO_VAR_UPDATES
 from pgmax.fg import groups, nodes
+from pgmax.groups.enumeration import EnumerationFactorGroup
 from pgmax.utils import cached_property
 
 
@@ -117,7 +118,7 @@ class FactorGraph:
                 If None, it is assumed the log potential is uniform 0 and such an array is automatically
                 initialized.
         """
-        factor_group = groups.EnumerationFactorGroup(
+        factor_group = EnumerationFactorGroup(
             self._variable_group,
             variable_names_for_factors=[variable_names],
             factor_configs=factor_configs,

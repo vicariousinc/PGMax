@@ -27,8 +27,8 @@ import numpy as np
 from scipy.special import logit
 from tqdm.notebook import tqdm
 
-from pgmax.factors import logical
-from pgmax.fg import graph, groups
+from pgmax.fg import graph
+from pgmax.groups import logical, variables
 
 
 # %%
@@ -115,21 +115,21 @@ s_height = im_height - feat_height + 1
 s_width = im_width - feat_width + 1
 
 # Binary features
-W = groups.NDVariableArray(
+W = variables.NDVariableArray(
     num_states=2, shape=(n_chan, n_feat, feat_height, feat_width)
 )
 
 # Binary indicators of features locations
-S = groups.NDVariableArray(num_states=2, shape=(n_images, n_feat, s_height, s_width))
+S = variables.NDVariableArray(num_states=2, shape=(n_images, n_feat, s_height, s_width))
 
 # Auxiliary binary variables combining W and S
-SW = groups.NDVariableArray(
+SW = variables.NDVariableArray(
     num_states=2,
     shape=(n_images, n_chan, im_height, im_width, n_feat, feat_height, feat_width),
 )
 
 # Binary images obtained by convolution
-X = groups.NDVariableArray(num_states=2, shape=X_gt.shape)
+X = variables.NDVariableArray(num_states=2, shape=X_gt.shape)
 
 # %%
 # Factor graph
@@ -211,37 +211,6 @@ for factor_type, factor_groups in fg.factor_groups.items():
 start = time.time()
 wiring = fg.wiring
 print("Time", time.time() - start)
-
-# %%
-# import collections
-# wiring2 = collections.OrderedDict(
-#     [
-#         (
-#             factor_type,
-#             [
-#                 factor.compile_wiring(fg._vars_to_starts)
-#                 for factor in fg.factors[factor_type]
-#             ],
-#         )
-#         for factor_type in fg._factor_types_to_groups
-#     ]
-# )
-# wiring2 = collections.OrderedDict(
-#     [
-#         (factor_type, factor_type.concatenate_wirings(wiring2[factor_type]))
-#         for factor_type in wiring2
-#     ]
-# )
-
-# for key in wiring.keys():
-#     print(key)
-#     print(np.all(wiring[key].edges_num_states == wiring2[key].edges_num_states))
-#     print(np.all(wiring[key].var_states_for_edges == wiring2[key].var_states_for_edges))
-#     try:
-#         print(np.all(wiring[key].parents_edge_states == wiring2[key].parents_edge_states))
-#         print(np.all(wiring[key].children_edge_states == wiring2[key].children_edge_states))
-#     except:
-#         continue
 
 # %% [markdown]
 # ### Run inference and visualize results

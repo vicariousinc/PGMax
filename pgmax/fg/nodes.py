@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """A module containing classes that specify the basic components of a Factor Graph."""
 
 from dataclasses import asdict, dataclass
