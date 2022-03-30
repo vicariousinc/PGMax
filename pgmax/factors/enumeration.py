@@ -8,6 +8,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from pgmax import utils
 from pgmax.bp import bp_utils
 from pgmax.fg import nodes
 
@@ -101,6 +102,49 @@ class EnumerationFactor(nodes.Factor):
             self.configs >= 0, self.configs < vars_num_states[None]
         ).all():
             raise ValueError("Invalid configurations for given variables")
+
+    @utils.cached_property
+    def factor_configs_edge_states(self) -> np.ndarray:
+        """Array containing factor configs and edge states pairs
+        Returns:
+            Array of shape (num_factor_configs, 2)
+            factor_configs_edge_states[ii] contains a pair of global factor_config and edge_state indices
+            factor_configs_edge_states[ii, 0] contains the global factor config index,
+            factor_configs_edge_states[ii, 1] contains the corresponding global edge_state index.
+            Both indices only take into account the EnumerationFactors of the FactorGraph
+        """
+        edges_starts = np.insert(self.edges_num_states.cumsum(), 0, 0)[:-1]
+        factor_configs_edge_states = np.stack(
+            [
+                np.repeat(np.arange(self.configs.shape[0]), self.configs.shape[1]),
+                (self.configs + edges_starts[None]).flatten(),
+            ],
+            axis=1,
+        )
+        return factor_configs_edge_states
+
+    def compile_wiring(
+        self, vars_to_starts: Mapping[nodes.Variable, int]
+    ) -> EnumerationWiring:
+        """Compile EnumerationWiring for the EnumerationFactor
+        Args:
+            vars_to_starts: A dictionary that maps variables to their global starting indices
+                For an n-state variable, a global start index of m means the global indices
+                of its n variable states are m, m + 1, ..., m + n - 1
+        Returns:
+            EnumerationWiring for the EnumerationFactor
+        """
+        var_states_for_edges = np.concatenate(
+            [
+                np.arange(variable.num_states) + vars_to_starts[variable]
+                for variable in self.variables
+            ]
+        )
+        return EnumerationWiring(
+            edges_num_states=self.edges_num_states,
+            var_states_for_edges=var_states_for_edges,
+            factor_configs_edge_states=self.factor_configs_edge_states,
+        )
 
     @staticmethod
     def concatenate_wirings(wirings: Sequence[EnumerationWiring]) -> EnumerationWiring:

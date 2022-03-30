@@ -7,6 +7,7 @@ from numpy.random import default_rng
 from scipy.ndimage import gaussian_filter
 
 from pgmax.fg import graph, groups, nodes
+from pgmax.groups import enumeration, variables
 
 # Set random seed for rng
 rng = default_rng(23)
@@ -351,14 +352,14 @@ def test_e2e_sanity_check():
 
     # Add the suppression factors to the graph via kwargs
     fg.add_factor_group(
-        factory=groups.EnumerationFactorGroup,
+        factory=enumeration.EnumerationFactorGroup,
         variable_names_for_factors={
             idx: names for idx, names in enumerate(vert_suppression_names)
         },
         factor_configs=valid_configs_supp,
     )
     fg.add_factor_group(
-        factory=groups.EnumerationFactorGroup,
+        factory=enumeration.EnumerationFactorGroup,
         variable_names_for_factors=horz_suppression_names,
         factor_configs=valid_configs_supp,
         log_potentials=np.zeros(valid_configs_supp.shape[0], dtype=float),
@@ -388,8 +389,8 @@ def test_e2e_heretic():
     # Define some global constants
     im_size = (30, 30)
     # Instantiate all the Variables in the factor graph via VariableGroups
-    pixel_vars = groups.NDVariableArray(3, im_size)
-    hidden_vars = groups.NDVariableArray(
+    pixel_vars = variables.NDVariableArray(3, im_size)
+    hidden_vars = variables.NDVariableArray(
         17, (im_size[0] - 2, im_size[1] - 2)
     )  # Each hidden var is connected to a 3x3 patch of pixel vars
 
@@ -416,7 +417,7 @@ def test_e2e_heretic():
     for k_row in range(3):
         for k_col in range(3):
             fg.add_factor_group(
-                factory=groups.PairwiseFactorGroup,
+                factory=enumeration.PairwiseFactorGroup,
                 variable_names_for_factors=binary_connected_variables(
                     28, 28, k_row, k_col
                 ),
