@@ -220,7 +220,7 @@ class ANDFactor(LogicalFactor):
 
 
 import collections
-from typing import FrozenSet, OrderedDict
+from typing import FrozenSet, OrderedDict, Type
 
 from pgmax.fg.groups import FactorGroup
 from pgmax.utils import cached_property
@@ -261,6 +261,10 @@ class LogicalFactorGroup(FactorGroup):
         Returns:
              LogicalWiring for the LogicalFactorGroup
         """
+        # TODO: run in parallel?
+        import time
+
+        start = time.time()
         relevant_state = (-self.edge_states_offset + 1) // 2
 
         var_states_for_edges = []
@@ -270,6 +274,7 @@ class LogicalFactorGroup(FactorGroup):
                 vars_to_starts[variable], vars_to_starts[variable] + num_states
             )
             var_states_for_edges.append(this_var_states_for_edges)
+        print(time.time() - start)
 
         edges_num_states_cumsum = 0
         parents_edge_states = []
@@ -279,7 +284,7 @@ class LogicalFactorGroup(FactorGroup):
         ):
             num_parents = len(variable_names_for_factor) - 1
 
-            # Note: edges_num_states_cumsum correspomds to the factor_to_msgs_start for the LogicalFactor
+            # Note: edges_num_states_cumsum corresponds to the factor_to_msgs_start for the LogicalFactor
             this_parents_edge_states = np.vstack(
                 [
                     np.full(num_parents, fill_value=factor_idx, dtype=int),
@@ -298,6 +303,7 @@ class LogicalFactorGroup(FactorGroup):
             parents_edge_states.append(this_parents_edge_states)
             children_edge_states.append(this_child_edge_state)
             edges_num_states_cumsum += 2 * (num_parents + 1)
+        print(time.time() - start)
 
         return LogicalWiring(
             edges_num_states=self.factor_edges_num_states,
@@ -318,6 +324,7 @@ class ORFactorGroup(LogicalFactorGroup):
     """
 
     edge_states_offset: int = field(init=False, default=1)
+    factor_type: Type = field(init=False, default=ORFactor)
 
     def _get_variables_to_factors(
         self,
@@ -354,6 +361,7 @@ class ANDFactorGroup(LogicalFactorGroup):
     """
 
     edge_states_offset: int = field(init=False, default=-1)
+    factor_type: Type = field(init=False, default=ANDFactor)
 
     def _get_variables_to_factors(
         self,

@@ -131,14 +131,13 @@ SW = groups.NDVariableArray(
 # Binary images obtained by convolution
 X = groups.NDVariableArray(num_states=2, shape=X_gt.shape)
 
+# %%
 # Factor graph
 fg = graph.FactorGraph(variables=dict(S=S, W=W, SW=SW, X=X))
 
-# %%
-# Note: although adding Factors is currently handled via for loops,
-# we have plans to make this more efficient in the near future through the use of FactorGroups
-
-variable_names_for_ORFactors = {}
+variable_names_for_ANDFactors = []
+variable_names_for_ORFactors = []
+variable_names_for_ORFactors_dict = {}
 
 # Add ANDFactors
 for idx_img in tqdm(range(n_images)):
@@ -161,7 +160,7 @@ for idx_img in tqdm(range(n_images)):
                                 idx_feat_width,
                             )
 
-                            variable_names = [
+                            variable_names_for_ANDFactor = [
                                 ("S", idx_img, idx_feat, idx_s_height, idx_s_width),
                                 (
                                     "W",
@@ -172,28 +171,77 @@ for idx_img in tqdm(range(n_images)):
                                 ),
                                 SW_var,
                             ]
-
-                            fg.add_factor_by_type(
-                                variable_names=variable_names,
-                                factor_type=logical.ANDFactor,
+                            variable_names_for_ANDFactors.append(
+                                variable_names_for_ANDFactor
                             )
 
                             X_var = (idx_img, idx_chan, idx_img_height, idx_img_width)
-                            if X_var not in variable_names_for_ORFactors:
-                                variable_names_for_ORFactors[X_var] = [SW_var]
+                            if X_var not in variable_names_for_ORFactors_dict:
+                                variable_names_for_ORFactors_dict[X_var] = [SW_var]
                             else:
-                                variable_names_for_ORFactors[X_var].append(SW_var)
+                                variable_names_for_ORFactors_dict[X_var].append(SW_var)
 
+
+import time
+
+start = time.time()
+fg.add_factor_group(
+    factory=logical.ANDFactorGroup,
+    variable_names_for_factors=variable_names_for_ANDFactors,
+)
+print("Time", time.time() - start)
 
 # Add ORFactors
-for X_var, variable_names_for_ORFactor in variable_names_for_ORFactors.items():
-    fg.add_factor_by_type(
-        variable_names=variable_names_for_ORFactor + [("X",) + X_var],  # type: ignore
-        factor_type=logical.ORFactor,
-    )
+for X_var, variable_names_for_ORFactor in variable_names_for_ORFactors_dict.items():
+    variable_names_for_ORFactors.append(variable_names_for_ORFactor + [("X",) + X_var])
 
-for factor_type, factors in fg.factors.items():
-    print(f"The factor graph contains {len(factors)} {factor_type}")
+start = time.time()
+fg.add_factor_group(
+    factory=logical.ORFactorGroup,
+    variable_names_for_factors=variable_names_for_ORFactors,
+)
+print("Time", time.time() - start)
+
+for factor_type, factor_groups in fg.factor_groups.items():
+    if len(factor_groups) > 0:
+        assert len(factor_groups) == 1
+        print(f"The factor graph contains {factor_groups[0].num_factors} {factor_type}")
+
+# %%
+start = time.time()
+wiring = fg.wiring
+print("Time", time.time() - start)
+
+# %%
+# import collections
+# wiring2 = collections.OrderedDict(
+#     [
+#         (
+#             factor_type,
+#             [
+#                 factor.compile_wiring(fg._vars_to_starts)
+#                 for factor in fg.factors[factor_type]
+#             ],
+#         )
+#         for factor_type in fg._factor_types_to_groups
+#     ]
+# )
+# wiring2 = collections.OrderedDict(
+#     [
+#         (factor_type, factor_type.concatenate_wirings(wiring2[factor_type]))
+#         for factor_type in wiring2
+#     ]
+# )
+
+# for key in wiring.keys():
+#     print(key)
+#     print(np.all(wiring[key].edges_num_states == wiring2[key].edges_num_states))
+#     print(np.all(wiring[key].var_states_for_edges == wiring2[key].var_states_for_edges))
+#     try:
+#         print(np.all(wiring[key].parents_edge_states == wiring2[key].parents_edge_states))
+#         print(np.all(wiring[key].children_edge_states == wiring2[key].children_edge_states))
+#     except:
+#         continue
 
 # %% [markdown]
 # ### Run inference and visualize results

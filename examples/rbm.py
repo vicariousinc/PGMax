@@ -21,12 +21,10 @@
 # %%
 # %matplotlib inline
 import functools
-import itertools
 
 import jax
 import matplotlib.pyplot as plt
 import numpy as np
-from tqdm.notebook import tqdm
 
 from pgmax.fg import graph, groups
 
@@ -59,31 +57,108 @@ fg = graph.FactorGraph(
 # After initialization, `fg` does not have any factors. PGMax supports imperatively adding factors to a [`FactorGraph`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.graph.FactorGraph.html#pgmax.fg.graph.FactorGraph). We can add the unary and pairwise factors one at a time to `fg` by
 
 # %%
-# Add unary factors
-for ii in range(bh.shape[0]):
-    fg.add_factor(
-        variable_names=[("hidden", ii)],
-        factor_configs=np.arange(2)[:, None],
-        log_potentials=np.array([0, bh[ii]]),
-    )
+# # Add unary factors
+# for ii in range(bh.shape[0]):
+#     fg.add_factor(
+#         variable_names=[("hidden", ii)],
+#         factor_configs=np.arange(2)[:, None],
+#         log_potentials=np.array([0, bh[ii]]),
+#     )
 
-for jj in range(bv.shape[0]):
-    fg.add_factor(
-        variable_names=[("visible", jj)],
-        factor_configs=np.arange(2)[:, None],
-        log_potentials=np.array([0, bv[jj]]),
-    )
+# for jj in range(bv.shape[0]):
+#     fg.add_factor(
+#         variable_names=[("visible", jj)],
+#         factor_configs=np.arange(2)[:, None],
+#         log_potentials=np.array([0, bv[jj]]),
+#     )
 
+
+# # Add pairwise factors
+# factor_configs = np.array(list(itertools.product(np.arange(2), repeat=2)))
+# for ii in tqdm(range(bh.shape[0])):
+#     for jj in range(bv.shape[0]):
+#         fg.add_factor(
+#             variable_names=[("hidden", ii), ("visible", jj)],
+#             factor_configs=factor_configs,
+#             log_potentials=np.array([0, 0, 0, W[ii, jj]]),
+#         )
+
+import time
+
+# %%
+# %load_ext snakeviz
+from pgmax.fg import graph, groups
+
+start = time.time()
+fg = graph.FactorGraph(
+    variables=dict(hidden=hidden_variables, visible=visible_variables),
+)
+print("Time", time.time() - start)
+
+start = time.time()
+fg.add_factor_group(
+    factory=groups.EnumerationFactorGroup,
+    variable_names_for_factors=[[("hidden", ii)] for ii in range(bh.shape[0])],
+    factor_configs=np.arange(2)[:, None],
+    log_potentials=np.stack([np.zeros_like(bh), bh], axis=1),
+)
+
+fg.add_factor_group(
+    factory=groups.EnumerationFactorGroup,
+    variable_names_for_factors=[[("visible", jj)] for jj in range(bv.shape[0])],
+    factor_configs=np.arange(2)[:, None],
+    log_potentials=np.stack([np.zeros_like(bv), bv], axis=1),
+)
 
 # Add pairwise factors
-factor_configs = np.array(list(itertools.product(np.arange(2), repeat=2)))
-for ii in tqdm(range(bh.shape[0])):
-    for jj in range(bv.shape[0]):
-        fg.add_factor(
-            variable_names=[("hidden", ii), ("visible", jj)],
-            factor_configs=factor_configs,
-            log_potentials=np.array([0, 0, 0, W[ii, jj]]),
-        )
+log_potential_matrix = np.zeros(W.shape + (2, 2)).reshape((-1, 2, 2))
+log_potential_matrix[:, 1, 1] = W.ravel()
+
+fg.add_factor_group(
+    factory=groups.PairwiseFactorGroup,
+    variable_names_for_factors=[
+        [("hidden", ii), ("visible", jj)]
+        for ii in range(bh.shape[0])
+        for jj in range(bv.shape[0])
+    ],
+    log_potential_matrix=log_potential_matrix,
+)
+print("Time", time.time() - start)
+
+
+# %%
+import time
+
+start = time.time()
+wiring = fg.wiring
+print("Time", time.time() - start)
+
+# %%
+# import collections
+# wiring2 = collections.OrderedDict(
+#     [
+#         (
+#             factor_type,
+#             [
+#                 factor.compile_wiring(fg._vars_to_starts)
+#                 for factor in fg.factors[factor_type]
+#             ],
+#         )
+#         for factor_type in fg._factor_types_to_groups
+#     ]
+# )
+# wiring2 = collections.OrderedDict(
+#     [
+#         (factor_type, factor_type.concatenate_wirings(wiring2[factor_type]))
+#         for factor_type in wiring2
+#     ]
+# )
+
+# from pgmax.factors import enumeration
+# key = enumeration.EnumerationFactor
+# print(np.all(wiring[key].edges_num_states == wiring2[key].edges_num_states))
+# print(np.all(wiring[key].var_states_for_edges == wiring2[key].var_states_for_edges))
+# print(np.all(wiring[key].factor_configs_edge_states == wiring2[key].factor_configs_edge_states))
 
 # %% [markdown]
 # [`fg.add_factor`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.graph.FactorGraph.html#pgmax.fg.graph.FactorGraph.add_factor) takes 3 arguments, `variable_names`, `factor_configs` and `log_potentials`, and is a literal translation of the factor definitions shown in Table [tab:unary] and Table [tab:binary]. `variable_names` is a list containing the name of the involved variables. In this example, since we construct `fg` with variables `dict(hidden=hidden_variables, visible=visible_variables)`, where `hidden_variables` and `visible_variables` are [`NDVariableArray`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.groups.NDVariableArray.html#pgmax.fg.groups.NDVariableArray)s, we can refer to the `ii`th hidden variable as `("hidden", ii)` and the `jj`th visible variable as `("visible", jj)`. In general, PGMax implements an intuitive scheme for automatically assigning names to the variables in a [`FactorGraph`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.graph.FactorGraph.html#pgmax.fg.graph.FactorGraph).
@@ -138,7 +213,13 @@ for ii in tqdm(range(bh.shape[0])):
 #
 # Now we are ready to demonstrate PMP sampling from RBM. PMP perturbs the model with [Gumbel](https://numpy.org/doc/stable/reference/random/generated/numpy.random.gumbel.html) unary potentials, and draws a sample from the RBM as the MAP decoding from running max-product LBP on the perturbed model
 
+import imp
+
 # %%
+from pgmax.fg import graph
+
+imp.reload(graph)
+
 run_bp, get_bp_state, get_beliefs = graph.BP(
     fg.bp_state, num_iters=100, temperature=0.0
 )
@@ -208,3 +289,7 @@ for ii in range(10):
     ax[np.unravel_index(ii, (2, 5))].axis("off")
 
 fig.tight_layout()
+
+# %%
+
+# %%

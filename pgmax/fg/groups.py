@@ -17,6 +17,7 @@ from typing import (
     OrderedDict,
     Sequence,
     Tuple,
+    Type,
     Union,
 )
 
@@ -561,6 +562,9 @@ class FactorGroup:
 
     variable_group: Union[CompositeVariableGroup, VariableGroup]
     variable_names_for_factors: Sequence[List]
+    num_factors: int = field(init=False)
+    factor_edges_num_states: int = field(init=False)
+    variables_and_num_states: int = field(init=False)
 
     def __post_init__(self):
         object.__setattr__(self, "num_factors", len(self.variable_names_for_factors))
@@ -623,20 +627,9 @@ class FactorGroup:
     @cached_property
     def factor_group_log_potentials(self) -> np.ndarray:
         """Flattened array of log potentials"""
-        return self.factor_group_log_potentials_full.flatten()
-
-    @cached_property
-    def factor_group_log_potentials_full(self) -> np.ndarray:
-        """Function to compile potential array for the factor group
-
-        Returns
-            A jnp array representing the log of the potential function for
-            the factor group
-        """
-        raise NotImplementedError(
-            "Please subclass the FactorGroup class and override this method"
-        )
-        # return np.empty((0,))
+        if not hasattr(self, "log_potentials"):
+            raise ValueError("The FactorGroup does not have log potentials")
+        return self.log_potentials.flatten()
 
     def _get_variables_to_factors(
         self,
@@ -692,7 +685,7 @@ class SingleFactorGroup(FactorGroup):
     def __post_init__(self):
         super().__post_init__()
 
-        if not len(self.variable_names_for_factors) == 0:
+        if not len(self.variable_names_for_factors) == 1:
             raise ValueError(
                 f"SingleFactorGroup should only contain one factor. Got {len(self.variable_names_for_factors)}"
             )
@@ -755,6 +748,7 @@ class EnumerationFactorGroup(FactorGroup):
 
     factor_configs: np.ndarray
     log_potentials: Optional[np.ndarray] = None
+    factor_type: Type = field(init=False, default=enumeration.EnumerationFactor)
 
     def __post_init__(self):
         super().__post_init__()
@@ -779,24 +773,6 @@ class EnumerationFactorGroup(FactorGroup):
             )
         object.__setattr__(self, "log_potentials", log_potentials)
 
-    @cached_property
-    def factor_group_log_potentials_full(self) -> np.ndarray:
-        """Function to compile potential array for the factor group
-
-        Returns:
-            An array of log potentials for the factor groups.
-
-        Raises:
-            ValueError: if the specified log_potentials is not of the right shape
-        """
-        factor_group_log_potentials_full = np.array(
-            [
-                self.log_potentials[ii]
-                for ii in range(len(self.variable_names_for_factors))
-            ]
-        )
-        return factor_group_log_potentials_full
-
     def _get_variables_to_factors(
         self,
     ) -> OrderedDict[FrozenSet, enumeration.EnumerationFactor]:
@@ -815,7 +791,7 @@ class EnumerationFactorGroup(FactorGroup):
                             self.variable_group[self.variable_names_for_factors[ii]]
                         ),
                         configs=self.factor_configs,
-                        log_potentials=self.factor_group_log_potentials_full[ii],
+                        log_potentials=self.log_potentials[ii],
                     ),
                 )
                 for ii in range(len(self.variable_names_for_factors))
@@ -946,6 +922,7 @@ class PairwiseFactorGroup(FactorGroup):
     """
 
     log_potential_matrix: Optional[np.ndarray] = None
+    factor_type: Type = field(init=False, default=enumeration.EnumerationFactor)
 
     def __post_init__(self):
         super().__post_init__()
@@ -987,7 +964,7 @@ class PairwiseFactorGroup(FactorGroup):
                     f" {len(fac_list)} variables ({fac_list})."
                 )
 
-            # num_states0 = self.variable_group[fac_list[0]] is 2x slower
+            # Note: num_states0 = self.variable_group[fac_list[0]] is 2x slower
             if isinstance(self.variable_group, VariableGroup):
                 num_states0 = self.variable_group._names_to_variables[
                     fac_list[0]
@@ -1010,33 +987,23 @@ class PairwiseFactorGroup(FactorGroup):
                     f"configurations) does not match the specified log_potential_matrix "
                     f"(with {log_potential_matrix.shape[-2:]} configurations)."
                 )
-        object.__setattr__(self, "log_potential_matrix", log_potential_matrix)
 
         factor_configs = (
             np.mgrid[
-                : self.log_potential_matrix.shape[-2],
-                : self.log_potential_matrix.shape[-1],
+                : log_potential_matrix.shape[-2],
+                : log_potential_matrix.shape[-1],
             ]
             .transpose((1, 2, 0))
             .reshape((-1, 2))
         )
         object.__setattr__(self, "factor_configs", factor_configs)
 
-    @cached_property
-    def factor_group_log_potentials_full(self) -> np.ndarray:
-        """Function to compile potential array for the factor group
-
-        Returns:
-            An array of log potentials for the factor groups.
-        """
-
         log_potential_matrix = np.broadcast_to(
-            self.log_potential_matrix,
-            (len(self.variable_names_for_factors),)
-            + self.log_potential_matrix.shape[-2:],
+            log_potential_matrix,
+            (len(self.variable_names_for_factors),) + log_potential_matrix.shape[-2:],
         )
 
-        factor_group_log_potentials_full = np.array(
+        log_potentials = np.array(
             [
                 log_potential_matrix[
                     ii, self.factor_configs[:, 0], self.factor_configs[:, 1]
@@ -1044,7 +1011,7 @@ class PairwiseFactorGroup(FactorGroup):
                 for ii in range(len(self.variable_names_for_factors))
             ]
         )
-        return factor_group_log_potentials_full
+        object.__setattr__(self, "log_potentials", log_potentials)
 
     def _get_variables_to_factors(
         self,

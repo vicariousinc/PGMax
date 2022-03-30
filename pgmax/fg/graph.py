@@ -30,18 +30,9 @@ import numpy as np
 from jax.scipy.special import logsumexp
 
 from pgmax.bp import infer
-from pgmax.factors import FAC_TO_VAR_UPDATES, enumeration, logical
+from pgmax.factors import FAC_TO_VAR_UPDATES
 from pgmax.fg import groups, nodes
 from pgmax.utils import cached_property
-
-GROUPS_TO_TYPES: OrderedDict[Type, Type] = collections.OrderedDict(
-    [
-        (groups.PairwiseFactorGroup, enumeration.EnumerationFactor),
-        (groups.EnumerationFactorGroup, enumeration.EnumerationFactor),
-        (logical.ORFactorGroup, logical.ORFactor),
-        (logical.ANDFactorGroup, logical.ANDFactor),
-    ]
-)
 
 
 @dataclass
@@ -151,7 +142,7 @@ class FactorGraph:
             To add an ORFactor to a FactorGraph fg, run::
 
                 fg.add_factor_by_type(
-                    variable_names_for_factors=[variables_names_for_OR_factor],
+                    variable_names=variables_names_for_OR_factor,
                     factor_type=logical.ORFactor
                 )
         """
@@ -201,7 +192,13 @@ class FactorGraph:
                 f"A factor group with the name {name} already exists. Please choose a different name!"
             )
 
-        factor_group_type = GROUPS_TO_TYPES[type(factor_group)]
+        # Add LogicalFactorGroup or default FactorGroup
+        factor_group_type = factor_group.factor_type
+        if factor_group_type not in FAC_TO_VAR_UPDATES:
+            raise ValueError(
+                f"Type {factor_group_type} is not one of the supported factor types {FAC_TO_VAR_UPDATES.keys()}"
+            )
+
         self._factor_types_to_groups[factor_group_type].append(factor_group)
         if name is not None:
             self._named_factor_groups[name] = factor_group
