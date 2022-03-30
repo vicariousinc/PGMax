@@ -367,10 +367,14 @@ class FactorGroup:
     num_factors: int = field(init=False)
     factor_edges_num_states: np.ndarray = field(init=False)
     variables_and_num_states: OrderedDict[FrozenSet, nodes.Factor] = field(init=False)
-    log_potentials: np.ndarray = field(init=False)
     factor_type: Type = field(init=False)
+    factor_configs: np.ndarray = field(init=False, default=None)
+    log_potentials: np.ndarray = field(init=False)
 
     def __post_init__(self):
+        if len(self.variable_names_for_factors) == 0:
+            raise ValueError("Do not add a factor group with no factors.")
+
         object.__setattr__(self, "num_factors", len(self.variable_names_for_factors))
 
         edges_num_states = []
@@ -390,7 +394,10 @@ class FactorGroup:
 
         object.__setattr__(self, "factor_edges_num_states", np.array(edges_num_states))
         object.__setattr__(self, "variables_and_num_states", variables_and_num_states)
-        object.__setattr__(self, "log_potentials", np.empty((0,)))
+
+        # Children classes may overwrite log_potentials
+        if not hasattr(self, "log_potentials"):
+            object.__setattr__(self, "log_potentials", np.empty((0,)))
 
     def __getitem__(self, variables: Union[Sequence, Collection]) -> Any:
         """Function to query individual factors in the factor group
@@ -505,12 +512,15 @@ class SingleFactorGroup(FactorGroup):
     factor: nodes.Factor
 
     def __post_init__(self):
+        # TODO: should we remove SingleFactorGroup as it has no compile_wiring?
         super().__post_init__()
 
         if not len(self.variable_names_for_factors) == 1:
             raise ValueError(
                 f"SingleFactorGroup should only contain one factor. Got {len(self.variable_names_for_factors)}"
             )
+
+        object.__setattr__(self, "factor_type", type(self.factor))
 
     def _get_variables_to_factors(
         self,
@@ -549,3 +559,18 @@ class SingleFactorGroup(FactorGroup):
         raise NotImplementedError(
             "SingleFactorGroup does not support vectorized factor operations."
         )
+
+    def compile_wiring(
+        self, vars_to_starts: Mapping[nodes.Variable, int]
+    ) -> nodes.Wiring:
+        """Compile wiring for the FactorGroup
+
+        Args:
+            vars_to_starts: A dictionary that maps variables to their global starting indices
+                For an n-state variable, a global start index of m means the global indices
+                of its n variable states are m, m + 1, ..., m + n - 1
+
+        Returns:
+            Wiring for the FactorGroup
+        """
+        return self.factor.compile_wiring(vars_to_starts)

@@ -39,7 +39,7 @@ from scipy.signal import fftconvolve
 from sklearn.datasets import fetch_openml
 
 from pgmax.fg import graph
-from pgmax.groups import enumeration, variables
+from pgmax.groups import variables
 
 memory = Memory("./example_data/tmp")
 fetch_openml_cached = memory.cache(fetch_openml)

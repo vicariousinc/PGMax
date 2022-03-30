@@ -70,6 +70,17 @@ class FactorGraph:
             0,
             0,
         )
+
+        # Useful objects to build the FactorGraph
+        self._factor_types_to_groups: OrderedDict[
+            Type, List[groups.FactorGroup]
+        ] = collections.OrderedDict(
+            [(factor_type, []) for factor_type in FAC_TO_VAR_UPDATES]
+        )
+        self._factors_var_names_to_type: OrderedDict[
+            Tuple[Any, ...], Type
+        ] = collections.OrderedDict()
+
         # See FactorGraphState docstrings for documentation on the following fields
         self._num_var_states = vars_num_states_cumsum[-1]
         self._vars_to_starts = MappingProxyType(
@@ -79,11 +90,6 @@ class FactorGraph:
             }
         )
         self._named_factor_groups: Dict[Hashable, groups.FactorGroup] = {}
-        self._factor_types_to_groups: OrderedDict[
-            Type, List[groups.FactorGroup]
-        ] = collections.OrderedDict(
-            [(factor_type, []) for factor_type in FAC_TO_VAR_UPDATES]
-        )
 
     def __hash__(self) -> int:
         all_factor_groups = tuple(
@@ -99,7 +105,7 @@ class FactorGraph:
         self,
         variable_names: List,
         factor_configs: np.ndarray,
-        log_potentials: Optional[np.ndarray] = None,
+        log_potentials: Optional[np.ndarray] = np.empty((0,)),
         name: Optional[str] = None,
     ) -> None:
         """Function to add a single factor to the FactorGraph.
@@ -192,6 +198,20 @@ class FactorGraph:
             raise ValueError(
                 f"A factor group with the name {name} already exists. Please choose a different name!"
             )
+
+        # TODO: remove this for speed
+        factor_type = factor_group.factor_type
+        for var_names_for_factor in factor_group.variable_names_for_factors:
+            tuple_var_names_for_factor = tuple(var_names_for_factor)
+            if (
+                tuple_var_names_for_factor in self._factors_var_names_to_type
+                and factor_type
+                == self._factors_var_names_to_type[tuple_var_names_for_factor]
+            ):
+                raise ValueError(
+                    f"A {factor_type} involving variables {tuple_var_names_for_factor} already exists. Please merge the corresponding factors."
+                )
+            self._factors_var_names_to_type[tuple_var_names_for_factor] = factor_type
 
         # TODO: unit test with LogicalFactorGroup or default FactorGroup
         factor_group_type = factor_group.factor_type

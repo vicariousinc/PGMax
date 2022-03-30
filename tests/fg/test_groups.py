@@ -6,11 +6,12 @@ import numpy as np
 import pytest
 
 from pgmax.fg import groups, nodes
+from pgmax.groups import enumeration, variables
 
 
 def test_composite_variable_group():
-    variable_dict1 = groups.VariableDict(15, tuple([0, 1, 2]))
-    variable_dict2 = groups.VariableDict(15, tuple([0, 1, 2]))
+    variable_dict1 = variables.VariableDict(15, tuple([0, 1, 2]))
+    variable_dict2 = variables.VariableDict(15, tuple([0, 1, 2]))
     composite_variable_sequence = groups.CompositeVariableGroup(
         [variable_dict1, variable_dict2]
     )
@@ -81,7 +82,7 @@ def test_composite_variable_group():
 
 
 def test_variable_dict():
-    variable_dict = groups.VariableDict(15, tuple([0, 1, 2]))
+    variable_dict = variables.VariableDict(15, tuple([0, 1, 2]))
     with pytest.raises(
         ValueError, match="data is referring to a non-existent variable 3"
     ):
@@ -121,9 +122,9 @@ def test_variable_dict():
 
 
 def test_nd_variable_array():
-    variable_group = groups.NDVariableArray(2, (1,))
+    variable_group = variables.NDVariableArray(2, (1,))
     assert isinstance(variable_group[0], nodes.Variable)
-    variable_group = groups.NDVariableArray(3, (2, 2))
+    variable_group = variables.NDVariableArray(3, (2, 2))
     with pytest.raises(
         ValueError,
         match=re.escape("data should be of shape (2, 2) or (2, 2, 3). Got (3, 3)."),
@@ -151,12 +152,12 @@ def test_nd_variable_array():
 
 
 def test_enumeration_factor_group():
-    variable_group = groups.NDVariableArray(3, (2, 2))
+    variable_group = variables.NDVariableArray(3, (2, 2))
     with pytest.raises(
         ValueError,
         match=re.escape("Expected log potentials shape: (1,) or (2, 1). Got (3, 2)"),
     ):
-        enumeration_factor_group = groups.EnumerationFactorGroup(
+        enumeration_factor_group = enumeration.EnumerationFactorGroup(
             variable_group=variable_group,
             variable_names_for_factors=[
                 [(0, 0), (0, 1), (1, 1)],
@@ -166,7 +167,7 @@ def test_enumeration_factor_group():
             log_potentials=np.zeros((3, 2)),
         )
 
-    enumeration_factor_group = groups.EnumerationFactorGroup(
+    enumeration_factor_group = enumeration.EnumerationFactorGroup(
         variable_group=variable_group,
         variable_names_for_factors=[[(0, 0), (0, 1), (1, 1)], [(0, 1), (1, 0), (1, 1)]],
         factor_configs=np.zeros((1, 3), dtype=int),
@@ -214,11 +215,11 @@ def test_enumeration_factor_group():
 
 
 def test_pairwise_factor_group():
-    variable_group = groups.NDVariableArray(3, (2, 2))
+    variable_group = variables.NDVariableArray(3, (2, 2))
     with pytest.raises(
         ValueError, match=re.escape("log_potential_matrix should be either a 2D array")
     ):
-        groups.PairwiseFactorGroup(
+        enumeration.PairwiseFactorGroup(
             variable_group, [[(0, 0), (1, 1)]], np.zeros((1,), dtype=float)
         )
 
@@ -228,7 +229,7 @@ def test_pairwise_factor_group():
             "Expected log_potential_matrix for 1 factors. Got log_potential_matrix for 2 factors."
         ),
     ):
-        groups.PairwiseFactorGroup(
+        enumeration.PairwiseFactorGroup(
             variable_group, [[(0, 0), (1, 1)]], np.zeros((2, 3, 3), dtype=float)
         )
 
@@ -238,7 +239,7 @@ def test_pairwise_factor_group():
             "All pairwise factors should connect to exactly 2 variables. Got a factor connecting to 3 variables"
         ),
     ):
-        groups.PairwiseFactorGroup(
+        enumeration.PairwiseFactorGroup(
             variable_group, [[(0, 0), (1, 1), (0, 1)]], np.zeros((3, 3), dtype=float)
         )
 
@@ -246,11 +247,11 @@ def test_pairwise_factor_group():
         ValueError,
         match=re.escape("The specified pairwise factor [(0, 0), (1, 1)]"),
     ):
-        groups.PairwiseFactorGroup(
+        enumeration.PairwiseFactorGroup(
             variable_group, [[(0, 0), (1, 1)]], np.zeros((4, 4), dtype=float)
         )
 
-    pairwise_factor_group = groups.PairwiseFactorGroup(
+    pairwise_factor_group = enumeration.PairwiseFactorGroup(
         variable_group,
         [[(0, 0), (1, 1)], [(1, 0), (0, 1)]],
     )

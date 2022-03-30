@@ -85,6 +85,20 @@ class Factor:
         )
         return edges_num_states
 
+    @staticmethod
+    def concatenate_wirings(wirings: Sequence) -> Wiring:
+        """Concatenate a list of Wirings
+
+        Args:
+            wirings: A list of Wirings
+
+        Returns:
+            Concatenated Wiring
+        """
+        raise NotImplementedError(
+            "Please subclass the Wiring class and override this method."
+        )
+
     def compile_wiring(self, vars_to_starts: Mapping[Variable, int]) -> Wiring:
         """Compile wiring for the factor
 
@@ -98,18 +112,4 @@ class Factor:
         """
         raise NotImplementedError(
             "Please subclass the Factor class and override this method"
-        )
-
-    @staticmethod
-    def concatenate_wirings(wirings: Sequence) -> Wiring:
-        """Concatenate a list of Wirings
-
-        Args:
-            wirings: A list of Wirings
-
-        Returns:
-            Concatenated Wiring
-        """
-        raise NotImplementedError(
-            "Please subclass the Wiring class and override this method."
         )

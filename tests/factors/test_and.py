@@ -3,26 +3,31 @@ from itertools import product
 import jax
 import numpy as np
 
-from pgmax.factors import logical
-from pgmax.fg import graph, groups
+from pgmax.factors import logical as logical_factor
+from pgmax.fg import graph
+from pgmax.groups import logical, variables
 
 
 def test_run_bp_with_AND_factors():
     """
     Simultaneously test
-    (1) the support of ANDFactors in a factor graph inference and their specialized inference
-    for different temperature
-    (2) the support of several factor types in a factor graph and during inference
+    (1) the support of ANDFactors in a FactorGraph and their specialized inference for different temperatures
+    (2) the support of large ANDFactorGroups vs individual SingleFactorGroup for inference
+    (3) the support of several factor types in a FactorGraph and during inference
 
     To do so, observe that an ANDFactor can be defined as an equivalent EnumerationFactor
-    (which list all the valid AND configurations) and define two equivalent factor graphs
+    (which list all the valid AND configurations) and define two equivalent FactorGraphs
     FG1: first half of factors are defined as EnumerationFactors, second half are defined as ANDFactors
     FG2: first half of factors are defined as ANDFactors, second half are defined as EnumerationFactors
+
+    In addition, observe that a large ANDFactorGroup can be represented as a sequence of SingleFactorGroup.
+    Compiling wiring is faster in the former as it directly happens at the FactorGroup level (wiring happens
+    at the Factors level for the latter, the wirings are then concatenated).
 
     Inference for the EnumerationFactors will be run with pass_enum_fac_to_var_messages while
     inference for the ANDFactors will be run with pass_logical_fac_to_var_messages.
 
-    Note: for the first seed, we add all the EnumerationFactors to FG1 and all the ANDFactors to FG2
+    Note: for the first seed, add all the EnumerationFactors to FG1 and all the ANDFactors to FG2
     """
     for idx in range(10):
         np.random.seed(idx)
@@ -40,19 +45,23 @@ def test_run_bp_with_AND_factors():
             temperature = np.random.uniform(low=0.5, high=1.0)
 
         # Graph 1
-        parents_variables1 = groups.NDVariableArray(
+        parents_variables1 = variables.NDVariableArray(
             num_states=2, shape=(num_parents.sum(),)
         )
-        children_variable1 = groups.NDVariableArray(num_states=2, shape=(num_factors,))
+        children_variable1 = variables.NDVariableArray(
+            num_states=2, shape=(num_factors,)
+        )
         fg1 = graph.FactorGraph(
             variables=dict(parents=parents_variables1, children=children_variable1)
         )
 
         # Graph 2
-        parents_variables2 = groups.NDVariableArray(
+        parents_variables2 = variables.NDVariableArray(
             num_states=2, shape=(num_parents.sum(),)
         )
-        children_variable2 = groups.NDVariableArray(num_states=2, shape=(num_factors,))
+        children_variable2 = variables.NDVariableArray(
+            num_states=2, shape=(num_factors,)
+        )
         fg2 = graph.FactorGraph(
             variables=dict(parents=parents_variables2, children=children_variable2)
         )
@@ -106,34 +115,75 @@ def test_run_bp_with_AND_factors():
 
         # Option 2: Define the ANDFactors
         num_parents_cumsum = np.insert(np.cumsum(num_parents), 0, 0)
-        for factor_idx in range(num_factors):
-            variables_names_for_AND_factor = [
-                ("parents", idx)
-                for idx in range(
-                    num_parents_cumsum[factor_idx],
-                    num_parents_cumsum[factor_idx + 1],
-                )
-            ] + [("children", factor_idx)]
+        variable_names_for_ANDFactors_fg1 = []
+        variable_names_for_ANDFactors_fg2 = []
 
-            if factor_idx < num_factors // 2:
-                # Add the first half of factors to FactorGraph2
-                fg2.add_factor_by_type(
-                    variable_names=variables_names_for_AND_factor,
-                    factor_type=logical.ANDFactor,
-                )
-            else:
-                if idx != 0:
-                    # Add the second half of factors to FactorGraph1
-                    fg1.add_factor_by_type(
-                        variable_names=variables_names_for_AND_factor,
-                        factor_type=logical.ANDFactor,
+        # For even value, build the large ANDFactorGroup with specialized wiring
+        if idx % 2 == 0:
+            for factor_idx in range(num_factors):
+                variables_names_for_ANDFactor = [
+                    ("parents", idx)
+                    for idx in range(
+                        num_parents_cumsum[factor_idx],
+                        num_parents_cumsum[factor_idx + 1],
+                    )
+                ] + [("children", factor_idx)]
+                if factor_idx < num_factors // 2:
+                    # Add the first half of factors to FactorGraph2
+                    variable_names_for_ANDFactors_fg2.append(
+                        variables_names_for_ANDFactor
                     )
                 else:
-                    # Add all the ANDFactors to FactorGraph2 for the first iter
-                    fg2.add_factor_by_type(
-                        variable_names=variables_names_for_AND_factor,
-                        factor_type=logical.ANDFactor,
+                    if idx != 0:
+                        # Add the second half of factors to FactorGraph1
+                        variable_names_for_ANDFactors_fg1.append(
+                            variables_names_for_ANDFactor
+                        )
+                    else:
+                        # Add all the ANDFactors to FactorGraph2 for the first iter
+                        variable_names_for_ANDFactors_fg2.append(
+                            variables_names_for_ANDFactor
+                        )
+
+            if idx != 0:
+                fg1.add_factor_group(
+                    factory=logical.ANDFactorGroup,
+                    variable_names_for_factors=variable_names_for_ANDFactors_fg1,
+                )
+            fg2.add_factor_group(
+                factory=logical.ANDFactorGroup,
+                variable_names_for_factors=variable_names_for_ANDFactors_fg2,
+            )
+        # For odd value, build the equivalent list of SingleFactorGroup
+        else:
+            for factor_idx in range(num_factors):
+                variables_names_for_ANDFactor = [
+                    ("parents", idx)
+                    for idx in range(
+                        num_parents_cumsum[factor_idx],
+                        num_parents_cumsum[factor_idx + 1],
                     )
+                ] + [("children", factor_idx)]
+
+                if factor_idx < num_factors // 2:
+                    # Add the first half of factors to FactorGraph2
+                    fg2.add_factor_by_type(
+                        variable_names=variables_names_for_ANDFactor,
+                        factor_type=logical_factor.ANDFactor,
+                    )
+                else:
+                    if idx != 0:
+                        # Add the second half of factors to FactorGraph1
+                        fg1.add_factor_by_type(
+                            variable_names=variables_names_for_ANDFactor,
+                            factor_type=logical_factor.ANDFactor,
+                        )
+                    else:
+                        # Add all the ANDFactors to FactorGraph2 for the first iter
+                        fg2.add_factor_by_type(
+                            variable_names=variables_names_for_ANDFactor,
+                            factor_type=logical_factor.ANDFactor,
+                        )
 
         # Run inference
         run_bp1, _, get_beliefs1 = graph.BP(fg1.bp_state, 1, temperature)

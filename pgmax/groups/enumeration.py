@@ -25,8 +25,8 @@ class EnumerationFactorGroup(groups.FactorGroup):
             An array containing explicit enumeration of all valid configurations
     """
 
-    factor_configs: np.ndarray
-    log_potentials: np.ndarray = field(init=True)
+    factor_configs: np.ndarray = field(init=True)
+    log_potentials: np.ndarray = field(init=True, default=np.empty((0,)))
     factor_type: Type = field(init=False, default=enumeration.EnumerationFactor)
 
     def __post_init__(self):
