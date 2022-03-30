@@ -6,7 +6,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.13.2
+#       jupytext_version: 1.13.7
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -22,7 +22,8 @@ import numpy as np
 from jax.example_libraries import optimizers
 from tqdm.notebook import tqdm
 
-from pgmax.fg import graph, groups
+from pgmax.fg import graph
+from pgmax.groups import enumeration, variables
 
 # %% [markdown]
 # # Visualize a trained GMRF
@@ -52,13 +53,13 @@ prototype_targets = jax.device_put(
 # %%
 M, N = target_images.shape[-2:]
 num_states = np.sum(n_clones)
-variables = groups.NDVariableArray(num_states=num_states, shape=(M, N))
-fg = graph.FactorGraph(variables)
+visible = variables.NDVariableArray(num_states=num_states, shape=(M, N))
+fg = graph.FactorGraph(visible)
 
 # %%
 # Add top-down factors
 fg.add_factor_group(
-    factory=groups.PairwiseFactorGroup,
+    factory=enumeration.PairwiseFactorGroup,
     variable_names_for_factors=[
         [(ii, jj), (ii + 1, jj)] for ii in range(M - 1) for jj in range(N)
     ],
@@ -66,7 +67,7 @@ fg.add_factor_group(
 )
 # Add left-right factors
 fg.add_factor_group(
-    factory=groups.PairwiseFactorGroup,
+    factory=enumeration.PairwiseFactorGroup,
     variable_names_for_factors=[
         [(ii, jj), (ii, jj + 1)] for ii in range(M) for jj in range(N - 1)
     ],
@@ -74,14 +75,14 @@ fg.add_factor_group(
 )
 # Add diagonal factors
 fg.add_factor_group(
-    factory=groups.PairwiseFactorGroup,
+    factory=enumeration.PairwiseFactorGroup,
     variable_names_for_factors=[
         [(ii, jj), (ii + 1, jj + 1)] for ii in range(M - 1) for jj in range(N - 1)
     ],
     name="diagonal0",
 )
 fg.add_factor_group(
-    factory=groups.PairwiseFactorGroup,
+    factory=enumeration.PairwiseFactorGroup,
     variable_names_for_factors=[
         [(ii, jj), (ii - 1, jj + 1)] for ii in range(1, M) for jj in range(N - 1)
     ],

@@ -193,7 +193,7 @@ class FactorGraph:
                 f"A factor group with the name {name} already exists. Please choose a different name!"
             )
 
-        # Add LogicalFactorGroup or default FactorGroup
+        # TODO: unit test with LogicalFactorGroup or default FactorGroup
         factor_group_type = factor_group.factor_type
         if factor_group_type not in FAC_TO_VAR_UPDATES:
             raise ValueError(
@@ -397,10 +397,7 @@ class FactorGraphState:
     vars_to_starts: Mapping[nodes.Variable, int]
     num_var_states: int
     total_factor_num_states: int
-    # variables_to_factors: Mapping[FrozenSet, nodes.Factor]
     named_factor_groups: Mapping[Hashable, groups.FactorGroup]
-    # factor_to_potentials_starts: OrderedDict[nodes.Factor, int]
-    # factor_to_msgs_starts: OrderedDict[nodes.Factor, int]
     factor_type_to_msgs_range: OrderedDict[type, Tuple[int, int]]
     factor_type_to_potentials_range: OrderedDict[type, Tuple[int, int]]
     factor_group_to_potentials_starts: OrderedDict[groups.FactorGroup, int]

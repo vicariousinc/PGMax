@@ -108,7 +108,7 @@ class ORFactorGroup(LogicalFactorGroup):
 
     def _get_variables_to_factors(
         self,
-    ) -> OrderedDict[FrozenSet, logical.LogicalFactor]:
+    ) -> OrderedDict[FrozenSet, logical.ORFactor]:
         """Function that generates a dictionary mapping set of connected variables to factors.
         This function is only called on demand when the user requires it.
 
@@ -145,7 +145,7 @@ class ANDFactorGroup(LogicalFactorGroup):
 
     def _get_variables_to_factors(
         self,
-    ) -> OrderedDict[FrozenSet, logical.LogicalFactor]:
+    ) -> OrderedDict[FrozenSet, logical.ANDFactor]:
         """Function that generates a dictionary mapping set of connected variables to factors.
         This function is only called on demand when the user requires it.
 

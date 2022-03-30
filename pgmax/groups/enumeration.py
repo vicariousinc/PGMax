@@ -23,21 +23,17 @@ class EnumerationFactorGroup(groups.FactorGroup):
     Args:
         factor_configs: Array of shape (num_val_configs, num_variables)
             An array containing explicit enumeration of all valid configurations
-        log_potentials: Optional array of shape (num_val_configs,) or (num_factors, num_val_configs).
-            If specified, it contains the log of the potential value for every possible configuration.
-            If none, it is assumed the log potential is uniform 0 and such an array is automatically
-            initialized.
     """
 
     factor_configs: np.ndarray
-    log_potentials: Optional[np.ndarray] = None
+    log_potentials: np.ndarray = field(init=True)
     factor_type: Type = field(init=False, default=enumeration.EnumerationFactor)
 
     def __post_init__(self):
         super().__post_init__()
 
         num_val_configs = self.factor_configs.shape[0]
-        if self.log_potentials is None:
+        if self.log_potentials.shape[0] == 0:
             log_potentials = np.zeros((self.num_factors, num_val_configs), dtype=float)
         else:
             if self.log_potentials.shape != (
@@ -51,9 +47,9 @@ class EnumerationFactorGroup(groups.FactorGroup):
                     f"Got {self.log_potentials.shape}."
                 )
 
-            log_potentials = np.broadcast_to(
-                self.log_potentials, (self.num_factors, self.factor_configs.shape[0])
-            )
+        log_potentials = np.broadcast_to(
+            self.log_potentials, (self.num_factors, self.factor_configs.shape[0])
+        )
         object.__setattr__(self, "log_potentials", log_potentials)
 
     def _get_variables_to_factors(
@@ -204,6 +200,7 @@ class PairwiseFactorGroup(groups.FactorGroup):
                     variables in the factors.
     """
 
+    factor_configs: np.array = field(init=False)
     log_potential_matrix: Optional[np.ndarray] = None
     factor_type: Type = field(init=False, default=enumeration.EnumerationFactor)
 
@@ -270,6 +267,7 @@ class PairwiseFactorGroup(groups.FactorGroup):
                     f"configurations) does not match the specified log_potential_matrix "
                     f"(with {log_potential_matrix.shape[-2:]} configurations)."
                 )
+        object.__setattr__(self, "log_potential_matrix", log_potential_matrix)
 
         factor_configs = (
             np.mgrid[
@@ -430,7 +428,7 @@ def _compile_factor_group_wiring(
     factor_configs,
     vars_to_starts,
     num_factors,
-):
+) -> enumeration.EnumerationWiring:
     """Array containing factor configs and edge states pairs
 
     Returns:

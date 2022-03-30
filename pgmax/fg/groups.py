@@ -14,6 +14,7 @@ from typing import (
     OrderedDict,
     Sequence,
     Tuple,
+    Type,
     Union,
 )
 
@@ -355,13 +356,19 @@ class FactorGroup:
         variable_names_for_factors: A list of list of variable names, where each innermost element is the
             name of a variable in variable_group. Each list within the outer list is taken to contain
             the names of the variables connected to a factor.
+        log_potentials: Optional array of shape (num_val_configs,) or (num_factors, num_val_configs).
+            If specified, it contains the log of the potential value for every possible configuration.
+            If none, it is assumed the log potential is uniform 0 and such an array is automatically
+            initialized.
     """
 
     variable_group: Union[CompositeVariableGroup, VariableGroup]
     variable_names_for_factors: Sequence[List]
     num_factors: int = field(init=False)
-    factor_edges_num_states: int = field(init=False)
-    variables_and_num_states: int = field(init=False)
+    factor_edges_num_states: np.ndarray = field(init=False)
+    variables_and_num_states: OrderedDict[FrozenSet, nodes.Factor] = field(init=False)
+    log_potentials: np.ndarray = field(init=False)
+    factor_type: Type = field(init=False)
 
     def __post_init__(self):
         object.__setattr__(self, "num_factors", len(self.variable_names_for_factors))
@@ -383,8 +390,9 @@ class FactorGroup:
 
         object.__setattr__(self, "factor_edges_num_states", np.array(edges_num_states))
         object.__setattr__(self, "variables_and_num_states", variables_and_num_states)
+        object.__setattr__(self, "log_potentials", np.empty((0,)))
 
-    def __getitem__(self, variables: Union[Sequence, Collection]) -> nodes.Factor:
+    def __getitem__(self, variables: Union[Sequence, Collection]) -> Any:
         """Function to query individual factors in the factor group
 
         Args:
@@ -398,7 +406,7 @@ class FactorGroup:
             ValueError: if the queried factor is not present in the factor group
         """
         variables = frozenset(variables)
-        if variables not in self._variables_to_factors():
+        if variables not in self._variables_to_factors:
             raise ValueError(
                 f"The queried factor connected to the set of variables {variables} is not present in the factor group."
             )
@@ -412,7 +420,7 @@ class FactorGroup:
         return tuple(self._variables_to_factors.values())
 
     @cached_property
-    def _variables_to_factors(self) -> Mapping[FrozenSet, nodes.Factor]:
+    def _variables_to_factors(self) -> Mapping[FrozenSet, Any]:
         """Function to compile potential array for the factor group.
         This function is only called on demand when the user requires it.
 
