@@ -126,20 +126,11 @@ def test_log_potentials():
     ):
         fg.bp_state.log_potentials["test"] = jnp.zeros((1, 15))
 
-    # fg.bp_state.log_potentials[[0]] = np.zeros(10)
-    # with pytest.raises(
-    #     ValueError,
-    #     match=re.escape(
-    #         f"Expected log potentials shape (10,) for factor {frozenset([0])}. Got (15,)"
-    #     ),
-    # ):
-    #     fg.bp_state.log_potentials[[0]] = np.zeros(15)
-
     with pytest.raises(
         ValueError,
         match=re.escape(f"Invalid name {frozenset([0])} for log potentials updates."),
     ):
-        fg.bp_state.log_potentials[frozenset([0])] = np.zeros(10)
+        fg.bp_state.log_potentials[[0]] = np.zeros(10)
 
     with pytest.raises(
         ValueError, match=re.escape("Expected log potentials shape (10,). Got (15,)")
@@ -163,13 +154,11 @@ def test_ftov_msgs():
         factor_configs=np.arange(10)[:, None],
         name="test",
     )
-    #     with pytest.raises(
-    #         ValueError,
-    #         match=re.escape(
-    #             f"Given message shape (10,) does not match expected shape (15,) from factor {frozenset([0])} to variable 0"
-    #         ),
-    #     ):
-    #         fg.bp_state.ftov_msgs[[0], 0] = np.ones(10)
+    with pytest.raises(
+        ValueError,
+        match=re.escape("Invalid names for setting messages"),
+    ):
+        fg.bp_state.ftov_msgs[[0], 0] = np.ones(10)
 
     with pytest.raises(
         ValueError,
@@ -178,12 +167,6 @@ def test_ftov_msgs():
         ),
     ):
         fg.bp_state.ftov_msgs[0] = np.ones(10)
-
-    with pytest.raises(
-        ValueError,
-        match=re.escape("Invalid names for setting messages"),
-    ):
-        fg.bp_state.ftov_msgs[1] = np.ones(10)
 
     with pytest.raises(
         ValueError, match=re.escape("Expected messages shape (15,). Got (10,)")
@@ -224,7 +207,7 @@ def test_bp():
     )
     run_bp, get_bp_state, get_beliefs = graph.BP(fg.bp_state, 1)
     bp_arrays = replace(
-        run_bp(),
+        run_bp(ftov_msgs_updates={0: np.zeros(15)}),
         log_potentials=jnp.zeros((10)),
     )
     bp_state = get_bp_state(bp_arrays)
