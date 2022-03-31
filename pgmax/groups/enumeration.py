@@ -245,20 +245,12 @@ class PairwiseFactorGroup(groups.FactorGroup):
                 )
 
             # Note: num_states0 = self.variable_group[fac_list[0]] is 2x slower
-            if isinstance(self.variable_group, groups.VariableGroup):
-                num_states0 = self.variable_group._names_to_variables[
-                    fac_list[0]
-                ].num_states
-                num_states1 = self.variable_group._names_to_variables[
-                    fac_list[1]
-                ].num_states
-            elif isinstance(self.variable_group, groups.CompositeVariableGroup):
-                num_states0 = self.variable_group.variable_group_container[
-                    fac_list[0][0]
-                ][fac_list[0][1]].num_states
-                num_states1 = self.variable_group.variable_group_container[
-                    fac_list[1][0]
-                ][fac_list[1][1]].num_states
+            num_states0 = self.variable_group._names_to_variables[
+                fac_list[0]
+            ].num_states
+            num_states1 = self.variable_group._names_to_variables[
+                fac_list[1]
+            ].num_states
 
             if not log_potential_matrix.shape[-2:] == (num_states0, num_states1):
                 raise ValueError(

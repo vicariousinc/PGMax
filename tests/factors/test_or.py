@@ -3,7 +3,6 @@ from itertools import product
 import jax
 import numpy as np
 
-from pgmax.factors import logical as logical_factor
 from pgmax.fg import graph
 from pgmax.groups import logical, variables
 
@@ -12,17 +11,12 @@ def test_run_bp_with_OR_factors():
     """
     Simultaneously test
     (1) the support of ORFactors in a FactorGraph and their specialized inference for different temperatures
-    (2) the support of large ORFactorGroups vs individual SingleFactorGroup for inference
-    (3) the support of several factor types in a FactorGraph and during inference
+    (2) the support of several factor types in a FactorGraph and during inference
 
     To do so, observe that an ORFactor can be defined as an equivalent EnumerationFactor
     (which list all the valid OR configurations) and define two equivalent FactorGraphs
     FG1: first half of factors are defined as EnumerationFactors, second half are defined as ORFactors
     FG2: first half of factors are defined as ORFactors, second half are defined as EnumerationFactors
-
-    In addition, observe that a large ORFactorGroup can be represented as a sequence of SingleFactorGroup.
-    Compiling wiring is faster in the former as it directly happens at the FactorGroup level (wiring happens
-    at the Factors level for the latter, the wirings are then concatenated).
 
     Inference for the EnumerationFactors will be run with pass_enum_fac_to_var_messages while
     inference for the ORFactors will be run with pass_logical_fac_to_var_messages.
@@ -116,80 +110,38 @@ def test_run_bp_with_OR_factors():
         variable_names_for_ORFactors_fg1 = []
         variable_names_for_ORFactors_fg2 = []
 
-        # For even value, build the large ORFactorGroup with specialized wiring
-        if idx % 2 == 0:
-            for factor_idx in range(num_factors):
-                variables_names_for_ORFactor = [
-                    ("parents", idx)
-                    for idx in range(
-                        num_parents_cumsum[factor_idx],
-                        num_parents_cumsum[factor_idx + 1],
-                    )
-                ] + [("children", factor_idx)]
-                if factor_idx < num_factors // 2:
-                    # Add the first half of factors to FactorGraph2
-                    variable_names_for_ORFactors_fg2.append(
+        for factor_idx in range(num_factors):
+            variables_names_for_ORFactor = [
+                ("parents", idx)
+                for idx in range(
+                    num_parents_cumsum[factor_idx],
+                    num_parents_cumsum[factor_idx + 1],
+                )
+            ] + [("children", factor_idx)]
+            if factor_idx < num_factors // 2:
+                # Add the first half of factors to FactorGraph2
+                variable_names_for_ORFactors_fg2.append(variables_names_for_ORFactor)
+            else:
+                if idx != 0:
+                    # Add the second half of factors to FactorGraph1
+                    variable_names_for_ORFactors_fg1.append(
                         variables_names_for_ORFactor
                     )
                 else:
-                    if idx != 0:
-                        # Add the second half of factors to FactorGraph1
-                        variable_names_for_ORFactors_fg1.append(
-                            variables_names_for_ORFactor
-                        )
-                    else:
-                        # Add all the ORFactors to FactorGraph2 for the first iter
-                        variable_names_for_ORFactors_fg2.append(
-                            variables_names_for_ORFactor
-                        )
+                    # Add all the ORFactors to FactorGraph2 for the first iter
+                    variable_names_for_ORFactors_fg2.append(
+                        variables_names_for_ORFactor
+                    )
 
-            if idx != 0:
-                fg1.add_factor_group(
-                    factory=logical.ORFactorGroup,
-                    variable_names_for_factors=variable_names_for_ORFactors_fg1,
-                )
-            fg2.add_factor_group(
+        if idx != 0:
+            fg1.add_factor_group(
                 factory=logical.ORFactorGroup,
-                variable_names_for_factors=variable_names_for_ORFactors_fg2,
+                variable_names_for_factors=variable_names_for_ORFactors_fg1,
             )
-        # For odd value, build the equivalent list of SingleFactorGroup
-        else:
-            for factor_idx in range(num_factors):
-                variables_names_for_ORFactor = [
-                    ("parents", idx)
-                    for idx in range(
-                        num_parents_cumsum[factor_idx],
-                        num_parents_cumsum[factor_idx + 1],
-                    )
-                ] + [("children", factor_idx)]
-
-                if factor_idx < num_factors // 2:
-                    # Add the first half of factors to FactorGraph2
-                    fg2.add_factor_by_type(
-                        variable_names=variables_names_for_ORFactor,
-                        factor_type=logical_factor.ORFactor,
-                    )
-                else:
-                    if idx != 0:
-                        # Add the second half of factors to FactorGraph1
-                        fg1.add_factor_by_type(
-                            variable_names=variables_names_for_ORFactor,
-                            factor_type=logical_factor.ORFactor,
-                        )
-                    else:
-                        # Add all the ANDFactors to FactorGraph2 for the first iter
-                        fg2.add_factor_by_type(
-                            variable_names=variables_names_for_ORFactor,
-                            factor_type=logical_factor.ORFactor,
-                        )
-
-        num_factors_fg1 = sum(
-            [len(fg1.factors[factor_type]) for factor_type in fg1.factors]
+        fg2.add_factor_group(
+            factory=logical.ORFactorGroup,
+            variable_names_for_factors=variable_names_for_ORFactors_fg2,
         )
-        num_factors_fg2 = sum(
-            [len(fg2.factors[factor_type]) for factor_type in fg2.factors]
-        )
-        assert num_factors_fg1 == num_factors_fg2 == num_factors
 
         # Run inference
         run_bp1, _, get_beliefs1 = graph.BP(fg1.bp_state, 5, temperature)

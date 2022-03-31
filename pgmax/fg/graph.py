@@ -101,6 +101,7 @@ class FactorGraph:
         )
         return hash(all_factor_groups)
 
+    # TODO: should we merge add_factor and add_factor_by_type?
     def add_factor(
         self,
         variable_names: List,
@@ -213,7 +214,6 @@ class FactorGraph:
                 )
             self._factors_var_names_to_type[tuple_var_names_for_factor] = factor_type
 
-        # TODO: unit test with LogicalFactorGroup or default FactorGroup
         factor_group_type = factor_group.factor_type
         if factor_group_type not in FAC_TO_VAR_UPDATES:
             raise ValueError(

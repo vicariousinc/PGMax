@@ -5,16 +5,18 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from pgmax.factors import FAC_TO_VAR_UPDATES, enumeration
+from pgmax.factors import FAC_TO_VAR_UPDATES
+from pgmax.factors import enumeration as enumeration_factor
+from pgmax.factors import logical as logical_factor
 from pgmax.fg import graph, groups
-from pgmax.groups import variables
+from pgmax.groups import logical, variables
 
 
 def test_factor_graph():
     variable_group = variables.VariableDict(15, (0,))
     fg = graph.FactorGraph(variable_group)
     fg.add_factor_by_type(
-        factor_type=enumeration.EnumerationFactor,
+        factor_type=enumeration_factor.EnumerationFactor,
         variable_names=[0],
         configs=np.arange(15)[:, None],
         log_potentials=np.zeros(15),
@@ -33,7 +35,7 @@ def test_factor_graph():
     with pytest.raises(
         ValueError,
         match=re.escape(
-            f"A {enumeration.EnumerationFactor} involving variables {tuple([0])} already exists."
+            f"A {enumeration_factor.EnumerationFactor} involving variables {tuple([0])} already exists."
         ),
     ):
         fg.add_factor(
@@ -48,6 +50,41 @@ def test_factor_graph():
         ),
     ):
         fg.add_factor_by_type(variable_names=[0], factor_type=groups.FactorGroup)
+
+
+def test_factor_adding():
+    A = variables.NDVariableArray(num_states=2, shape=(10,))
+    B = variables.NDVariableArray(num_states=2, shape=(10,))
+    fg = graph.FactorGraph(variables=dict(A=A, B=B))
+
+    with pytest.raises(ValueError, match="Do not add a factor group with no factors."):
+        fg.add_factor_group(
+            factory=logical.LogicalFactorGroup,
+            variable_names_for_factors=[],
+        )
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            f"Type {logical_factor.LogicalFactor} is not one of the supported factor types {FAC_TO_VAR_UPDATES.keys()}"
+        ),
+    ):
+        fg.add_factor_group(
+            factory=logical.LogicalFactorGroup,
+            variable_names_for_factors=[[("A", 0), ("B", 0)]],
+        )
+
+    variables0 = [("A", 0), ("B", 0)]
+    variables1 = [("A", 1), ("B", 1)]
+    LogicalFactor = logical_factor.LogicalFactor(fg._variable_group[variables0])
+    with pytest.raises(
+        ValueError, match="SingleFactorGroup should only contain one factor. Got 2"
+    ):
+        groups.SingleFactorGroup(
+            variable_group=fg._variable_group,
+            variable_names_for_factors=[variables0, variables1],
+            factor=LogicalFactor,
+        )
 
 
 def test_bp_state():
@@ -100,9 +137,9 @@ def test_log_potentials():
 
     with pytest.raises(
         ValueError,
-        match=re.escape(f"Invalid name {frozenset([1])} for log potentials updates."),
+        match=re.escape(f"Invalid name {frozenset([0])} for log potentials updates."),
     ):
-        fg.bp_state.log_potentials[frozenset([1])] = np.zeros(10)
+        fg.bp_state.log_potentials[frozenset([0])] = np.zeros(10)
 
     with pytest.raises(
         ValueError, match=re.escape("Expected log potentials shape (10,). Got (15,)")
@@ -153,10 +190,11 @@ def test_ftov_msgs():
     ):
         graph.FToVMessages(fg_state=fg.fg_state, value=np.zeros(10))
 
-
-#     ftov_msgs = graph.FToVMessages(fg_state=fg.fg_state, value=np.zeros(15))
-#     with pytest.raises(ValueError, match=re.escape("Invalid names (10,)")):
-#         ftov_msgs[(10,)]
+    ftov_msgs = graph.FToVMessages(fg_state=fg.fg_state, value=np.zeros(15))
+    with pytest.raises(
+        TypeError, match=re.escape("'FToVMessages' object is not subscriptable")
+    ):
+        ftov_msgs[(10,)]
 
 
 def test_evidence():

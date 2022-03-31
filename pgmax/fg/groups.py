@@ -382,12 +382,7 @@ class FactorGroup:
 
         for variable_names_for_factor in self.variable_names_for_factors:
             for variable_name in variable_names_for_factor:
-                if isinstance(self.variable_group, VariableGroup):
-                    variable = self.variable_group._names_to_variables[variable_name]
-                elif isinstance(self.variable_group, CompositeVariableGroup):
-                    variable = self.variable_group.variable_group_container[
-                        variable_name[0]
-                    ][variable_name[1]]
+                variable = self.variable_group._names_to_variables[variable_name]
                 num_states = variable.num_states
                 edges_num_states.append(num_states)
                 variables_and_num_states.append((variable, num_states))
