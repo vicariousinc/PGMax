@@ -439,8 +439,6 @@ class FactorGroup:
     @cached_property
     def factor_group_log_potentials(self) -> np.ndarray:
         """Flattened array of log potentials"""
-        if not hasattr(self, "log_potentials"):
-            raise ValueError("The FactorGroup does not have log potentials")
         return self.log_potentials.flatten()
 
     def _get_variables_to_factors(

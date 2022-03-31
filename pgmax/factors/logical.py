@@ -150,10 +150,12 @@ class LogicalFactor(nodes.Factor):
         self, vars_to_starts: Mapping[nodes.Variable, int]
     ) -> LogicalWiring:
         """Compile LogicalWiring for the LogicalFactor
+
         Args:
             vars_to_starts: A dictionary that maps variables to their global starting indices
                 For an n-state variable, a global start index of m means the global indices
                 of its n variable states are m, m + 1, ..., m + n - 1
+
         Returns:
              LogicalWiring for the LogicalFactor
         """

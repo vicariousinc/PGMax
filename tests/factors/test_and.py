@@ -185,6 +185,14 @@ def test_run_bp_with_AND_factors():
                             factor_type=logical_factor.ANDFactor,
                         )
 
+        num_factors_fg1 = sum(
+            [len(fg1.factors[factor_type]) for factor_type in fg1.factors]
+        )
+        num_factors_fg2 = sum(
+            [len(fg2.factors[factor_type]) for factor_type in fg2.factors]
+        )
+        assert num_factors_fg1 == num_factors_fg2 == num_factors
+
         # Run inference
         run_bp1, _, get_beliefs1 = graph.BP(fg1.bp_state, 1, temperature)
         run_bp2, _, get_beliefs2 = graph.BP(fg2.bp_state, 1, temperature)

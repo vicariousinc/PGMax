@@ -98,11 +98,11 @@ def test_log_potentials():
     # ):
     #     fg.bp_state.log_potentials[[0]] = np.zeros(15)
 
-    # with pytest.raises(
-    #     ValueError,
-    #     match=re.escape(f"Invalid name {frozenset([1])} for log potentials updates."),
-    # ):
-    #     fg.bp_state.log_potentials[frozenset([1])] = np.zeros(10)
+    with pytest.raises(
+        ValueError,
+        match=re.escape(f"Invalid name {frozenset([1])} for log potentials updates."),
+    ):
+        fg.bp_state.log_potentials[frozenset([1])] = np.zeros(10)
 
     with pytest.raises(
         ValueError, match=re.escape("Expected log potentials shape (10,). Got (15,)")
@@ -118,40 +118,41 @@ def test_log_potentials():
         fg.bp_state.log_potentials[[1]]
 
 
-# def test_ftov_msgs():
-#     variable_group = variables.VariableDict(15, (0,))
-#     fg = graph.FactorGraph(variable_group)
-#     fg.add_factor(
-#         variable_names=[0],
-#         factor_configs=np.arange(10)[:, None],
-#         name="test",
-#     )
-#     with pytest.raises(
-#         ValueError,
-#         match=re.escape(
-#             f"Given message shape (10,) does not match expected shape (15,) from factor {frozenset([0])} to variable 0"
-#         ),
-#     ):
-#         fg.bp_state.ftov_msgs[[0], 0] = np.ones(10)
+def test_ftov_msgs():
+    variable_group = variables.VariableDict(15, (0,))
+    fg = graph.FactorGraph(variable_group)
+    fg.add_factor(
+        variable_names=[0],
+        factor_configs=np.arange(10)[:, None],
+        name="test",
+    )
+    #     with pytest.raises(
+    #         ValueError,
+    #         match=re.escape(
+    #             f"Given message shape (10,) does not match expected shape (15,) from factor {frozenset([0])} to variable 0"
+    #         ),
+    #     ):
+    #         fg.bp_state.ftov_msgs[[0], 0] = np.ones(10)
 
-#     with pytest.raises(
-#         ValueError,
-#         match=re.escape(
-#             "Given belief shape (10,) does not match expected shape (15,) for variable 0"
-#         ),
-#     ):
-#         fg.bp_state.ftov_msgs[0] = np.ones(10)
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Given belief shape (10,) does not match expected shape (15,) for variable 0"
+        ),
+    ):
+        fg.bp_state.ftov_msgs[0] = np.ones(10)
 
-#     with pytest.raises(
-#         ValueError,
-#         match=re.escape("Invalid names for setting messages"),
-#     ):
-#         fg.bp_state.ftov_msgs[1] = np.ones(10)
+    with pytest.raises(
+        ValueError,
+        match=re.escape("Invalid names for setting messages"),
+    ):
+        fg.bp_state.ftov_msgs[1] = np.ones(10)
 
-#     with pytest.raises(
-#         ValueError, match=re.escape("Expected messages shape (15,). Got (10,)")
-#     ):
-#         graph.FToVMessages(fg_state=fg.fg_state, value=np.zeros(10))
+    with pytest.raises(
+        ValueError, match=re.escape("Expected messages shape (15,). Got (10,)")
+    ):
+        graph.FToVMessages(fg_state=fg.fg_state, value=np.zeros(10))
+
 
 #     ftov_msgs = graph.FToVMessages(fg_state=fg.fg_state, value=np.zeros(15))
 #     with pytest.raises(ValueError, match=re.escape("Invalid names (10,)")):

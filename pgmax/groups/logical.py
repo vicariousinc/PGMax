@@ -24,6 +24,7 @@ class LogicalFactorGroup(groups.FactorGroup):
 
     log_potentials: np.ndarray = field(init=False, default=np.empty((0,)))
     edge_states_offset: int = field(init=False)
+    factor_type: Type = field(init=False, default=logical.LogicalFactor)
 
     def __post_init__(self):
         # TODO: move all asserts from LogicalFactor to here
