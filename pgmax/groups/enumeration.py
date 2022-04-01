@@ -95,7 +95,7 @@ class EnumerationFactorGroup(groups.FactorGroup):
         Returns:
              EnumerationWiring for the EnumerationFactorGroup
         """
-        return _compile_factor_group_wiring(
+        return enumeration.compile_enumeration_wiring(
             factor_edges_num_states=self.factor_edges_num_states,
             variables_for_factors=self.variables_for_factors,
             num_factors=self.num_factors,
@@ -329,8 +329,7 @@ class PairwiseFactorGroup(groups.FactorGroup):
         Returns:
              EnumerationWiring for the PairwiseFactorGroup
         """
-
-        return _compile_factor_group_wiring(
+        return enumeration.compile_enumeration_wiring(
             factor_edges_num_states=self.factor_edges_num_states,
             variables_for_factors=self.variables_for_factors,
             num_factors=self.num_factors,
@@ -416,48 +415,3 @@ class PairwiseFactorGroup(groups.FactorGroup):
             )
 
         return data
-
-
-def _compile_factor_group_wiring(
-    factor_edges_num_states,
-    variables_for_factors,
-    factor_configs,
-    vars_to_starts,
-    num_factors,
-) -> enumeration.EnumerationWiring:
-    """Array containing factor configs and edge states pairs
-
-    Returns:
-        Array of shape (num_factor_configs, 2)
-        factor_configs_edge_states[ii] contains a pair of global factor_config and edge_state indices
-        factor_configs_edge_states[ii, 0] contains the global factor config index,
-        factor_configs_edge_states[ii, 1] contains the corresponding global edge_state index.
-        Both indices only take into account the EnumerationFactors of the FactorGraph
-    """
-    var_states_for_edges = []
-    for variable in variables_for_factors:
-        num_states = variable.num_states
-        this_var_states_for_edges = np.arange(
-            vars_to_starts[variable], vars_to_starts[variable] + num_states
-        )
-        var_states_for_edges.append(this_var_states_for_edges)
-
-    edges_starts = np.insert(factor_edges_num_states.cumsum(), 0, 0)[:-1].reshape(
-        -1, factor_configs.shape[1]
-    )
-
-    factor_configs_edge_states = np.stack(
-        [
-            np.repeat(
-                np.arange(factor_configs.shape[0] * num_factors),
-                factor_configs.shape[1],
-            ),
-            (factor_configs[None] + edges_starts[:, None, :]).flatten(),
-        ],
-        axis=1,
-    )
-    return enumeration.EnumerationWiring(
-        edges_num_states=factor_edges_num_states,
-        var_states_for_edges=np.concatenate(var_states_for_edges),
-        factor_configs_edge_states=factor_configs_edge_states,
-    )

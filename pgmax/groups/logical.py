@@ -4,8 +4,6 @@ import collections
 from dataclasses import dataclass, field
 from typing import FrozenSet, OrderedDict, Type
 
-import numpy as np
-
 from pgmax.factors import logical
 from pgmax.fg import groups
 
@@ -23,7 +21,6 @@ class LogicalFactorGroup(groups.FactorGroup):
     """
 
     edge_states_offset: int = field(init=False)
-    factor_type: Type = field(init=False, default=logical.LogicalFactor)
 
     def compile_wiring(self, vars_to_starts) -> logical.LogicalWiring:
         """Compile LogicalWiring for the LogicalFactorGroup
@@ -36,49 +33,11 @@ class LogicalFactorGroup(groups.FactorGroup):
         Returns:
              LogicalWiring for the LogicalFactorGroup
         """
-        relevant_state = (-self.edge_states_offset + 1) // 2
-
-        var_states_for_edges = []
-        for variable in self.variables_for_factors:
-            num_states = variable.num_states
-            this_var_states_for_edges = np.arange(
-                vars_to_starts[variable], vars_to_starts[variable] + num_states
-            )
-            var_states_for_edges.append(this_var_states_for_edges)
-
-        edges_num_states_cumsum = 0
-        parents_edge_states = []
-        children_edge_states = []
-        for factor_idx, variable_names_for_factor in enumerate(
-            self.variable_names_for_factors
-        ):
-            num_parents = len(variable_names_for_factor) - 1
-
-            # Note: edges_num_states_cumsum corresponds to the factor_to_msgs_start for the LogicalFactor
-            this_parents_edge_states = np.vstack(
-                [
-                    np.full(num_parents, fill_value=factor_idx, dtype=int),
-                    np.arange(
-                        edges_num_states_cumsum + relevant_state,
-                        edges_num_states_cumsum + 2 * num_parents,
-                        2,
-                        dtype=int,
-                    ),
-                ],
-            ).T
-            this_child_edge_state = (
-                edges_num_states_cumsum + 2 * num_parents + relevant_state
-            )
-
-            parents_edge_states.append(this_parents_edge_states)
-            children_edge_states.append(this_child_edge_state)
-            edges_num_states_cumsum += 2 * (num_parents + 1)
-
-        return logical.LogicalWiring(
-            edges_num_states=self.factor_edges_num_states,
-            var_states_for_edges=np.concatenate(var_states_for_edges),
-            parents_edge_states=np.concatenate(parents_edge_states),
-            children_edge_states=np.array(children_edge_states),
+        return logical.compile_logical_wiring(
+            factor_edges_num_states=self.factor_edges_num_states,
+            variables_for_factors=self.variables_for_factors,
+            factor_sizes=self.factor_sizes,
+            vars_to_starts=vars_to_starts,
             edge_states_offset=self.edge_states_offset,
         )
 

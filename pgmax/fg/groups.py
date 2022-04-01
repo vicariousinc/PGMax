@@ -357,17 +357,20 @@ class FactorGroup:
             name of a variable in variable_group. Each list within the outer list is taken to contain
             the names of the variables connected to a Factor.
         num_factors: Number of Factors in the FactorGroup.
+        factor_sizes: Sizes of the Factors in the FactorGroup.
         factor_edges_num_states: An array concatenating the number of states for the variables connected to each
             Factor of the FactorGroup. Each variable will appear once for each Factor it connects to.
         variables_for_factors: A tuple concatenating the variables (with repetition) connected to each
             Factor of the FactorGroup. Each variable will appear once for each Factor it connects to.
         factor_type: Factor type shared by all the Factors in the FactorGroup.
-        log_potentials: array of log potentials.
+        factor_configs: Optional array containing an explicit enumeration of all valid configurations
+        log_potentials: Array of log potentials.
     """
 
     variable_group: Union[CompositeVariableGroup, VariableGroup]
     variable_names_for_factors: Sequence[List]
     num_factors: int = field(init=False)
+    factor_sizes: List[int] = field(init=False)
     factor_edges_num_states: np.ndarray = field(init=False)
     variables_for_factors: Tuple[nodes.Variable, ...] = field(init=False)
     factor_type: Type = field(init=False)
@@ -379,6 +382,14 @@ class FactorGroup:
             raise ValueError("Do not add a factor group with no factors.")
 
         object.__setattr__(self, "num_factors", len(self.variable_names_for_factors))
+        object.__setattr__(
+            self,
+            "factor_sizes",
+            [
+                len(variable_names_for_factor)
+                for variable_names_for_factor in self.variable_names_for_factors
+            ],
+        )
 
         factor_edges_num_states = []
         variables_for_factors = []

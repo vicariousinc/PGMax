@@ -6,12 +6,13 @@ import numpy as np
 import pytest
 
 from pgmax.fg import groups, nodes
-from pgmax.groups import enumeration, variables
+from pgmax.groups import enumeration
+from pgmax.groups import variables as vgroup
 
 
 def test_composite_variable_group():
-    variable_dict1 = variables.VariableDict(15, tuple([0, 1, 2]))
-    variable_dict2 = variables.VariableDict(15, tuple([0, 1, 2]))
+    variable_dict1 = vgroup.VariableDict(15, tuple([0, 1, 2]))
+    variable_dict2 = vgroup.VariableDict(15, tuple([0, 1, 2]))
     composite_variable_sequence = groups.CompositeVariableGroup(
         [variable_dict1, variable_dict2]
     )
@@ -82,7 +83,7 @@ def test_composite_variable_group():
 
 
 def test_variable_dict():
-    variable_dict = variables.VariableDict(15, tuple([0, 1, 2]))
+    variable_dict = vgroup.VariableDict(15, tuple([0, 1, 2]))
     with pytest.raises(
         ValueError, match="data is referring to a non-existent variable 3"
     ):
@@ -122,9 +123,9 @@ def test_variable_dict():
 
 
 def test_nd_variable_array():
-    variable_group = variables.NDVariableArray(2, (1,))
+    variable_group = vgroup.NDVariableArray(2, (1,))
     assert isinstance(variable_group[0], nodes.Variable)
-    variable_group = variables.NDVariableArray(3, (2, 2))
+    variable_group = vgroup.NDVariableArray(3, (2, 2))
     with pytest.raises(
         ValueError,
         match=re.escape("data should be of shape (2, 2) or (2, 2, 3). Got (3, 3)."),
@@ -152,7 +153,7 @@ def test_nd_variable_array():
 
 
 def test_enumeration_factor_group():
-    variable_group = variables.NDVariableArray(3, (2, 2))
+    variable_group = vgroup.NDVariableArray(3, (2, 2))
     with pytest.raises(
         ValueError,
         match=re.escape("Expected log potentials shape: (1,) or (2, 1). Got (3, 2)"),
@@ -215,7 +216,7 @@ def test_enumeration_factor_group():
 
 
 def test_pairwise_factor_group():
-    variable_group = variables.NDVariableArray(3, (2, 2))
+    variable_group = vgroup.NDVariableArray(3, (2, 2))
     with pytest.raises(
         ValueError, match=re.escape("log_potential_matrix should be either a 2D array")
     ):

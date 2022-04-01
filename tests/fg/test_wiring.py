@@ -3,7 +3,8 @@ import numpy as np
 from pgmax.factors import enumeration as enumeration_factor
 from pgmax.factors import logical as logical_factor
 from pgmax.fg import graph
-from pgmax.groups import enumeration, logical, variables
+from pgmax.groups import enumeration, logical
+from pgmax.groups import variables as vgroup
 
 
 def test_wiring_with_PairwiseFactorGroup():
@@ -11,8 +12,8 @@ def test_wiring_with_PairwiseFactorGroup():
     Test the equivalence of the wiring compiled at the PairwiseFactorGroup level
     vs at the individual EnumerationFactor level (which is called from SingleFactorGroup)
     """
-    A = variables.NDVariableArray(num_states=2, shape=(10,))
-    B = variables.NDVariableArray(num_states=2, shape=(10,))
+    A = vgroup.NDVariableArray(num_states=2, shape=(10,))
+    B = vgroup.NDVariableArray(num_states=2, shape=(10,))
 
     # FactorGraph with a single PairwiseFactorGroup
     fg1 = graph.FactorGraph(variables=dict(A=A, B=B))
@@ -71,9 +72,9 @@ def test_wiring_with_ORFactorGroup():
     Test the equivalence of the wiring compiled at the ORFactorGroup level
     vs at the individual ORFactor level (which is called from SingleFactorGroup)
     """
-    A = variables.NDVariableArray(num_states=2, shape=(10,))
-    B = variables.NDVariableArray(num_states=2, shape=(10,))
-    C = variables.NDVariableArray(num_states=2, shape=(10,))
+    A = vgroup.NDVariableArray(num_states=2, shape=(10,))
+    B = vgroup.NDVariableArray(num_states=2, shape=(10,))
+    C = vgroup.NDVariableArray(num_states=2, shape=(10,))
 
     # FactorGraph with a single ORFactorGroup
     fg1 = graph.FactorGraph(variables=dict(A=A, B=B, C=C))
@@ -128,9 +129,9 @@ def test_wiring_with_ANDFactorGroup():
     Test the equivalence of the wiring compiled at the ANDFactorGroup level
     vs at the individual ORFactor level (which is called from SingleFactorGroup)
     """
-    A = variables.NDVariableArray(num_states=2, shape=(10,))
-    B = variables.NDVariableArray(num_states=2, shape=(10,))
-    C = variables.NDVariableArray(num_states=2, shape=(10,))
+    A = vgroup.NDVariableArray(num_states=2, shape=(10,))
+    B = vgroup.NDVariableArray(num_states=2, shape=(10,))
+    C = vgroup.NDVariableArray(num_states=2, shape=(10,))
 
     # FactorGraph with a single ANDFactorGroup
     fg1 = graph.FactorGraph(variables=dict(A=A, B=B, C=C))
