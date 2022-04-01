@@ -209,7 +209,7 @@ def compile_logical_wiring(
     vars_to_starts,
     edge_states_offset,
 ) -> LogicalWiring:
-    """Compile a LogicalWiring for a Factor or a FactorGroup
+    """Compile a LogicalWiring for a LogicalFactor or a FactorGroup with LogicalFactors.
 
     Args:
         factor_edges_num_states: An array concatenating the number of states for the variables connected to each
@@ -236,13 +236,13 @@ def compile_logical_wiring(
         )
         var_states_for_edges.append(this_var_states_for_edges)
 
+    # Note: edges_num_states_cumsum corresponds to the factor_to_msgs_start for the LogicalFactors
     edges_num_states_cumsum = 0
     parents_edge_states = []
     children_edge_states = []
     for factor_idx, factor_size in enumerate(factor_sizes):
         num_parents = factor_size - 1
 
-        # Note: edges_num_states_cumsum corresponds to the factor_to_msgs_start for the LogicalFactor
         this_parents_edge_states = np.vstack(
             [
                 np.full(num_parents, fill_value=factor_idx, dtype=int),

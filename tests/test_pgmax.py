@@ -7,7 +7,8 @@ from numpy.random import default_rng
 from scipy.ndimage import gaussian_filter
 
 from pgmax.fg import graph, groups, nodes
-from pgmax.groups import enumeration, variables
+from pgmax.groups import enumeration
+from pgmax.groups import variables as vgroup
 
 # Set random seed for rng
 rng = default_rng(23)
@@ -213,13 +214,13 @@ def test_e2e_sanity_check():
     # We create a NDVariableArray such that the [0,i,j] entry corresponds to the vertical cut variable (i.e, the one
     # attached horizontally to the factor) that's at that location in the image, and the [1,i,j] entry corresponds to
     # the horizontal cut variable (i.e, the one attached vertically to the factor) that's at that location
-    grid_vars_group = variables.NDVariableArray(3, (2, M - 1, N - 1))
+    grid_vars_group = vgroup.NDVariableArray(3, (2, M - 1, N - 1))
 
     # Make a group of additional variables for the edges of the grid
     extra_row_names: List[Tuple[Any, ...]] = [(0, row, N - 1) for row in range(M - 1)]
     extra_col_names: List[Tuple[Any, ...]] = [(1, M - 1, col) for col in range(N - 1)]
     additional_names = tuple(extra_row_names + extra_col_names)
-    additional_names_group = variables.VariableDict(3, additional_names)
+    additional_names_group = vgroup.VariableDict(3, additional_names)
 
     # Combine these two VariableGroups into one CompositeVariableGroup
     composite_grid_group = groups.CompositeVariableGroup(
@@ -387,8 +388,8 @@ def test_e2e_heretic():
     # Define some global constants
     im_size = (30, 30)
     # Instantiate all the Variables in the factor graph via VariableGroups
-    pixel_vars = variables.NDVariableArray(3, im_size)
-    hidden_vars = variables.NDVariableArray(
+    pixel_vars = vgroup.NDVariableArray(3, im_size)
+    hidden_vars = vgroup.NDVariableArray(
         17, (im_size[0] - 2, im_size[1] - 2)
     )  # Each hidden var is connected to a 3x3 patch of pixel vars
 

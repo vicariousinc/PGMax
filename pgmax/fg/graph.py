@@ -274,10 +274,6 @@ class FactorGraph:
         Returns:
             A dictionnary mapping each factor type to its wiring.
         """
-        for factor_type in self._factor_types_to_groups:
-            for factor_group in self._factor_types_to_groups[factor_type]:
-                print(factor_type)
-                factor_group.compile_wiring(self._vars_to_starts)
         wiring = collections.OrderedDict(
             [
                 (

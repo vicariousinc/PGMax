@@ -127,7 +127,7 @@ def test_wiring_with_ORFactorGroup():
 def test_wiring_with_ANDFactorGroup():
     """
     Test the equivalence of the wiring compiled at the ANDFactorGroup level
-    vs at the individual ORFactor level (which is called from SingleFactorGroup)
+    vs at the individual ANDFactor level (which is called from SingleFactorGroup)
     """
     A = vgroup.NDVariableArray(num_states=2, shape=(10,))
     B = vgroup.NDVariableArray(num_states=2, shape=(10,))

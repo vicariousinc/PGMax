@@ -4,7 +4,8 @@ import jax
 import numpy as np
 
 from pgmax.fg import graph
-from pgmax.groups import logical, variables
+from pgmax.groups import logical
+from pgmax.groups import variables as vgroup
 
 
 def test_run_bp_with_OR_factors():
@@ -39,23 +40,19 @@ def test_run_bp_with_OR_factors():
             temperature = np.random.uniform(low=0.5, high=1.0)
 
         # Graph 1
-        parents_variables1 = variables.NDVariableArray(
+        parents_variables1 = vgroup.NDVariableArray(
             num_states=2, shape=(num_parents.sum(),)
         )
-        children_variable1 = variables.NDVariableArray(
-            num_states=2, shape=(num_factors,)
-        )
+        children_variable1 = vgroup.NDVariableArray(num_states=2, shape=(num_factors,))
         fg1 = graph.FactorGraph(
             variables=dict(parents=parents_variables1, children=children_variable1)
         )
 
         # Graph 2
-        parents_variables2 = variables.NDVariableArray(
+        parents_variables2 = vgroup.NDVariableArray(
             num_states=2, shape=(num_parents.sum(),)
         )
-        children_variable2 = variables.NDVariableArray(
-            num_states=2, shape=(num_factors,)
-        )
+        children_variable2 = vgroup.NDVariableArray(num_states=2, shape=(num_factors,))
         fg2 = graph.FactorGraph(
             variables=dict(parents=parents_variables2, children=children_variable2)
         )

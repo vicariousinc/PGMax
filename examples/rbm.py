@@ -148,9 +148,6 @@ run_bp, get_bp_state, get_beliefs = graph.BP(
 )
 
 # %%
-# %debug
-
-# %%
 bp_arrays = run_bp(
     evidence_updates={
         "hidden": np.random.gumbel(size=(bh.shape[0], 2)),

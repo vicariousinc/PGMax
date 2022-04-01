@@ -184,7 +184,7 @@ def compile_enumeration_wiring(
     vars_to_starts,
     num_factors,
 ) -> EnumerationWiring:
-    """Compile an EnumerationWiring for a Factor or a FactorGroup
+    """Compile an EnumerationWiring for an EnumerationFactor or a FactorGroup with EnumerationFactors.
 
     Args:
         factor_edges_num_states: An array concatenating the number of states for the variables connected to each
@@ -209,6 +209,7 @@ def compile_enumeration_wiring(
         )
         var_states_for_edges.append(this_var_states_for_edges)
 
+    # Note: edges_starts corresponds to the factor_to_msgs_start for the LogicalFactors
     edges_starts = np.insert(factor_edges_num_states.cumsum(), 0, 0)[:-1].reshape(
         -1, factor_configs.shape[1]
     )

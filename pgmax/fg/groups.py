@@ -487,9 +487,10 @@ class FactorGroup:
 
     def compile_wiring(self, vars_to_starts: Mapping[nodes.Variable, int]) -> Any:
         """Compile wiring for the FactorGroup.
-        In pratice, this function is overwritten to implement an efficient wiring at the
-        FactorGroup level.
-        When this does not happen, the slower fallback concatenates wiring at the Factor level.
+        In pratice, this function is overwritten to implement an efficient wiring directly
+        compiled at the FactorGroup level.
+        If the overwritten does not happen, the slower fallback proposed here compiles
+        all the wirings at the Factor level then concatenates them.
 
         Args:
             vars_to_starts: A dictionary that maps variables to their global starting indices
