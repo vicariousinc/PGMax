@@ -6,10 +6,12 @@ from typing import Mapping, Optional, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
+import numba as nb
 import numpy as np
 from jax.nn import log_sigmoid, sigmoid
 
 from pgmax.bp import bp_utils
+from pgmax.factors import enumeration
 from pgmax.fg import nodes
 
 
@@ -161,7 +163,12 @@ class LogicalFactor(nodes.Factor):
         """
         return compile_logical_wiring(
             factor_edges_num_states=self.edges_num_states,
+<<<<<<< HEAD
             variables_for_factors=tuple([self.variables]),
+=======
+            variables_for_factors=self.variables,
+            factor_sizes=np.array([len(self.variables)]),
+>>>>>>> 94b1fba... Update
             vars_to_starts=vars_to_starts,
             edge_states_offset=self.edge_states_offset,
         )
@@ -225,47 +232,66 @@ def compile_logical_wiring(
     """
     relevant_state = (-edge_states_offset + 1) // 2
 
-    var_states_for_edges = []
-    for variables_for_factor in variables_for_factors:
-        for variable in variables_for_factor:
-            num_states = variable.num_states
-            this_var_states_for_edges = np.arange(
-                vars_to_starts[variable], vars_to_starts[variable] + num_states
-            )
-            var_states_for_edges.append(this_var_states_for_edges)
+    var_states_for_edges = np.empty(shape=(2 * len(variables_for_factors),), dtype=int)
+    start_indices = np.arange(len(variables_for_factors))
+    var_states = np.array(
+        [vars_to_starts[variable] for variable in variables_for_factors]
+    )
+    enumeration._compile_var_states_numba(
+        var_states_for_edges, start_indices, var_states
+    )
 
-    # Note: edges_num_states_cumsum corresponds to the factor_to_msgs_start for the LogicalFactors
-    edges_num_states_cumsum = 0
-    parents_edge_states = []
-    children_edge_states = []
-    for factor_idx, variables_for_factor in enumerate(variables_for_factors):
-        num_parents = len(variables_for_factor) - 1
-        this_parents_edge_states = np.vstack(
-            [
-                np.full(num_parents, fill_value=factor_idx, dtype=int),
-                np.arange(
-                    edges_num_states_cumsum + relevant_state,
-                    edges_num_states_cumsum + 2 * num_parents,
-                    2,
-                    dtype=int,
-                ),
-            ],
-        ).T
-        this_child_edge_state = (
-            edges_num_states_cumsum + 2 * num_parents + relevant_state
-        )
+    num_parents = factor_sizes - 1
+    num_parents_cumsum = np.insert(np.cumsum(num_parents), 0, 0)
+    parents_edge_states = np.empty(shape=(num_parents_cumsum[-1], 2), dtype=int)
+    children_edge_states = np.empty(shape=(factor_sizes.shape[0],), dtype=int)
 
-        parents_edge_states.append(this_parents_edge_states)
-        children_edge_states.append(this_child_edge_state)
-        edges_num_states_cumsum += 2 * (num_parents + 1)
+    # Note: edges_num_states_cumsum corresponds to the factor_to_msgs_start for the LogicalFactor
+    edges_num_states_cumsum = np.insert(np.cumsum(2 * factor_sizes), 0, 0)
+
+    compile_logical_wiring_numba(
+        parents_edge_states=parents_edge_states,
+        children_edge_states=children_edge_states,
+        num_parents=num_parents,
+        num_parents_cumsum=num_parents_cumsum,
+        edges_num_states_cumsum=edges_num_states_cumsum,
+        relevant_state=relevant_state,
+    )
 
     return LogicalWiring(
         edges_num_states=factor_edges_num_states,
-        var_states_for_edges=np.concatenate(var_states_for_edges),
-        parents_edge_states=np.concatenate(parents_edge_states),
-        children_edge_states=np.array(children_edge_states),
+        var_states_for_edges=var_states_for_edges,
+        parents_edge_states=parents_edge_states,
+        children_edge_states=children_edge_states,
         edge_states_offset=edge_states_offset,
     )
+
+
+@nb.jit(parallel=False, cache=True, fastmath=True, nopython=True)
+def compile_logical_wiring_numba(
+    parents_edge_states,
+    children_edge_states,
+    num_parents,
+    num_parents_cumsum,
+    edges_num_states_cumsum,
+    relevant_state,
+):
+    for factor_idx in nb.prange(num_parents.shape[0]):
+        start_parents, end_parents = (
+            num_parents_cumsum[factor_idx],
+            num_parents_cumsum[factor_idx + 1],
+        )
+        parents_edge_states[start_parents:end_parents, 0] = factor_idx
+        parents_edge_states[start_parents:end_parents, 1] = np.arange(
+            edges_num_states_cumsum[factor_idx] + relevant_state,
+            edges_num_states_cumsum[factor_idx] + 2 * num_parents[factor_idx],
+            2,
+        )
+        children_edge_states[factor_idx] = (
+            edges_num_states_cumsum[factor_idx]
+            + 2 * num_parents[factor_idx]
+            + relevant_state
+        )
 
 
 @functools.partial(jax.jit, static_argnames=("temperature"))

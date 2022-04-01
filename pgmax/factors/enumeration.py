@@ -6,6 +6,7 @@ from typing import Mapping, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
+import numba as nb
 import numpy as np
 
 from pgmax.bp import bp_utils
@@ -201,35 +202,60 @@ def compile_enumeration_wiring(
     Returns:
         The EnumerationWiring
     """
-    var_states_for_edges = []
-    for variables_for_factor in variables_for_factors:
-        for variable in variables_for_factor:
-            num_states = variable.num_states
-            this_var_states_for_edges = np.arange(
-                vars_to_starts[variable], vars_to_starts[variable] + num_states
-            )
-            var_states_for_edges.append(this_var_states_for_edges)
+    var_states_for_edges = np.empty(shape=(2 * len(variables_for_factors),), dtype=int)
+    start_indices = np.arange(len(variables_for_factors))
+    var_states = np.array(
+        [vars_to_starts[variable] for variable in variables_for_factors]
+    )
+    _compile_var_states_numba(var_states_for_edges, start_indices, var_states)
 
-    # Note: edges_starts corresponds to the factor_to_msgs_start for the LogicalFactors
-    edges_starts = np.insert(factor_edges_num_states.cumsum(), 0, 0)[:-1].reshape(
-        -1, factor_configs.shape[1]
+    num_configs, num_variables = factor_configs.shape
+    factor_configs_edge_states = np.empty(
+        (num_factors * num_configs * num_variables, 2), dtype=int
+    )
+    assert factor_edges_num_states.shape[0] == num_factors * num_variables
+    factor_edges_starts = np.insert(np.cumsum(factor_edges_num_states), 0, 0)
+    _compile_enumeration_wiring_numba(
+        factor_configs_edge_states, factor_configs, factor_edges_starts, num_factors
     )
 
-    factor_configs_edge_states = np.stack(
-        [
-            np.repeat(
-                np.arange(factor_configs.shape[0] * num_factors),
-                factor_configs.shape[1],
-            ),
-            (factor_configs[None] + edges_starts[:, None, :]).flatten(),
-        ],
-        axis=1,
-    )
     return EnumerationWiring(
         edges_num_states=factor_edges_num_states,
-        var_states_for_edges=np.concatenate(var_states_for_edges),
+        var_states_for_edges=var_states_for_edges,
         factor_configs_edge_states=factor_configs_edge_states,
     )
+
+
+@nb.jit(parallel=False, cache=True, fastmath=True, nopython=True)
+def _compile_var_states_numba(var_states_for_edges, start_indices, var_states):
+    for idx in start_indices:
+        var_states_for_edges[2 * idx] = var_states[idx]
+        var_states_for_edges[2 * idx + 1] = var_states[idx] + 1
+
+
+@nb.jit(parallel=False, cache=True, fastmath=True, nopython=True)
+def _compile_enumeration_wiring_numba(
+    factor_configs_edge_states, factor_configs, factor_edges_starts, num_factors
+):
+    num_configs, num_variables = factor_configs.shape
+
+    for factor_idx in nb.prange(num_factors):
+        for config_idx in range(num_configs):
+            factor_config_idx = num_configs * factor_idx + config_idx
+            factor_configs_edge_states[
+                num_variables
+                * factor_config_idx : num_variables
+                * (factor_config_idx + 1),
+                0,
+            ] = factor_config_idx
+
+            for var_idx in range(num_variables):
+                factor_configs_edge_states[
+                    num_variables * factor_config_idx + var_idx, 1
+                ] = (
+                    factor_edges_starts[num_variables * factor_idx + var_idx]
+                    + factor_configs[config_idx, var_idx]
+                )
 
 
 @functools.partial(jax.jit, static_argnames=("num_val_configs", "temperature"))

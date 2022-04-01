@@ -6,6 +6,7 @@ from typing import FrozenSet, Mapping, Optional, OrderedDict, Type, Union
 
 import jax
 import jax.numpy as jnp
+import numba as nb
 import numpy as np
 
 from pgmax.factors import enumeration
@@ -294,13 +295,11 @@ class PairwiseFactorGroup(groups.FactorGroup):
             log_potential_matrix,
             (len(self.variable_names_for_factors),) + log_potential_matrix.shape[-2:],
         )
-        log_potentials = np.array(
-            [
-                log_potential_matrix[
-                    ii, self.factor_configs[:, 0], self.factor_configs[:, 1]
-                ]
-                for ii in range(len(self.variable_names_for_factors))
-            ]
+        log_potentials = np.empty(
+            shape=(self.num_factors, self.factor_configs.shape[0])
+        )
+        _compute_log_potentials(
+            log_potentials, log_potential_matrix, self.factor_configs
         )
         object.__setattr__(self, "log_potentials", log_potentials)
 
@@ -429,3 +428,11 @@ class PairwiseFactorGroup(groups.FactorGroup):
             )
 
         return data
+
+
+@nb.jit(parallel=False, cache=True, fastmath=True, nopython=True)
+def _compute_log_potentials(log_potentials, log_potential_matrix, factor_configs):
+    for config_idx in range(factor_configs.shape[0]):
+        log_potentials[:, config_idx] = log_potential_matrix[
+            :, factor_configs[config_idx, 0], factor_configs[config_idx, 1]
+        ]
