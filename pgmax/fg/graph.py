@@ -101,7 +101,6 @@ class FactorGraph:
         )
         return hash(all_factor_groups)
 
-    # TODO: should we merge add_factor and add_factor_by_type?
     def add_factor(
         self,
         variable_names: List,
@@ -200,7 +199,6 @@ class FactorGraph:
                 f"A factor group with the name {name} already exists. Please choose a different name!"
             )
 
-        # TODO: do we want to remove this for speed?
         factor_type = factor_group.factor_type
         for var_names_for_factor in factor_group.variable_names_for_factors:
             tuple_var_names_for_factor = tuple(var_names_for_factor)
@@ -276,6 +274,10 @@ class FactorGraph:
         Returns:
             A dictionnary mapping each factor type to its wiring.
         """
+        for factor_type in self._factor_types_to_groups:
+            for factor_group in self._factor_types_to_groups[factor_type]:
+                print(factor_type)
+                factor_group.compile_wiring(self._vars_to_starts)
         wiring = collections.OrderedDict(
             [
                 (

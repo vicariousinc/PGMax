@@ -1,7 +1,6 @@
 """Defines LogicalFactorGroup and its two children, ORFactorGroup and ANDFactorGroup."""
 
 import collections
-import functools
 from dataclasses import dataclass, field
 from typing import FrozenSet, OrderedDict, Type
 
@@ -23,16 +22,9 @@ class LogicalFactorGroup(groups.FactorGroup):
             For ORFactors the edge_states_offset is 1, for ANDFactors the edge_states_offset is -1.
     """
 
-    log_potentials: np.ndarray = field(init=False, default=np.empty((0,)))
     edge_states_offset: int = field(init=False)
     factor_type: Type = field(init=False, default=logical.LogicalFactor)
 
-    def __post_init__(self):
-        # TODO: move all asserts from LogicalFactor to here
-        super().__post_init__()
-        pass
-
-    @functools.lru_cache(None)
     def compile_wiring(self, vars_to_starts) -> logical.LogicalWiring:
         """Compile LogicalWiring for the LogicalFactorGroup
 

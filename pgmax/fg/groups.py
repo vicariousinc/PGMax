@@ -1,7 +1,6 @@
 """A module containing the base classes for variable and factor groups in a Factor Graph."""
 
 import collections
-import functools
 import typing
 from dataclasses import dataclass, field
 from types import MappingProxyType
@@ -348,7 +347,7 @@ class CompositeVariableGroup(VariableGroup):
 
 @dataclass(frozen=True, eq=False)
 class FactorGroup:
-    """Class to represent a group of factors.
+    """Class to represent a group of Factors.
 
     Args:
         variable_group: either a VariableGroup or - if the elements of more than one VariableGroup
@@ -356,11 +355,14 @@ class FactorGroup:
             all the variables that are connected to this FactorGroup
         variable_names_for_factors: A list of list of variable names, where each innermost element is the
             name of a variable in variable_group. Each list within the outer list is taken to contain
-            the names of the variables connected to a factor.
-        log_potentials: Optional array of shape (num_val_configs,) or (num_factors, num_val_configs).
-            If specified, it contains the log of the potential value for every possible configuration.
-            If none, it is assumed the log potential is uniform 0 and such an array is automatically
-            initialized.
+            the names of the variables connected to a Factor.
+        num_factors: Number of Factors in the FactorGroup.
+        factor_edges_num_states: An array concatenating the number of states for the variables connected to each
+            Factor of the FactorGroup. Each variable will appear once for each Factor it connects to.
+        variables_for_factors: A tuple concatenating the variables (with repetition) connected to each
+            Factor of the FactorGroup. Each variable will appear once for each Factor it connects to.
+        factor_type: Factor type shared by all the Factors in the FactorGroup.
+        log_potentials: array of log potentials.
     """
 
     variable_group: Union[CompositeVariableGroup, VariableGroup]
@@ -415,7 +417,7 @@ class FactorGroup:
         return self._variables_to_factors[variables]
 
     @cached_property
-    def _variables_to_factors(self) -> Mapping[FrozenSet, Any]:
+    def _variables_to_factors(self) -> Mapping[FrozenSet, nodes.Factor]:
         """Function to compile potential array for the factor group.
         This function is only called on demand when the user requires it.
 
@@ -435,9 +437,7 @@ class FactorGroup:
         This function is only called on demand when the user requires it."""
         return tuple(self._variables_to_factors.values())
 
-    def _get_variables_to_factors(
-        self,
-    ) -> OrderedDict[FrozenSet, Any]:
+    def _get_variables_to_factors(self) -> OrderedDict[FrozenSet, Any]:
         """Function that generates a dictionary mapping names to factors.
         This function is only called on demand when the user requires it.
 
@@ -474,7 +474,6 @@ class FactorGroup:
             "Please subclass the FactorGroup class and override this method"
         )
 
-    @functools.lru_cache(None)
     def compile_wiring(self, vars_to_starts: Mapping[nodes.Variable, int]) -> Any:
         """Compile wiring for the FactorGroup.
         In pratice, this function is overwritten to implement an efficient wiring at the

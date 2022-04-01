@@ -1,7 +1,6 @@
 """Defines EnumerationFactorGroup and PairwiseFactorGroup."""
 
 import collections
-import functools
 from dataclasses import dataclass, field
 from typing import FrozenSet, Mapping, Optional, OrderedDict, Type, Union
 
@@ -24,6 +23,10 @@ class EnumerationFactorGroup(groups.FactorGroup):
     Args:
         factor_configs: Array of shape (num_val_configs, num_variables)
             An array containing explicit enumeration of all valid configurations
+        log_potentials: Optional array of shape (num_val_configs,) or (num_factors, num_val_configs).
+            If specified, it contains the log of the potential value for every possible configuration.
+            If none, it is assumed the log potential is uniform 0 and such an array is automatically
+            initialized.
     """
 
     factor_configs: np.ndarray
@@ -79,7 +82,6 @@ class EnumerationFactorGroup(groups.FactorGroup):
         )
         return variables_to_factors
 
-    @functools.lru_cache(None)
     def compile_wiring(
         self, vars_to_starts: Mapping[nodes.Variable, int]
     ) -> enumeration.EnumerationWiring:
@@ -314,7 +316,6 @@ class PairwiseFactorGroup(groups.FactorGroup):
         )
         return variables_to_factors
 
-    @functools.lru_cache(None)
     def compile_wiring(
         self, vars_to_starts: Mapping[nodes.Variable, int]
     ) -> enumeration.EnumerationWiring:
