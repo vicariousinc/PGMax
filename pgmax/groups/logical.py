@@ -1,6 +1,7 @@
 """Defines LogicalFactorGroup and its two children, ORFactorGroup and ANDFactorGroup."""
 
 import collections
+import functools
 from dataclasses import dataclass, field
 from typing import FrozenSet, OrderedDict, Type
 
@@ -31,6 +32,7 @@ class LogicalFactorGroup(groups.FactorGroup):
         super().__post_init__()
         pass
 
+    @functools.lru_cache(None)
     def compile_wiring(self, vars_to_starts) -> logical.LogicalWiring:
         """Compile LogicalWiring for the LogicalFactorGroup
 
@@ -42,20 +44,15 @@ class LogicalFactorGroup(groups.FactorGroup):
         Returns:
              LogicalWiring for the LogicalFactorGroup
         """
-        # TODO: run in parallel?
-        import time
-
-        start = time.time()
         relevant_state = (-self.edge_states_offset + 1) // 2
 
         var_states_for_edges = []
-        for variable_and_num_states in self.variables_and_num_states:
-            variable, num_states = variable_and_num_states
+        for variable in self.variables_for_factors:
+            num_states = variable.num_states
             this_var_states_for_edges = np.arange(
                 vars_to_starts[variable], vars_to_starts[variable] + num_states
             )
             var_states_for_edges.append(this_var_states_for_edges)
-        print(time.time() - start)
 
         edges_num_states_cumsum = 0
         parents_edge_states = []
@@ -84,7 +81,6 @@ class LogicalFactorGroup(groups.FactorGroup):
             parents_edge_states.append(this_parents_edge_states)
             children_edge_states.append(this_child_edge_state)
             edges_num_states_cumsum += 2 * (num_parents + 1)
-        print(time.time() - start)
 
         return logical.LogicalWiring(
             edges_num_states=self.factor_edges_num_states,
@@ -93,6 +89,30 @@ class LogicalFactorGroup(groups.FactorGroup):
             children_edge_states=np.array(children_edge_states),
             edge_states_offset=self.edge_states_offset,
         )
+
+    def _get_variables_to_factors(
+        self,
+    ) -> OrderedDict[FrozenSet, logical.LogicalFactor]:
+        """Function that generates a dictionary mapping set of connected variables to factors.
+        This function is only called on demand when the user requires it.
+
+        Returns:
+            A dictionary mapping all possible set of connected variables to different factors.
+        """
+        variables_to_factors = collections.OrderedDict(
+            [
+                (
+                    frozenset(self.variable_names_for_factors[ii]),
+                    self.factor_type(
+                        variables=tuple(
+                            self.variable_group[self.variable_names_for_factors[ii]]
+                        ),
+                    ),
+                )
+                for ii in range(len(self.variable_names_for_factors))
+            ]
+        )
+        return variables_to_factors
 
 
 @dataclass(frozen=True, eq=False)
@@ -107,30 +127,6 @@ class ORFactorGroup(LogicalFactorGroup):
     edge_states_offset: int = field(init=False, default=1)
     factor_type: Type = field(init=False, default=logical.ORFactor)
 
-    def _get_variables_to_factors(
-        self,
-    ) -> OrderedDict[FrozenSet, logical.ORFactor]:
-        """Function that generates a dictionary mapping set of connected variables to factors.
-        This function is only called on demand when the user requires it.
-
-        Returns:
-            A dictionary mapping all possible set of connected variables to different factors.
-        """
-        variables_to_factors = collections.OrderedDict(
-            [
-                (
-                    frozenset(self.variable_names_for_factors[ii]),
-                    logical.ORFactor(
-                        variables=tuple(
-                            self.variable_group[self.variable_names_for_factors[ii]]
-                        ),
-                    ),
-                )
-                for ii in range(len(self.variable_names_for_factors))
-            ]
-        )
-        return variables_to_factors
-
 
 @dataclass(frozen=True, eq=False)
 class ANDFactorGroup(LogicalFactorGroup):
@@ -143,27 +139,3 @@ class ANDFactorGroup(LogicalFactorGroup):
 
     edge_states_offset: int = field(init=False, default=-1)
     factor_type: Type = field(init=False, default=logical.ANDFactor)
-
-    def _get_variables_to_factors(
-        self,
-    ) -> OrderedDict[FrozenSet, logical.ANDFactor]:
-        """Function that generates a dictionary mapping set of connected variables to factors.
-        This function is only called on demand when the user requires it.
-
-        Returns:
-            A dictionary mapping all possible set of connected variables to different factors.
-        """
-        variables_to_factors = collections.OrderedDict(
-            [
-                (
-                    frozenset(self.variable_names_for_factors[ii]),
-                    logical.ANDFactor(
-                        variables=tuple(
-                            self.variable_group[self.variable_names_for_factors[ii]]
-                        ),
-                    ),
-                )
-                for ii in range(len(self.variable_names_for_factors))
-            ]
-        )
-        return variables_to_factors

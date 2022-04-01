@@ -1,6 +1,7 @@
 """Defines EnumerationFactorGroup and PairwiseFactorGroup."""
 
 import collections
+import functools
 from dataclasses import dataclass, field
 from typing import FrozenSet, Mapping, Optional, OrderedDict, Type, Union
 
@@ -25,7 +26,7 @@ class EnumerationFactorGroup(groups.FactorGroup):
             An array containing explicit enumeration of all valid configurations
     """
 
-    factor_configs: np.ndarray = field(init=True)
+    factor_configs: np.ndarray
     log_potentials: np.ndarray = field(init=True, default=np.empty((0,)))
     factor_type: Type = field(init=False, default=enumeration.EnumerationFactor)
 
@@ -78,6 +79,7 @@ class EnumerationFactorGroup(groups.FactorGroup):
         )
         return variables_to_factors
 
+    @functools.lru_cache(None)
     def compile_wiring(
         self, vars_to_starts: Mapping[nodes.Variable, int]
     ) -> enumeration.EnumerationWiring:
@@ -93,7 +95,7 @@ class EnumerationFactorGroup(groups.FactorGroup):
         """
         return _compile_factor_group_wiring(
             factor_edges_num_states=self.factor_edges_num_states,
-            variables_and_num_states=self.variables_and_num_states,
+            variables_for_factors=self.variables_for_factors,
             num_factors=self.num_factors,
             factor_configs=self.factor_configs,
             vars_to_starts=vars_to_starts,
@@ -312,6 +314,7 @@ class PairwiseFactorGroup(groups.FactorGroup):
         )
         return variables_to_factors
 
+    @functools.lru_cache(None)
     def compile_wiring(
         self, vars_to_starts: Mapping[nodes.Variable, int]
     ) -> enumeration.EnumerationWiring:
@@ -328,7 +331,7 @@ class PairwiseFactorGroup(groups.FactorGroup):
 
         return _compile_factor_group_wiring(
             factor_edges_num_states=self.factor_edges_num_states,
-            variables_and_num_states=self.variables_and_num_states,
+            variables_for_factors=self.variables_for_factors,
             num_factors=self.num_factors,
             factor_configs=self.factor_configs,
             vars_to_starts=vars_to_starts,
@@ -416,7 +419,7 @@ class PairwiseFactorGroup(groups.FactorGroup):
 
 def _compile_factor_group_wiring(
     factor_edges_num_states,
-    variables_and_num_states,
+    variables_for_factors,
     factor_configs,
     vars_to_starts,
     num_factors,
@@ -431,8 +434,8 @@ def _compile_factor_group_wiring(
         Both indices only take into account the EnumerationFactors of the FactorGraph
     """
     var_states_for_edges = []
-    for variable_and_num_states in variables_and_num_states:
-        variable, num_states = variable_and_num_states
+    for variable in variables_for_factors:
+        num_states = variable.num_states
         this_var_states_for_edges = np.arange(
             vars_to_starts[variable], vars_to_starts[variable] + num_states
         )

@@ -7,13 +7,13 @@ import pytest
 
 from pgmax.factors import FAC_TO_VAR_UPDATES
 from pgmax.factors import enumeration as enumeration_factor
-from pgmax.factors import logical as logical_factor
 from pgmax.fg import graph, groups
-from pgmax.groups import logical, variables
+from pgmax.groups import logical
+from pgmax.groups import variables as vgroup
 
 
 def test_factor_graph():
-    variable_group = variables.VariableDict(15, (0,))
+    variable_group = vgroup.VariableDict(15, (0,))
     fg = graph.FactorGraph(variable_group)
     fg.add_factor_by_type(
         factor_type=enumeration_factor.EnumerationFactor,
@@ -53,42 +53,33 @@ def test_factor_graph():
 
 
 def test_factor_adding():
-    A = variables.NDVariableArray(num_states=2, shape=(10,))
-    B = variables.NDVariableArray(num_states=2, shape=(10,))
+    A = vgroup.NDVariableArray(num_states=2, shape=(10,))
+    B = vgroup.NDVariableArray(num_states=2, shape=(10,))
     fg = graph.FactorGraph(variables=dict(A=A, B=B))
 
     with pytest.raises(ValueError, match="Do not add a factor group with no factors."):
         fg.add_factor_group(
-            factory=logical.LogicalFactorGroup,
+            factory=logical.ORFactorGroup,
             variable_names_for_factors=[],
-        )
-
-    with pytest.raises(
-        ValueError,
-        match=re.escape(
-            f"Type {logical_factor.LogicalFactor} is not one of the supported factor types {FAC_TO_VAR_UPDATES.keys()}"
-        ),
-    ):
-        fg.add_factor_group(
-            factory=logical.LogicalFactorGroup,
-            variable_names_for_factors=[[("A", 0), ("B", 0)]],
         )
 
     variables0 = [("A", 0), ("B", 0)]
     variables1 = [("A", 1), ("B", 1)]
-    LogicalFactor = logical_factor.LogicalFactor(fg._variable_group[variables0])
+    ORFactor = logical.ORFactorGroup(
+        fg._variable_group, variable_names_for_factors=[variables0]
+    )
     with pytest.raises(
         ValueError, match="SingleFactorGroup should only contain one factor. Got 2"
     ):
         groups.SingleFactorGroup(
             variable_group=fg._variable_group,
             variable_names_for_factors=[variables0, variables1],
-            factor=LogicalFactor,
+            factor=ORFactor,
         )
 
 
 def test_bp_state():
-    variable_group = variables.VariableDict(15, (0,))
+    variable_group = vgroup.VariableDict(15, (0,))
     fg0 = graph.FactorGraph(variable_group)
     fg0.add_factor(
         variable_names=[0],
@@ -113,7 +104,7 @@ def test_bp_state():
 
 
 def test_log_potentials():
-    variable_group = variables.VariableDict(15, (0,))
+    variable_group = vgroup.VariableDict(15, (0,))
     fg = graph.FactorGraph(variable_group)
     fg.add_factor(
         variable_names=[0],
@@ -147,7 +138,7 @@ def test_log_potentials():
 
 
 def test_ftov_msgs():
-    variable_group = variables.VariableDict(15, (0,))
+    variable_group = vgroup.VariableDict(15, (0,))
     fg = graph.FactorGraph(variable_group)
     fg.add_factor(
         variable_names=[0],
@@ -181,7 +172,7 @@ def test_ftov_msgs():
 
 
 def test_evidence():
-    variable_group = variables.VariableDict(15, (0,))
+    variable_group = vgroup.VariableDict(15, (0,))
     fg = graph.FactorGraph(variable_group)
     fg.add_factor(
         variable_names=[0],
@@ -198,7 +189,7 @@ def test_evidence():
 
 
 def test_bp():
-    variable_group = variables.VariableDict(15, (0,))
+    variable_group = vgroup.VariableDict(15, (0,))
     fg = graph.FactorGraph(variable_group)
     fg.add_factor(
         variable_names=[0],

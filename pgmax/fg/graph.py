@@ -214,13 +214,8 @@ class FactorGraph:
                 )
             self._factors_var_names_to_type[tuple_var_names_for_factor] = factor_type
 
-        factor_group_type = factor_group.factor_type
-        if factor_group_type not in FAC_TO_VAR_UPDATES:
-            raise ValueError(
-                f"Type {factor_group_type} is not one of the supported factor types {FAC_TO_VAR_UPDATES.keys()}"
-            )
-
-        self._factor_types_to_groups[factor_group_type].append(factor_group)
+        factor_type = factor_group.factor_type
+        self._factor_types_to_groups[factor_type].append(factor_group)
         if name is not None:
             self._named_factor_groups[name] = factor_group
 

@@ -1,6 +1,7 @@
 """A module containing the base classes for variable and factor groups in a Factor Graph."""
 
 import collections
+import functools
 import typing
 from dataclasses import dataclass, field
 from types import MappingProxyType
@@ -366,10 +367,10 @@ class FactorGroup:
     variable_names_for_factors: Sequence[List]
     num_factors: int = field(init=False)
     factor_edges_num_states: np.ndarray = field(init=False)
-    variables_and_num_states: OrderedDict[FrozenSet, nodes.Factor] = field(init=False)
+    variables_for_factors: Tuple[nodes.Variable, ...] = field(init=False)
     factor_type: Type = field(init=False)
     factor_configs: np.ndarray = field(init=False, default=None)
-    log_potentials: np.ndarray = field(init=False)
+    log_potentials: np.ndarray = field(init=False, default=np.empty((0,)))
 
     def __post_init__(self):
         if len(self.variable_names_for_factors) == 0:
@@ -377,22 +378,20 @@ class FactorGroup:
 
         object.__setattr__(self, "num_factors", len(self.variable_names_for_factors))
 
-        edges_num_states = []
-        variables_and_num_states = []
+        factor_edges_num_states = []
+        variables_for_factors = []
 
         for variable_names_for_factor in self.variable_names_for_factors:
             for variable_name in variable_names_for_factor:
                 variable = self.variable_group._names_to_variables[variable_name]
                 num_states = variable.num_states
-                edges_num_states.append(num_states)
-                variables_and_num_states.append((variable, num_states))
+                factor_edges_num_states.append(num_states)
+                variables_for_factors.append(variable)
 
-        object.__setattr__(self, "factor_edges_num_states", np.array(edges_num_states))
-        object.__setattr__(self, "variables_and_num_states", variables_and_num_states)
-
-        # Children classes may overwrite log_potentials
-        if not hasattr(self, "log_potentials"):
-            object.__setattr__(self, "log_potentials", np.empty((0,)))
+        object.__setattr__(
+            self, "factor_edges_num_states", np.array(factor_edges_num_states)
+        )
+        object.__setattr__(self, "variables_for_factors", tuple(variables_for_factors))
 
     def __getitem__(self, variables: Union[Sequence, Collection]) -> Any:
         """Function to query individual factors in the factor group
@@ -416,12 +415,6 @@ class FactorGroup:
         return self._variables_to_factors[variables]
 
     @cached_property
-    def factors(self) -> Tuple[nodes.Factor, ...]:
-        """Returns all factors in the factor group.
-        This function is only called on demand when the user requires it."""
-        return tuple(self._variables_to_factors.values())
-
-    @cached_property
     def _variables_to_factors(self) -> Mapping[FrozenSet, Any]:
         """Function to compile potential array for the factor group.
         This function is only called on demand when the user requires it.
@@ -435,6 +428,12 @@ class FactorGroup:
     def factor_group_log_potentials(self) -> np.ndarray:
         """Flattened array of log potentials"""
         return self.log_potentials.flatten()
+
+    @cached_property
+    def factors(self) -> Tuple[nodes.Factor, ...]:
+        """Returns all factors in the factor group.
+        This function is only called on demand when the user requires it."""
+        return tuple(self._variables_to_factors.values())
 
     def _get_variables_to_factors(
         self,
@@ -475,10 +474,12 @@ class FactorGroup:
             "Please subclass the FactorGroup class and override this method"
         )
 
-    def compile_wiring(
-        self, vars_to_starts: Mapping[nodes.Variable, int]
-    ) -> nodes.Wiring:
-        """Compile wiring for the FactorGroup
+    @functools.lru_cache(None)
+    def compile_wiring(self, vars_to_starts: Mapping[nodes.Variable, int]) -> Any:
+        """Compile wiring for the FactorGroup.
+        In pratice, this function is overwritten to implement an efficient wiring at the
+        FactorGroup level.
+        When this does not happen, the slower fallback concatenates wiring at the Factor level.
 
         Args:
             vars_to_starts: A dictionary that maps variables to their global starting indices
@@ -488,9 +489,10 @@ class FactorGroup:
         Returns:
             Wiring for the FactorGroup
         """
-        raise NotImplementedError(
-            "Please subclass the FactorGroup class and override this method"
-        )
+
+        wirings = [factor.compile_wiring(vars_to_starts) for factor in self.factors]
+        wiring = self.factor_type.concatenate_wirings(wirings)
+        return wiring
 
 
 @dataclass(frozen=True, eq=False)
@@ -551,18 +553,3 @@ class SingleFactorGroup(FactorGroup):
         raise NotImplementedError(
             "SingleFactorGroup does not support vectorized factor operations."
         )
-
-    def compile_wiring(
-        self, vars_to_starts: Mapping[nodes.Variable, int]
-    ) -> nodes.Wiring:
-        """Compile wiring for the FactorGroup
-
-        Args:
-            vars_to_starts: A dictionary that maps variables to their global starting indices
-                For an n-state variable, a global start index of m means the global indices
-                of its n variable states are m, m + 1, ..., m + n - 1
-
-        Returns:
-            Wiring for the FactorGroup
-        """
-        return self.factor.compile_wiring(vars_to_starts)

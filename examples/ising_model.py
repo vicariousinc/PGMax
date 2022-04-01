@@ -21,14 +21,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from pgmax.fg import graph
-from pgmax.groups import enumeration, variables
+from pgmax.groups import enumeration
+from pgmax.groups import variables as vgroup
 
 # %% [markdown]
 # ### Construct variable grid, initialize factor graph, and add factors
 
 # %%
-visible = variables.NDVariableArray(num_states=2, shape=(50, 50))
-fg = graph.FactorGraph(variables=visible)
+variables = vgroup.NDVariableArray(num_states=2, shape=(50, 50))
+fg = graph.FactorGraph(variables=variables)
 variable_names_for_factors = []
 for ii in range(50):
     for jj in range(50):

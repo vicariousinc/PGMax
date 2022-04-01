@@ -27,7 +27,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from pgmax.fg import graph
-from pgmax.groups import enumeration, variables
+from pgmax.groups import enumeration
+from pgmax.groups import variables as vgroup
 
 # %% [markdown]
 # The [`pgmax.fg.graph`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.graph.html#module-pgmax.fg.graph) module contains core classes for specifying factor graphs and implementing LBP, while the [`pgmax.fg.groups`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.graph.html#module-pgmax.fg.graph) module contains classes for specifying groups of variables/factors.
@@ -46,8 +47,8 @@ W = params["W"]
 
 # %%
 # Initialize factor graph
-hidden_variables = variables.NDVariableArray(num_states=2, shape=bh.shape)
-visible_variables = variables.NDVariableArray(num_states=2, shape=bv.shape)
+hidden_variables = vgroup.NDVariableArray(num_states=2, shape=bh.shape)
+visible_variables = vgroup.NDVariableArray(num_states=2, shape=bv.shape)
 fg = graph.FactorGraph(
     variables=dict(hidden=hidden_variables, visible=visible_variables),
 )

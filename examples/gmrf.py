@@ -23,7 +23,8 @@ from jax.example_libraries import optimizers
 from tqdm.notebook import tqdm
 
 from pgmax.fg import graph
-from pgmax.groups import enumeration, variables
+from pgmax.groups import enumeration
+from pgmax.groups import variables as vgroup
 
 # %% [markdown]
 # # Visualize a trained GMRF
@@ -53,8 +54,8 @@ prototype_targets = jax.device_put(
 # %%
 M, N = target_images.shape[-2:]
 num_states = np.sum(n_clones)
-visible = variables.NDVariableArray(num_states=num_states, shape=(M, N))
-fg = graph.FactorGraph(visible)
+variables = vgroup.NDVariableArray(num_states=num_states, shape=(M, N))
+fg = graph.FactorGraph(variables)
 
 # %%
 # Add top-down factors

@@ -39,7 +39,7 @@ from scipy.signal import fftconvolve
 from sklearn.datasets import fetch_openml
 
 from pgmax.fg import graph
-from pgmax.groups import variables
+from pgmax.groups import variables as vgroup
 
 memory = Memory("./example_data/tmp")
 fetch_openml_cached = memory.cache(fetch_openml)
@@ -214,7 +214,7 @@ M = (2 * hps + 1) * (
 variables_all_models = {}
 for idx in range(frcs.shape[0]):
     frc = frcs[idx]
-    variables_all_models[idx] = variables.NDVariableArray(
+    variables_all_models[idx] = vgroup.NDVariableArray(
         num_states=M, shape=(frc.shape[0],)
     )
 

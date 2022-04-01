@@ -135,11 +135,9 @@ X = variables.NDVariableArray(num_states=2, shape=X_gt.shape)
 # Factor graph
 fg = graph.FactorGraph(variables=dict(S=S, W=W, SW=SW, X=X))
 
-variable_names_for_ANDFactors = []
-variable_names_for_ORFactors = []
-variable_names_for_ORFactors_dict = {}
-
 # Add ANDFactors
+variable_names_for_ANDFactors = []
+variable_names_for_ORFactors_dict = {}
 for idx_img in tqdm(range(n_images)):
     for idx_chan in range(n_chan):
         for idx_s_height in range(s_height):
@@ -181,26 +179,20 @@ for idx_img in tqdm(range(n_images)):
                             else:
                                 variable_names_for_ORFactors_dict[X_var].append(SW_var)
 
-
-import time
-
-start = time.time()
 fg.add_factor_group(
     factory=logical.ANDFactorGroup,
     variable_names_for_factors=variable_names_for_ANDFactors,
 )
-print("Time", time.time() - start)
 
 # Add ORFactors
+variable_names_for_ORFactors = []
 for X_var, variable_names_for_ORFactor in variable_names_for_ORFactors_dict.items():
     variable_names_for_ORFactors.append(variable_names_for_ORFactor + [("X",) + X_var])  # type: ignore
 
-start = time.time()
 fg.add_factor_group(
     factory=logical.ORFactorGroup,
     variable_names_for_factors=variable_names_for_ORFactors,
 )
-print("Time", time.time() - start)
 
 for factor_type, factor_groups in fg.factor_groups.items():
     if len(factor_groups) > 0:
@@ -208,9 +200,7 @@ for factor_type, factor_groups in fg.factor_groups.items():
         print(f"The factor graph contains {factor_groups[0].num_factors} {factor_type}")
 
 # %%
-start = time.time()
 wiring = fg.wiring
-print("Time", time.time() - start)
 
 # %% [markdown]
 # ### Run inference and visualize results
