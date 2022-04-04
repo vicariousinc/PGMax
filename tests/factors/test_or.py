@@ -77,7 +77,7 @@ def test_run_bp_with_OR_factors():
                 [np.zeros((1, this_num_parents + 1), dtype=int), valid_ON_configs],
                 axis=0,
             )
-            assert valid_configs.shape[0] == 2 ** this_num_parents
+            assert valid_configs.shape[0] == 2**this_num_parents
 
             if factor_idx < num_factors // 2:
                 # Add the first half of factors to FactorGraph1

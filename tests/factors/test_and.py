@@ -79,7 +79,7 @@ def test_run_bp_with_AND_factors():
                 [np.ones((1, this_num_parents + 1), dtype=int), valid_AND_configs],
                 axis=0,
             )
-            assert valid_configs.shape[0] == 2 ** this_num_parents
+            assert valid_configs.shape[0] == 2**this_num_parents
 
             if factor_idx < num_factors // 2:
                 # Add the first half of factors to FactorGraph1
