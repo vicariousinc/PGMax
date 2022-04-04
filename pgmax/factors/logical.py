@@ -2,7 +2,7 @@
 
 import functools
 from dataclasses import dataclass, field
-from typing import Mapping, Optional, Sequence, Union
+from typing import Mapping, Optional, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -202,18 +202,18 @@ class ANDFactor(LogicalFactor):
 
 
 def compile_logical_wiring(
-    factor_edges_num_states,
-    variables_for_factors,
-    vars_to_starts,
-    edge_states_offset,
+    factor_edges_num_states: np.ndarray,
+    variables_for_factors: Tuple[Tuple[nodes.Variable, ...], ...],
+    vars_to_starts: Mapping[nodes.Variable, int],
+    edge_states_offset: int,
 ) -> LogicalWiring:
     """Compile a LogicalWiring for a LogicalFactor or a FactorGroup with LogicalFactors.
 
     Args:
         factor_edges_num_states: An array concatenating the number of states for the variables connected to each
             Factor of the FactorGroup. Each variable will appear once for each Factor it connects to.
-        variables_for_factors: A tuple concatenating the variables (with repetition) connected to each
-            Factor of the FactorGroup. Each variable will appear once for each Factor it connects to.
+        variables_for_factors: A tuple of tuples containing variables connected to each Factor of the FactorGroup.
+            Each variable will appear once for each Factor it connects to.
         vars_to_starts: A dictionary that maps variables to their global starting indices
             For an n-state variable, a global start index of m means the global indices
             of its n variable states are m, m + 1, ..., m + n - 1

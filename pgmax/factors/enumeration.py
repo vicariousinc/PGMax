@@ -2,7 +2,7 @@
 
 import functools
 from dataclasses import dataclass
-from typing import Mapping, Sequence, Union
+from typing import Mapping, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -117,7 +117,7 @@ class EnumerationFactor(nodes.Factor):
         """
         return compile_enumeration_wiring(
             factor_edges_num_states=self.edges_num_states,
-            variables_for_factors=self.variables,
+            variables_for_factors=tuple([self.variables]),
             factor_configs=self.configs,
             vars_to_starts=vars_to_starts,
             num_factors=1,
@@ -178,19 +178,19 @@ class EnumerationFactor(nodes.Factor):
 
 
 def compile_enumeration_wiring(
-    factor_edges_num_states,
-    variables_for_factors,
-    factor_configs,
-    vars_to_starts,
-    num_factors,
+    factor_edges_num_states: np.ndarray,
+    variables_for_factors: Tuple[Tuple[nodes.Variable, ...], ...],
+    factor_configs: np.ndarray,
+    vars_to_starts: Mapping[nodes.Variable, int],
+    num_factors: int,
 ) -> EnumerationWiring:
     """Compile an EnumerationWiring for an EnumerationFactor or a FactorGroup with EnumerationFactors.
 
     Args:
         factor_edges_num_states: An array concatenating the number of states for the variables connected to each
             Factor of the FactorGroup. Each variable will appear once for each Factor it connects to.
-        variables_for_factors: A tuple concatenating the variables (with repetition) connected to each
-            Factor of the FactorGroup. Each variable will appear once for each Factor it connects to.
+        variables_for_factors: A tuple of tuples containing variables connected to each Factor of the FactorGroup.
+            Each variable will appear once for each Factor it connects to.
         factor_configs: Array of shape (num_val_configs, num_variables) containing an explicit enumeration
             of all valid configurations.
         vars_to_starts: A dictionary that maps variables to their global starting indices
