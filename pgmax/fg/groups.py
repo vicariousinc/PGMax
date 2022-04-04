@@ -357,13 +357,14 @@ class FactorGroup:
             name of a variable in variable_group. Each list within the outer list is taken to contain
             the names of the variables connected to a Factor.
         factor_type: Factor type shared by all the Factors in the FactorGroup.
+        factor_configs: Optional array containing an explicit enumeration of all valid configurations
         log_potentials: Array of log potentials.
     """
 
     variable_group: Union[CompositeVariableGroup, VariableGroup]
     variable_names_for_factors: Sequence[List]
-    factor_configs: np.ndarray = field(init=False)
     factor_type: Type = field(init=False)
+    factor_configs: np.ndarray = field(init=False)
     log_potentials: np.ndarray = field(init=False, default=np.empty((0,)))
 
     def __post_init__(self):
