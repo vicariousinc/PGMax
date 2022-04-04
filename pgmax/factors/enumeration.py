@@ -118,7 +118,7 @@ class EnumerationFactor(nodes.Factor):
         """
         return compile_enumeration_wiring(
             factor_edges_num_states=self.edges_num_states,
-            variables_for_factors=tuple([self.variables]),
+            variables_for_factors=tuple(self.variables),
             factor_configs=self.configs,
             vars_to_starts=vars_to_starts,
             num_factors=1,
@@ -180,12 +180,13 @@ class EnumerationFactor(nodes.Factor):
 
 def compile_enumeration_wiring(
     factor_edges_num_states: np.ndarray,
-    variables_for_factors: Tuple[Tuple[nodes.Variable, ...], ...],
+    variables_for_factors: Tuple[nodes.Variable, ...],
     factor_configs: np.ndarray,
     vars_to_starts: Mapping[nodes.Variable, int],
     num_factors: int,
 ) -> EnumerationWiring:
     """Compile an EnumerationWiring for an EnumerationFactor or a FactorGroup with EnumerationFactors.
+    Internally calls _compile_var_states_numba and _compile_enumeration_wiring_numba for speed.
 
     Args:
         factor_edges_num_states: An array concatenating the number of states for the variables connected to each
@@ -202,11 +203,11 @@ def compile_enumeration_wiring(
     Returns:
         The EnumerationWiring
     """
-    var_states_for_edges = np.empty(shape=(2 * len(variables_for_factors),), dtype=int)
-    start_indices = np.arange(len(variables_for_factors))
     var_states = np.array(
         [vars_to_starts[variable] for variable in variables_for_factors]
     )
+    var_states_for_edges = np.empty(shape=(2 * var_states.shape[0],), dtype=int)
+    start_indices = np.arange(var_states.shape[0])
     _compile_var_states_numba(var_states_for_edges, start_indices, var_states)
 
     num_configs, num_variables = factor_configs.shape
@@ -228,6 +229,8 @@ def compile_enumeration_wiring(
 
 @nb.jit(parallel=False, cache=True, fastmath=True, nopython=True)
 def _compile_var_states_numba(var_states_for_edges, start_indices, var_states):
+    "Fast numba computation of the var_states_for_edges of an EnumerationWiring."
+
     for idx in start_indices:
         var_states_for_edges[2 * idx] = var_states[idx]
         var_states_for_edges[2 * idx + 1] = var_states[idx] + 1
@@ -237,6 +240,8 @@ def _compile_var_states_numba(var_states_for_edges, start_indices, var_states):
 def _compile_enumeration_wiring_numba(
     factor_configs_edge_states, factor_configs, factor_edges_starts, num_factors
 ):
+    "Fast numba computation of the factor_configs_edge_states of an EnumerationWiring."
+
     num_configs, num_variables = factor_configs.shape
 
     for factor_idx in nb.prange(num_factors):

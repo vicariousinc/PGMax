@@ -222,7 +222,7 @@ run_bp, get_bp_state, get_beliefs = graph.BP(fg.bp_state, 3000)
 
 # %%
 pW = 0.25
-pS = 1e-72
+pS = 1e-100
 pX = 1e-100
 
 # Sparsity inducing priors for W and S
@@ -240,7 +240,7 @@ uX[..., 0] = (2 * X_gt - 1) * logit(pX)
 # We draw a batch of samples from the posterior in parallel by transforming `run_bp`/`get_beliefs` with `jax.vmap`
 
 # %%
-np.random.seed(seed=42)
+np.random.seed(seed=40)
 n_samples = 4
 
 bp_arrays = jax.vmap(functools.partial(run_bp, damping=0.5), in_axes=0, out_axes=0)(

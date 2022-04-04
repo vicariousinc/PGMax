@@ -163,12 +163,8 @@ class LogicalFactor(nodes.Factor):
         """
         return compile_logical_wiring(
             factor_edges_num_states=self.edges_num_states,
-<<<<<<< HEAD
-            variables_for_factors=tuple([self.variables]),
-=======
-            variables_for_factors=self.variables,
+            variables_for_factors=tuple(self.variables),
             factor_sizes=np.array([len(self.variables)]),
->>>>>>> 94b1fba... Update
             vars_to_starts=vars_to_starts,
             edge_states_offset=self.edge_states_offset,
         )
@@ -210,11 +206,13 @@ class ANDFactor(LogicalFactor):
 
 def compile_logical_wiring(
     factor_edges_num_states: np.ndarray,
-    variables_for_factors: Tuple[Tuple[nodes.Variable, ...], ...],
+    variables_for_factors: Tuple[nodes.Variable, ...],
+    factor_sizes: np.ndarray,
     vars_to_starts: Mapping[nodes.Variable, int],
     edge_states_offset: int,
 ) -> LogicalWiring:
     """Compile a LogicalWiring for a LogicalFactor or a FactorGroup with LogicalFactors.
+    Internally calls _compile_var_states_numba and _compile_enumeration_wiring_numba for speed.
 
     Args:
         factor_edges_num_states: An array concatenating the number of states for the variables connected to each
@@ -232,11 +230,11 @@ def compile_logical_wiring(
     """
     relevant_state = (-edge_states_offset + 1) // 2
 
-    var_states_for_edges = np.empty(shape=(2 * len(variables_for_factors),), dtype=int)
-    start_indices = np.arange(len(variables_for_factors))
     var_states = np.array(
         [vars_to_starts[variable] for variable in variables_for_factors]
     )
+    var_states_for_edges = np.empty(shape=(2 * var_states.shape[0],), dtype=int)
+    start_indices = np.arange(var_states.shape[0])
     enumeration._compile_var_states_numba(
         var_states_for_edges, start_indices, var_states
     )
@@ -276,6 +274,8 @@ def compile_logical_wiring_numba(
     edges_num_states_cumsum,
     relevant_state,
 ):
+    "Fast numba computation of the parents_edge_states and children_edge_states of an LogicalWiring."
+
     for factor_idx in nb.prange(num_parents.shape[0]):
         start_parents, end_parents = (
             num_parents_cumsum[factor_idx],
