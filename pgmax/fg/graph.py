@@ -79,9 +79,11 @@ class FactorGraph:
         ] = collections.OrderedDict(
             [(factor_type, []) for factor_type in FAC_TO_VAR_UPDATES]
         )
-        self._factor_types_to_variable_names_for_factors: Dict[
+        self._factor_types_to_variable_names_for_factors: OrderedDict[
             Type, Set[FrozenSet]
-        ] = {}
+        ] = collections.OrderedDict(
+            [(factor_type, set()) for factor_type in FAC_TO_VAR_UPDATES]
+        )
 
         # See FactorGraphState docstrings for documentation on the following fields
         self._num_var_states = vars_num_states_cumsum[-1]

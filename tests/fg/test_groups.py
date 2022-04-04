@@ -168,6 +168,17 @@ def test_enumeration_factor_group():
             log_potentials=np.zeros((3, 2)),
         )
 
+    with pytest.raises(ValueError, match=re.escape("Potentials should be floats")):
+        enumeration_factor_group = enumeration.EnumerationFactorGroup(
+            variable_group=variable_group,
+            variable_names_for_factors=[
+                [(0, 0), (0, 1), (1, 1)],
+                [(0, 1), (1, 0), (1, 1)],
+            ],
+            factor_configs=np.zeros((1, 3), dtype=int),
+            log_potentials=np.zeros((2, 1), dtype=int),
+        )
+
     enumeration_factor_group = enumeration.EnumerationFactorGroup(
         variable_group=variable_group,
         variable_names_for_factors=[[(0, 0), (0, 1), (1, 1)], [(0, 1), (1, 0), (1, 1)]],
@@ -217,11 +228,19 @@ def test_enumeration_factor_group():
 
 def test_pairwise_factor_group():
     variable_group = vgroup.NDVariableArray(3, (2, 2))
+
     with pytest.raises(
         ValueError, match=re.escape("log_potential_matrix should be either a 2D array")
     ):
         enumeration.PairwiseFactorGroup(
             variable_group, [[(0, 0), (1, 1)]], np.zeros((1,), dtype=float)
+        )
+
+    with pytest.raises(
+        ValueError, match=re.escape("Potential matrix should be floats")
+    ):
+        enumeration.PairwiseFactorGroup(
+            variable_group, [[(0, 0), (1, 1)]], np.zeros((3, 3), dtype=int)
         )
 
     with pytest.raises(

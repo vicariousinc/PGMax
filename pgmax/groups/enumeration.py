@@ -27,6 +27,12 @@ class EnumerationFactorGroup(groups.FactorGroup):
             If specified, it contains the log of the potential value for every possible configuration.
             If none, it is assumed the log potential is uniform 0 and such an array is automatically
             initialized.
+        factor_type: Factor type shared by all the Factors in the FactorGroup.
+
+    Raises:
+        ValueError if:
+            (1) The specified log_potentials is not of the expected shape.
+            (2) The dtype of the potential array is not float
     """
 
     factor_configs: np.ndarray
@@ -52,6 +58,11 @@ class EnumerationFactorGroup(groups.FactorGroup):
                 )
             log_potentials = np.broadcast_to(
                 self.log_potentials, (self.num_factors, num_val_configs)
+            )
+
+        if not np.issubdtype(log_potentials.dtype, np.floating):
+            raise ValueError(
+                f"Potentials should be floats. Got {log_potentials.dtype}."
             )
 
         object.__setattr__(self, "log_potentials", log_potentials)
@@ -195,13 +206,16 @@ class PairwiseFactorGroup(groups.FactorGroup):
         log_potential_matrix: array of shape (var1.num_states, var2.num_states),
             where var1 and var2 are the 2 VariableGroups (that may refer to the same
             VariableGroup) whose names are present in each sub-list from self.variable_names_for_factors.
-        Raises:
-            ValueError if:
-                (1) The specified log_potential_matrix is not a 2D or 3D array.
-                (2) Some pairwise factors connect to less or more than 2 variables.
-                (3) The specified log_potential_matrix does not match the number of factors.
-                (4) The specified log_potential_matrix does not match the number of variable states of the
-                    variables in the factors.
+        factor_type: Factor type shared by all the Factors in the FactorGroup.
+
+    Raises:
+        ValueError if:
+            (1) The specified log_potential_matrix is not a 2D or 3D array.
+            (2) The dtype of the potential array is not float
+            (3) Some pairwise factors connect to less or more than 2 variables.
+            (4) The specified log_potential_matrix does not match the number of factors.
+            (5) The specified log_potential_matrix does not match the number of variable states of the
+                variables in the factors.
     """
 
     log_potential_matrix: Optional[np.ndarray] = None
@@ -209,7 +223,6 @@ class PairwiseFactorGroup(groups.FactorGroup):
 
     def __post_init__(self):
         super().__post_init__()
-        # TODO: move all asserts from EnumerationFactor to here
 
         if self.log_potential_matrix is None:
             log_potential_matrix = np.zeros(
@@ -230,6 +243,11 @@ class PairwiseFactorGroup(groups.FactorGroup):
                 "log_potential_matrix should be either a 2D array, specifying shared parameters for all "
                 "pairwise factors, or 3D array, specifying parameters for individual pairwise factors. "
                 f"Got a {log_potential_matrix.ndim}D log_potential_matrix array."
+            )
+
+        if not np.issubdtype(log_potential_matrix.dtype, np.floating):
+            raise ValueError(
+                f"Potential matrix should be floats. Got {self.log_potential_matrix.dtype}."
             )
 
         if log_potential_matrix.ndim == 3 and log_potential_matrix.shape[0] != len(

@@ -35,7 +35,7 @@ def test_factor_graph():
     with pytest.raises(
         ValueError,
         match=re.escape(
-            f"A {enumeration_factor.EnumerationFactor} involving variables {tuple([0])} already exists."
+            f"A Factor of type {enumeration_factor.EnumerationFactor} involving variables {frozenset([0])} already exists."
         ),
     ):
         fg.add_factor(
