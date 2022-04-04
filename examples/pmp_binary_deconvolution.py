@@ -20,6 +20,7 @@
 
 # %%
 import functools
+from collections import defaultdict
 
 import jax
 import matplotlib.pyplot as plt
@@ -141,7 +142,7 @@ fg = graph.FactorGraph(variables=dict(S=S, W=W, SW=SW, X=X))
 
 # Define the ANDFactors
 variable_names_for_ANDFactors = []
-variable_names_for_ORFactors_dict = {}
+variable_names_for_ORFactors_dict = defaultdict(list)
 for idx_img in tqdm(range(n_images)):
     for idx_chan in range(n_chan):
         for idx_s_height in range(s_height):
@@ -178,10 +179,7 @@ for idx_img in tqdm(range(n_images)):
                             )
 
                             X_var = (idx_img, idx_chan, idx_img_height, idx_img_width)
-                            if X_var not in variable_names_for_ORFactors_dict:
-                                variable_names_for_ORFactors_dict[X_var] = [SW_var]
-                            else:
-                                variable_names_for_ORFactors_dict[X_var].append(SW_var)
+                            variable_names_for_ORFactors_dict[X_var].append(SW_var)
 
 # Add ANDFactorGroup, which is computationally efficient
 fg.add_factor_group(
@@ -190,9 +188,10 @@ fg.add_factor_group(
 )
 
 # Define the ORFactors
-variable_names_for_ORFactors = []
-for X_var, variable_names_for_ORFactor in variable_names_for_ORFactors_dict.items():
-    variable_names_for_ORFactors.append(variable_names_for_ORFactor + [("X",) + X_var])  # type: ignore
+variable_names_for_ORFactors = [
+    list(tuple(variable_names_for_ORFactors_dict[X_var]) + (("X",) + X_var,))
+    for X_var in variable_names_for_ORFactors_dict
+]
 
 # Add ORFactorGroup, which is computationally efficient
 fg.add_factor_group(
