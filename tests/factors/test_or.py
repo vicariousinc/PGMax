@@ -3,18 +3,19 @@ from itertools import product
 import jax
 import numpy as np
 
-from pgmax.factors import logical
-from pgmax.fg import graph, groups
+from pgmax.fg import graph
+from pgmax.groups import logical
+from pgmax.groups import variables as vgroup
 
 
 def test_run_bp_with_OR_factors():
     """
     Simultaneously test
-    (1) the support of ORFactors in a factor graph and their specialized inference for different temperatures
-    (2) the support of several factor types in a factor graph and during inference
+    (1) the support of ORFactors in a FactorGraph and their specialized inference for different temperatures
+    (2) the support of several factor types in a FactorGraph and during inference
 
     To do so, observe that an ORFactor can be defined as an equivalent EnumerationFactor
-    (which list all the valid OR configurations) and define two equivalent factor graphs
+    (which list all the valid OR configurations) and define two equivalent FactorGraphs
     FG1: first half of factors are defined as EnumerationFactors, second half are defined as ORFactors
     FG2: first half of factors are defined as ORFactors, second half are defined as EnumerationFactors
 
@@ -39,19 +40,19 @@ def test_run_bp_with_OR_factors():
             temperature = np.random.uniform(low=0.5, high=1.0)
 
         # Graph 1
-        parents_variables1 = groups.NDVariableArray(
+        parents_variables1 = vgroup.NDVariableArray(
             num_states=2, shape=(num_parents.sum(),)
         )
-        children_variable1 = groups.NDVariableArray(num_states=2, shape=(num_factors,))
+        children_variable1 = vgroup.NDVariableArray(num_states=2, shape=(num_factors,))
         fg1 = graph.FactorGraph(
             variables=dict(parents=parents_variables1, children=children_variable1)
         )
 
         # Graph 2
-        parents_variables2 = groups.NDVariableArray(
+        parents_variables2 = vgroup.NDVariableArray(
             num_states=2, shape=(num_parents.sum(),)
         )
-        children_variable2 = groups.NDVariableArray(num_states=2, shape=(num_factors,))
+        children_variable2 = vgroup.NDVariableArray(num_states=2, shape=(num_factors,))
         fg2 = graph.FactorGraph(
             variables=dict(parents=parents_variables2, children=children_variable2)
         )
@@ -76,7 +77,7 @@ def test_run_bp_with_OR_factors():
                 [np.zeros((1, this_num_parents + 1), dtype=int), valid_ON_configs],
                 axis=0,
             )
-            assert valid_configs.shape[0] == 2 ** this_num_parents
+            assert valid_configs.shape[0] == 2**this_num_parents
 
             if factor_idx < num_factors // 2:
                 # Add the first half of factors to FactorGraph1
@@ -103,8 +104,11 @@ def test_run_bp_with_OR_factors():
 
         # Option 2: Define the ORFactors
         num_parents_cumsum = np.insert(np.cumsum(num_parents), 0, 0)
+        variable_names_for_ORFactors_fg1 = []
+        variable_names_for_ORFactors_fg2 = []
+
         for factor_idx in range(num_factors):
-            variables_names_for_OR_factor = [
+            variables_names_for_ORFactor = [
                 ("parents", idx)
                 for idx in range(
                     num_parents_cumsum[factor_idx],
@@ -113,23 +117,28 @@ def test_run_bp_with_OR_factors():
             ] + [("children", factor_idx)]
             if factor_idx < num_factors // 2:
                 # Add the first half of factors to FactorGraph2
-                fg2.add_factor_by_type(
-                    variable_names=variables_names_for_OR_factor,
-                    factor_type=logical.ORFactor,
-                )
+                variable_names_for_ORFactors_fg2.append(variables_names_for_ORFactor)
             else:
                 if idx != 0:
                     # Add the second half of factors to FactorGraph1
-                    fg1.add_factor_by_type(
-                        variable_names=variables_names_for_OR_factor,
-                        factor_type=logical.ORFactor,
+                    variable_names_for_ORFactors_fg1.append(
+                        variables_names_for_ORFactor
                     )
                 else:
                     # Add all the ORFactors to FactorGraph2 for the first iter
-                    fg2.add_factor_by_type(
-                        variable_names=variables_names_for_OR_factor,
-                        factor_type=logical.ORFactor,
+                    variable_names_for_ORFactors_fg2.append(
+                        variables_names_for_ORFactor
                     )
+
+        if idx != 0:
+            fg1.add_factor_group(
+                factory=logical.ORFactorGroup,
+                variable_names_for_factors=variable_names_for_ORFactors_fg1,
+            )
+        fg2.add_factor_group(
+            factory=logical.ORFactorGroup,
+            variable_names_for_factors=variable_names_for_ORFactors_fg2,
+        )
 
         # Run inference
         run_bp1, _, get_beliefs1 = graph.BP(fg1.bp_state, 5, temperature)

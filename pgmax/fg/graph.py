@@ -19,6 +19,7 @@ from typing import (
     Optional,
     OrderedDict,
     Sequence,
+    Set,
     Tuple,
     Type,
     Union,
@@ -33,6 +34,7 @@ from jax.scipy.special import logsumexp
 from pgmax.bp import infer
 from pgmax.factors import FAC_TO_VAR_UPDATES
 from pgmax.fg import groups, nodes
+from pgmax.groups.enumeration import EnumerationFactorGroup
 from pgmax.utils import cached_property
 
 
@@ -70,6 +72,19 @@ class FactorGraph:
             0,
             0,
         )
+
+        # Useful objects to build the FactorGraph
+        self._factor_types_to_groups: OrderedDict[
+            Type, List[groups.FactorGroup]
+        ] = collections.OrderedDict(
+            [(factor_type, []) for factor_type in FAC_TO_VAR_UPDATES]
+        )
+        self._factor_types_to_variable_names_for_factors: OrderedDict[
+            Type, Set[FrozenSet]
+        ] = collections.OrderedDict(
+            [(factor_type, set()) for factor_type in FAC_TO_VAR_UPDATES]
+        )
+
         # See FactorGraphState docstrings for documentation on the following fields
         self._num_var_states = vars_num_states_cumsum[-1]
         self._vars_to_starts = MappingProxyType(
@@ -79,20 +94,12 @@ class FactorGraph:
             }
         )
         self._named_factor_groups: Dict[Hashable, groups.FactorGroup] = {}
-        self._variables_to_factors: OrderedDict[
-            FrozenSet, nodes.Factor
-        ] = collections.OrderedDict()
-        self._factor_types_to_groups: OrderedDict[
-            Type, List[groups.FactorGroup]
-        ] = collections.OrderedDict(
-            [(factor_type, []) for factor_type in FAC_TO_VAR_UPDATES]
-        )
 
     def __hash__(self) -> int:
         all_factor_groups = tuple(
             [
                 factor_group
-                for factor_groups_per_type in self.factor_groups.values()
+                for factor_groups_per_type in self._factor_types_to_groups.values()
                 for factor_group in factor_groups_per_type
             ]
         )
@@ -121,7 +128,7 @@ class FactorGraph:
                 If None, it is assumed the log potential is uniform 0 and such an array is automatically
                 initialized.
         """
-        factor_group = groups.EnumerationFactorGroup(
+        factor_group = EnumerationFactorGroup(
             self._variable_group,
             variable_names_for_factors=[variable_names],
             factor_configs=factor_configs,
@@ -160,7 +167,7 @@ class FactorGraph:
         factor = factor_type(variables, *args, **kwargs)
         factor_group = groups.SingleFactorGroup(
             variable_group=self._variable_group,
-            variable_names=variable_names,
+            variable_names_for_factors=[variable_names],
             factor=factor,
         )
         self._register_factor_group(factor_group, name)
@@ -196,23 +203,29 @@ class FactorGraph:
                 f"A factor group with the name {name} already exists. Please choose a different name!"
             )
 
-        for variables, factor in factor_group._variables_to_factors.items():
-            if variables in self._variables_to_factors:
+        factor_type = factor_group.factor_type
+        for var_names_for_factor in factor_group.variable_names_for_factors:
+            var_names = frozenset(var_names_for_factor)
+            if (
+                var_names
+                in self._factor_types_to_variable_names_for_factors[factor_type]
+            ):
                 raise ValueError(
-                    f"A factor involving variables {variables} already exists. Please merge the corresponding factors."
+                    f"A Factor of type {factor_type} involving variables {var_names} already exists. Please merge the corresponding factors."
                 )
-            self._variables_to_factors[variables] = factor
 
-        factor_type = type(factor)
+            self._factor_types_to_variable_names_for_factors[factor_type].add(var_names)
+
+        factor_type = factor_group.factor_type
         self._factor_types_to_groups[factor_type].append(factor_group)
         if name is not None:
             self._named_factor_groups[name] = factor_group
 
     @functools.lru_cache(None)
     def compute_offsets(self) -> None:
-        """Compute factor messages offsets for the factor types, factor groups and factors
+        """Compute factor messages offsets for the factor types and factor groups
         in the flattened array of message.
-        Also compute log potentials offsets for factor groups and factors.
+        Also compute log potentials offsets for factor groups.
 
         See FactorGraphState for documentation on the following fields
 
@@ -221,16 +234,14 @@ class FactorGraph:
         # Message offsets for ftov messages
         self._factor_type_to_msgs_range = collections.OrderedDict()
         self._factor_group_to_msgs_starts = collections.OrderedDict()
-        self._factor_to_msgs_starts = collections.OrderedDict()
         factor_num_states_cumsum = 0
 
         # Log potentials offsets
         self._factor_type_to_potentials_range = collections.OrderedDict()
         self._factor_group_to_potentials_starts = collections.OrderedDict()
-        self._factor_to_potentials_starts = collections.OrderedDict()
         factor_num_configs_cumsum = 0
 
-        for factor_type, factors_groups_by_type in self.factor_groups.items():
+        for factor_type, factors_groups_by_type in self._factor_types_to_groups.items():
             factor_type_num_states_start = factor_num_states_cumsum
             factor_type_num_configs_start = factor_num_configs_cumsum
             for factor_group in factors_groups_by_type:
@@ -241,14 +252,10 @@ class FactorGraph:
                     factor_group
                 ] = factor_num_configs_cumsum
 
-                for factor in factor_group.factors:
-                    self._factor_to_msgs_starts[factor] = factor_num_states_cumsum
-                    self._factor_to_potentials_starts[
-                        factor
-                    ] = factor_num_configs_cumsum
-
-                    factor_num_states_cumsum += np.sum(factor.edges_num_states)
-                    factor_num_configs_cumsum += factor.log_potentials.shape[0]
+                factor_num_states_cumsum += sum(factor_group.factor_edges_num_states)
+                factor_num_configs_cumsum += (
+                    factor_group.factor_group_log_potentials.shape[0]
+                )
 
             self._factor_type_to_msgs_range[factor_type] = (
                 factor_type_num_states_start,
@@ -276,11 +283,11 @@ class FactorGraph:
                 (
                     factor_type,
                     [
-                        factor.compile_wiring(self._vars_to_starts)
-                        for factor in self.factors[factor_type]
+                        factor_group.compile_wiring(self._vars_to_starts)
+                        for factor_group in self._factor_types_to_groups[factor_type]
                     ],
                 )
-                for factor_type in self.factors
+                for factor_type in self._factor_types_to_groups
             ]
         )
         wiring = collections.OrderedDict(
@@ -295,14 +302,14 @@ class FactorGraph:
     def log_potentials(self) -> OrderedDict[Type, np.ndarray]:
         """Function to compile potential array for belief propagation.
 
-        If potential array has already beeen compiled, do nothing.
+        If potential array has already been compiled, do nothing.
 
         Returns:
             A dictionnary mapping each factor type to the array of the log of the potential
                 function for each valid configuration
         """
         log_potentials = collections.OrderedDict()
-        for factor_type, factors_groups_by_type in self.factor_groups.items():
+        for factor_type, factors_groups_by_type in self._factor_types_to_groups.items():
             if len(factors_groups_by_type) == 0:
                 log_potentials[factor_type] = np.empty((0,))
             else:
@@ -317,7 +324,12 @@ class FactorGraph:
 
     @cached_property
     def factors(self) -> OrderedDict[Type, Tuple[nodes.Factor, ...]]:
-        """Mapping factor type to individual factors in the factor graph"""
+        """Mapping factor type to individual factors in the factor graph.
+        This function is only called on demand when the user requires it."""
+        print(
+            "Factors have not been added to the factor graph yet, this may take a while..."
+        )
+
         factors: OrderedDict[Type, Tuple[nodes.Factor, ...]] = collections.OrderedDict(
             [
                 (
@@ -354,7 +366,6 @@ class FactorGraph:
             vars_to_starts=self._vars_to_starts,
             num_var_states=self._num_var_states,
             total_factor_num_states=self._total_factor_num_states,
-            variables_to_factors=copy.copy(self._variables_to_factors),
             named_factor_groups=copy.copy(self._named_factor_groups),
             factor_type_to_msgs_range=copy.copy(self._factor_type_to_msgs_range),
             factor_type_to_potentials_range=copy.copy(
@@ -363,8 +374,6 @@ class FactorGraph:
             factor_group_to_potentials_starts=copy.copy(
                 self._factor_group_to_potentials_starts
             ),
-            factor_to_potentials_starts=copy.copy(self._factor_to_potentials_starts),
-            factor_to_msgs_starts=copy.copy(self._factor_to_msgs_starts),
             log_potentials=log_potentials,
             wiring=self.wiring,
         )
@@ -393,14 +402,10 @@ class FactorGraphState:
             contains evidence to the variable.
         num_var_states: Total number of variable states.
         total_factor_num_states: Size of the flat ftov messages array.
-        variables_to_factors: Maps sets of connected variables (in the form of frozensets of
-            variable names) to corresponding factors.
         named_factor_groups: Maps the names of named factor groups to the corresponding factor groups.
         factor_type_to_msgs_range: Maps factors types to their start and end indices in the flat ftov messages.
         factor_type_to_potentials_range: Maps factor types to their start and end indices in the flat log potentials.
         factor_group_to_potentials_starts: Maps factor groups to their starting indices in the flat log potentials.
-        factor_to_msgs_starts: Maps factors to their starting indices in the flat ftov messages.
-        factor_to_potentials_starts: Maps factors to their starting indices in the flat log potentials.
         log_potentials: Flat log potentials array concatenated for each factor type.
         wiring: Wiring derived for each factor type.
     """
@@ -409,13 +414,10 @@ class FactorGraphState:
     vars_to_starts: Mapping[nodes.Variable, int]
     num_var_states: int
     total_factor_num_states: int
-    variables_to_factors: Mapping[FrozenSet, nodes.Factor]
     named_factor_groups: Mapping[Hashable, groups.FactorGroup]
-    factor_group_to_potentials_starts: OrderedDict[groups.FactorGroup, int]
-    factor_to_potentials_starts: OrderedDict[nodes.Factor, int]
-    factor_to_msgs_starts: OrderedDict[nodes.Factor, int]
     factor_type_to_msgs_range: OrderedDict[type, Tuple[int, int]]
     factor_type_to_potentials_range: OrderedDict[type, Tuple[int, int]]
+    factor_group_to_potentials_starts: OrderedDict[groups.FactorGroup, int]
     log_potentials: OrderedDict[type, None | np.ndarray]
     wiring: OrderedDict[type, nodes.Wiring]
 
@@ -496,19 +498,6 @@ def update_log_potentials(
             log_potentials = log_potentials.at[start : start + flat_data.shape[0]].set(
                 flat_data
             )
-        elif frozenset(name) in fg_state.variables_to_factors:
-            factor = fg_state.variables_to_factors[frozenset(name)]
-
-            if data.shape != factor.log_potentials.shape:
-                raise ValueError(
-                    f"Expected log potentials shape {factor.log_potentials.shape} "
-                    f"for factor {name}. Got {data.shape}."
-                )
-
-            start = fg_state.factor_to_potentials_starts[factor]
-            log_potentials = log_potentials.at[
-                start : start + factor.log_potentials.shape[0]
-            ].set(data)
         else:
             raise ValueError(f"Invalid name {name} for log potentials updates.")
 
@@ -562,10 +551,6 @@ class LogPotentials:
             log_potentials = value[
                 start : start + factor_group.factor_group_log_potentials.shape[0]
             ]
-        elif frozenset(name) in self.fg_state.variables_to_factors:
-            factor = self.fg_state.variables_to_factors[frozenset(name)]
-            start = self.fg_state.factor_to_potentials_starts[factor]
-            log_potentials = value[start : start + factor.log_potentials.shape[0]]
         else:
             raise ValueError(f"Invalid name {name} for log potentials updates.")
 
@@ -620,25 +605,7 @@ def update_ftov_msgs(
     """
     for names in updates:
         data = updates[names]
-        if (
-            isinstance(names, tuple)
-            and len(names) == 2
-            and names[1] in fg_state.variable_group.names
-        ):
-            factor = fg_state.variables_to_factors[frozenset(names[0])]
-            variable = fg_state.variable_group[names[1]]
-            start = fg_state.factor_to_msgs_starts[factor] + np.sum(
-                factor.edges_num_states[: factor.variables.index(variable)]
-            )
-            if data.shape != (variable.num_states,):
-                raise ValueError(
-                    f"Given message shape {data.shape} does not match expected "
-                    f"shape {(variable.num_states,)} from factor {names[0]} "
-                    f"to variable {names[1]}."
-                )
-
-            ftov_msgs = ftov_msgs.at[start : start + variable.num_states].set(data)
-        elif names in fg_state.variable_group.names:
+        if names in fg_state.variable_group.names:
             variable = fg_state.variable_group[names]
             if data.shape != (variable.num_states,):
                 raise ValueError(
@@ -699,38 +666,6 @@ class FToVMessages:
                 )
 
             object.__setattr__(self, "value", self.value)
-
-    def __getitem__(self, names: Tuple[Any, Any]) -> np.ndarray:
-        """Function to query messages from a factor to a variable
-
-        Args:
-            names: a tuple of length 2, with names[0] being the name for
-                factor, and names[1] being the name for variable
-
-        Returns:
-            An array containing the current ftov messages from factor
-            names[0] to variable names[1]
-
-        Raises: ValueError if provided names are not valid for querying ftov messages.
-        """
-        value = cast(np.ndarray, self.value)
-        if not (
-            isinstance(names, tuple)
-            and len(names) == 2
-            and names[1] in self.fg_state.variable_group.names
-        ):
-            raise ValueError(
-                f"Invalid names {names}. Please specify a tuple of factor, variable "
-                "names to get the messages from a named factor to a variable"
-            )
-
-        factor = self.fg_state.variables_to_factors[frozenset(names[0])]
-        variable = self.fg_state.variable_group[names[1]]
-        start = self.fg_state.factor_to_msgs_starts[factor] + np.sum(
-            factor.edges_num_states[: factor.variables.index(variable)]
-        )
-        msgs = value[start : start + variable.num_states]
-        return msgs
 
     @typing.overload
     def __setitem__(
@@ -942,6 +877,7 @@ def BP(
         [wiring[factor_type].edges_num_states for factor_type in FAC_TO_VAR_UPDATES]
     )
     max_msg_size = int(np.max(edges_num_states))
+
     var_states_for_edges = np.concatenate(
         [wiring[factor_type].var_states_for_edges for factor_type in FAC_TO_VAR_UPDATES]
     )

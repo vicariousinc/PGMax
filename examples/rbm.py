@@ -21,14 +21,14 @@
 # %%
 # %matplotlib inline
 import functools
-import itertools
 
 import jax
 import matplotlib.pyplot as plt
 import numpy as np
-from tqdm.notebook import tqdm
 
-from pgmax.fg import graph, groups
+from pgmax.fg import graph
+from pgmax.groups import enumeration
+from pgmax.groups import variables as vgroup
 
 # %% [markdown]
 # The [`pgmax.fg.graph`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.graph.html#module-pgmax.fg.graph) module contains core classes for specifying factor graphs and implementing LBP, while the [`pgmax.fg.groups`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.graph.html#module-pgmax.fg.graph) module contains classes for specifying groups of variables/factors.
@@ -47,8 +47,8 @@ W = params["W"]
 
 # %%
 # Initialize factor graph
-hidden_variables = groups.NDVariableArray(num_states=2, shape=bh.shape)
-visible_variables = groups.NDVariableArray(num_states=2, shape=bv.shape)
+hidden_variables = vgroup.NDVariableArray(num_states=2, shape=bh.shape)
+visible_variables = vgroup.NDVariableArray(num_states=2, shape=bv.shape)
 fg = graph.FactorGraph(
     variables=dict(hidden=hidden_variables, visible=visible_variables),
 )
@@ -60,65 +60,69 @@ fg = graph.FactorGraph(
 
 # %%
 # Add unary factors
-for ii in range(bh.shape[0]):
-    fg.add_factor(
-        variable_names=[("hidden", ii)],
-        factor_configs=np.arange(2)[:, None],
-        log_potentials=np.array([0, bh[ii]]),
-    )
+fg.add_factor_group(
+    factory=enumeration.EnumerationFactorGroup,
+    variable_names_for_factors=[[("hidden", ii)] for ii in range(bh.shape[0])],
+    factor_configs=np.arange(2)[:, None],
+    log_potentials=np.stack([np.zeros_like(bh), bh], axis=1),
+)
 
-for jj in range(bv.shape[0]):
-    fg.add_factor(
-        variable_names=[("visible", jj)],
-        factor_configs=np.arange(2)[:, None],
-        log_potentials=np.array([0, bv[jj]]),
-    )
-
+fg.add_factor_group(
+    factory=enumeration.EnumerationFactorGroup,
+    variable_names_for_factors=[[("visible", jj)] for jj in range(bv.shape[0])],
+    factor_configs=np.arange(2)[:, None],
+    log_potentials=np.stack([np.zeros_like(bv), bv], axis=1),
+)
 
 # Add pairwise factors
-factor_configs = np.array(list(itertools.product(np.arange(2), repeat=2)))
-for ii in tqdm(range(bh.shape[0])):
-    for jj in range(bv.shape[0]):
-        fg.add_factor(
-            variable_names=[("hidden", ii), ("visible", jj)],
-            factor_configs=factor_configs,
-            log_potentials=np.array([0, 0, 0, W[ii, jj]]),
-        )
+log_potential_matrix = np.zeros(W.shape + (2, 2)).reshape((-1, 2, 2))
+log_potential_matrix[:, 1, 1] = W.ravel()
+
+fg.add_factor_group(
+    factory=enumeration.PairwiseFactorGroup,
+    variable_names_for_factors=[
+        [("hidden", ii), ("visible", jj)]
+        for ii in range(bh.shape[0])
+        for jj in range(bv.shape[0])
+    ],
+    log_potential_matrix=log_potential_matrix,
+)
+
 
 # %% [markdown]
-# [`fg.add_factor`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.graph.FactorGraph.html#pgmax.fg.graph.FactorGraph.add_factor) takes 3 arguments, `variable_names`, `factor_configs` and `log_potentials`, and is a literal translation of the factor definitions shown in Table [tab:unary] and Table [tab:binary]. `variable_names` is a list containing the name of the involved variables. In this example, since we construct `fg` with variables `dict(hidden=hidden_variables, visible=visible_variables)`, where `hidden_variables` and `visible_variables` are [`NDVariableArray`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.groups.NDVariableArray.html#pgmax.fg.groups.NDVariableArray)s, we can refer to the `ii`th hidden variable as `("hidden", ii)` and the `jj`th visible variable as `("visible", jj)`. In general, PGMax implements an intuitive scheme for automatically assigning names to the variables in a [`FactorGraph`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.graph.FactorGraph.html#pgmax.fg.graph.FactorGraph).
+# PGMax implements convenient and computationally efficient [`FactorGroup`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.groups.FactorGroup.html#pgmax.fg.groups.FactorGroup) for representing Groups of similar factors. The code above makes use of [`EnumerationFactorGroup`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.groups.EnumerationFactorGroup.html#pgmax.fg.groups.EnumerationFactorGroup) and [`PairwiseFactorGroup`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.groups.PairwiseFactorGroup.html#pgmax.fg.groups.PairwiseFactorGroup), two [`FactorGroup`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.groups.FactorGroup.html#pgmax.fg.groups.FactorGroup)s implemented in the [`pgmax.fg.groups`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.graph.html#module-pgmax.fg.graph) module.
 #
-# PGMax also implements convenient [`FactorGroup`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.groups.FactorGroup.html#pgmax.fg.groups.FactorGroup)s for adding groups of similar factors. An alternative way of adding the above factors using [`FactorGroup`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.groups.FactorGroup.html#pgmax.fg.groups.FactorGroup)s is by calling [`fg.add_factor_group`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.graph.FactorGraph.html#pgmax.fg.graph.FactorGraph.add_factor_group)
+# A [`FactorGroup`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.groups.FactorGroup.html#pgmax.fg.groups.FactorGroup) is created by calling [`fg.add_factor_group`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.graph.FactorGraph.html#pgmax.fg.graph.FactorGraph.add_factor_group), which takes 2 arguments: `factory` which specifies the [`FactorGroup`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.groups.FactorGroup.html#pgmax.fg.groups.FactorGroup) subclass, `variable_names_for_factors` which is a list of lists containing the name of the involved variables in the different factors, and additional arguments for the [`FactorGroup`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.groups.FactorGroup.html#pgmax.fg.groups.FactorGroup) (e.g. `factor_configs` or `log_potential_matrix` here).
+#
+# In this example, since we construct `fg` with variables `dict(hidden=hidden_variables, visible=visible_variables)`, where `hidden_variables` and `visible_variables` are [`NDVariableArray`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.groups.NDVariableArray.html#pgmax.fg.groups.NDVariableArray)s, we can refer to the `ii`th hidden variable as `("hidden", ii)` and the `jj`th visible variable as `("visible", jj)`. In general, PGMax implements an intuitive scheme for automatically assigning names to the variables in a [`FactorGraph`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.graph.FactorGraph.html#pgmax.fg.graph.FactorGraph).
+#
+# An alternative way of creating the above factors is to add them iteratively by calling [`fg.add_factor`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.graph.FactorGraph.html#pgmax.fg.graph.FactorGraph.add_factor) as below. This approach is not recommended as it is not computationally efficient.
 # ~~~python
 # # Add unary factors
-# fg.add_factor_group(
-#     factory=groups.EnumerationFactorGroup,
-#     variable_names_for_factors=[[("hidden", ii)] for ii in range(bh.shape[0])],
-#     factor_configs=np.arange(2)[:, None],
-#     log_potentials=np.stack([np.zeros_like(bh), bh], axis=1),
-# )
-# fg.add_factor_group(
-#     factory=groups.EnumerationFactorGroup,
-#     variable_names_for_factors=[[("visible", jj)] for jj in range(bv.shape[0])],
-#     factor_configs=np.arange(2)[:, None],
-#     log_potentials=np.stack([np.zeros_like(bv), bv], axis=1),
-# )
+# for ii in range(bh.shape[0]):
+#     fg.add_factor(
+#         variable_names=[("hidden", ii)],
+#         factor_configs=np.arange(2)[:, None],
+#         log_potentials=np.array([0, bh[ii]]),
+#     )
+#
+# for jj in range(bv.shape[0]):
+#     fg.add_factor(
+#         variable_names=[("visible", jj)],
+#         factor_configs=np.arange(2)[:, None],
+#         log_potentials=np.array([0, bv[jj]]),
+#     )
 #
 # # Add pairwise factors
-# log_potential_matrix = np.zeros(W.shape + (2, 2)).reshape((-1, 2, 2))
-# log_potential_matrix[:, 1, 1] = W.ravel()
-# fg.add_factor_group(
-#     factory=groups.PairwiseFactorGroup,
-#     variable_names_for_factors=[
-#         [("hidden", ii), ("visible", jj)]
-#         for ii in range(bh.shape[0])
-#         for jj in range(bv.shape[0])
-#     ],
-#     log_potential_matrix=log_potential_matrix,
-# )
+# factor_configs = np.array(list(itertools.product(np.arange(2), repeat=2)))
+# for ii in tqdm(range(bh.shape[0])):
+#     for jj in range(bv.shape[0]):
+#         fg.add_factor(
+#             variable_names=[("hidden", ii), ("visible", jj)],
+#             factor_configs=factor_configs,
+#             log_potentials=np.array([0, 0, 0, W[ii, jj]]),
+#         )
 # ~~~
-#
-# This makes use of [`EnumerationFactorGroup`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.groups.EnumerationFactorGroup.html#pgmax.fg.groups.EnumerationFactorGroup) and [`PairwiseFactorGroup`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.groups.PairwiseFactorGroup.html#pgmax.fg.groups.PairwiseFactorGroup), two [`FactorGroup`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.groups.FactorGroup.html#pgmax.fg.groups.FactorGroup)s implemented in the [`pgmax.fg.groups`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.graph.html#module-pgmax.fg.graph) module.
 #
 # Once we have added the factors, we can run max-product LBP and get MAP decoding by
 # ~~~python

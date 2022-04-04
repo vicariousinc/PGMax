@@ -1,16 +1,13 @@
-from __future__ import annotations
-
 """Defines an enumeration factor"""
 
 import functools
 from dataclasses import dataclass
-from typing import Mapping, Sequence, Union
+from typing import Mapping, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 
-from pgmax import utils
 from pgmax.bp import bp_utils
 from pgmax.fg import nodes
 
@@ -105,27 +102,6 @@ class EnumerationFactor(nodes.Factor):
         ).all():
             raise ValueError("Invalid configurations for given variables")
 
-    @utils.cached_property
-    def factor_configs_edge_states(self) -> np.ndarray:
-        """Array containing factor configs and edge states pairs
-
-        Returns:
-            Array of shape (num_factor_configs, 2)
-            factor_configs_edge_states[ii] contains a pair of global factor_config and edge_state indices
-            factor_configs_edge_states[ii, 0] contains the global factor config index,
-            factor_configs_edge_states[ii, 1] contains the corresponding global edge_state index.
-            Both indices only take into account the EnumerationFactors of the FactorGraph
-        """
-        edges_starts = np.insert(self.edges_num_states.cumsum(), 0, 0)[:-1]
-        factor_configs_edge_states = np.stack(
-            [
-                np.repeat(np.arange(self.configs.shape[0]), self.configs.shape[1]),
-                (self.configs + edges_starts[None]).flatten(),
-            ],
-            axis=1,
-        )
-        return factor_configs_edge_states
-
     def compile_wiring(
         self, vars_to_starts: Mapping[nodes.Variable, int]
     ) -> EnumerationWiring:
@@ -139,16 +115,12 @@ class EnumerationFactor(nodes.Factor):
         Returns:
             EnumerationWiring for the EnumerationFactor
         """
-        var_states_for_edges = np.concatenate(
-            [
-                np.arange(variable.num_states) + vars_to_starts[variable]
-                for variable in self.variables
-            ]
-        )
-        return EnumerationWiring(
-            edges_num_states=self.edges_num_states,
-            var_states_for_edges=var_states_for_edges,
-            factor_configs_edge_states=self.factor_configs_edge_states,
+        return compile_enumeration_wiring(
+            factor_edges_num_states=self.edges_num_states,
+            variables_for_factors=tuple([self.variables]),
+            factor_configs=self.configs,
+            vars_to_starts=vars_to_starts,
+            num_factors=1,
         )
 
     @staticmethod
@@ -203,6 +175,61 @@ class EnumerationFactor(nodes.Factor):
                 factor_configs_edge_states, axis=0
             ),
         )
+
+
+def compile_enumeration_wiring(
+    factor_edges_num_states: np.ndarray,
+    variables_for_factors: Tuple[Tuple[nodes.Variable, ...], ...],
+    factor_configs: np.ndarray,
+    vars_to_starts: Mapping[nodes.Variable, int],
+    num_factors: int,
+) -> EnumerationWiring:
+    """Compile an EnumerationWiring for an EnumerationFactor or a FactorGroup with EnumerationFactors.
+
+    Args:
+        factor_edges_num_states: An array concatenating the number of states for the variables connected to each
+            Factor of the FactorGroup. Each variable will appear once for each Factor it connects to.
+        variables_for_factors: A tuple of tuples containing variables connected to each Factor of the FactorGroup.
+            Each variable will appear once for each Factor it connects to.
+        factor_configs: Array of shape (num_val_configs, num_variables) containing an explicit enumeration
+            of all valid configurations.
+        vars_to_starts: A dictionary that maps variables to their global starting indices
+            For an n-state variable, a global start index of m means the global indices
+            of its n variable states are m, m + 1, ..., m + n - 1
+        num_factors: Number of Factors in the FactorGroup.
+
+    Returns:
+        The EnumerationWiring
+    """
+    var_states_for_edges = []
+    for variables_for_factor in variables_for_factors:
+        for variable in variables_for_factor:
+            num_states = variable.num_states
+            this_var_states_for_edges = np.arange(
+                vars_to_starts[variable], vars_to_starts[variable] + num_states
+            )
+            var_states_for_edges.append(this_var_states_for_edges)
+
+    # Note: edges_starts corresponds to the factor_to_msgs_start for the LogicalFactors
+    edges_starts = np.insert(factor_edges_num_states.cumsum(), 0, 0)[:-1].reshape(
+        -1, factor_configs.shape[1]
+    )
+
+    factor_configs_edge_states = np.stack(
+        [
+            np.repeat(
+                np.arange(factor_configs.shape[0] * num_factors),
+                factor_configs.shape[1],
+            ),
+            (factor_configs[None] + edges_starts[:, None, :]).flatten(),
+        ],
+        axis=1,
+    )
+    return EnumerationWiring(
+        edges_num_states=factor_edges_num_states,
+        var_states_for_edges=np.concatenate(var_states_for_edges),
+        factor_configs_edge_states=factor_configs_edge_states,
+    )
 
 
 @functools.partial(jax.jit, static_argnames=("num_val_configs", "temperature"))

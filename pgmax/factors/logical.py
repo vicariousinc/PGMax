@@ -1,10 +1,8 @@
-from __future__ import annotations
-
 """Defines a logical factor"""
 
 import functools
 from dataclasses import dataclass, field
-from typing import Mapping, Optional, Sequence, Union
+from typing import Mapping, Optional, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -161,26 +159,10 @@ class LogicalFactor(nodes.Factor):
         Returns:
              LogicalWiring for the LogicalFactor
         """
-        var_states_for_edges = np.concatenate(
-            [
-                np.arange(variable.num_states) + vars_to_starts[variable]
-                for variable in self.variables
-            ]
-        )
-        num_parents = len(self.variables) - 1
-        relevant_state = (-self.edge_states_offset + 1) // 2
-        parents_edge_states = np.vstack(
-            [
-                np.zeros(num_parents, dtype=int),
-                np.arange(relevant_state, 2 * num_parents, 2, dtype=int),
-            ],
-        ).T
-        child_edge_state = np.array([2 * num_parents + relevant_state], dtype=int)
-        return LogicalWiring(
-            edges_num_states=self.edges_num_states,
-            var_states_for_edges=var_states_for_edges,
-            parents_edge_states=parents_edge_states,
-            children_edge_states=child_edge_state,
+        return compile_logical_wiring(
+            factor_edges_num_states=self.edges_num_states,
+            variables_for_factors=tuple([self.variables]),
+            vars_to_starts=vars_to_starts,
             edge_states_offset=self.edge_states_offset,
         )
 
@@ -217,6 +199,73 @@ class ANDFactor(LogicalFactor):
     """
 
     edge_states_offset: int = field(init=False, default=-1)
+
+
+def compile_logical_wiring(
+    factor_edges_num_states: np.ndarray,
+    variables_for_factors: Tuple[Tuple[nodes.Variable, ...], ...],
+    vars_to_starts: Mapping[nodes.Variable, int],
+    edge_states_offset: int,
+) -> LogicalWiring:
+    """Compile a LogicalWiring for a LogicalFactor or a FactorGroup with LogicalFactors.
+
+    Args:
+        factor_edges_num_states: An array concatenating the number of states for the variables connected to each
+            Factor of the FactorGroup. Each variable will appear once for each Factor it connects to.
+        variables_for_factors: A tuple of tuples containing variables connected to each Factor of the FactorGroup.
+            Each variable will appear once for each Factor it connects to.
+        vars_to_starts: A dictionary that maps variables to their global starting indices
+            For an n-state variable, a global start index of m means the global indices
+            of its n variable states are m, m + 1, ..., m + n - 1
+        edge_states_offset: Offset to go from a variable's relevant state to its other state
+            For ORFactors the edge_states_offset is 1, for ANDFactors the edge_states_offset is -1.
+
+    Returns:
+        The LogicalWiring
+    """
+    relevant_state = (-edge_states_offset + 1) // 2
+
+    var_states_for_edges = []
+    for variables_for_factor in variables_for_factors:
+        for variable in variables_for_factor:
+            num_states = variable.num_states
+            this_var_states_for_edges = np.arange(
+                vars_to_starts[variable], vars_to_starts[variable] + num_states
+            )
+            var_states_for_edges.append(this_var_states_for_edges)
+
+    # Note: edges_num_states_cumsum corresponds to the factor_to_msgs_start for the LogicalFactors
+    edges_num_states_cumsum = 0
+    parents_edge_states = []
+    children_edge_states = []
+    for factor_idx, variables_for_factor in enumerate(variables_for_factors):
+        num_parents = len(variables_for_factor) - 1
+        this_parents_edge_states = np.vstack(
+            [
+                np.full(num_parents, fill_value=factor_idx, dtype=int),
+                np.arange(
+                    edges_num_states_cumsum + relevant_state,
+                    edges_num_states_cumsum + 2 * num_parents,
+                    2,
+                    dtype=int,
+                ),
+            ],
+        ).T
+        this_child_edge_state = (
+            edges_num_states_cumsum + 2 * num_parents + relevant_state
+        )
+
+        parents_edge_states.append(this_parents_edge_states)
+        children_edge_states.append(this_child_edge_state)
+        edges_num_states_cumsum += 2 * (num_parents + 1)
+
+    return LogicalWiring(
+        edges_num_states=factor_edges_num_states,
+        var_states_for_edges=np.concatenate(var_states_for_edges),
+        parents_edge_states=np.concatenate(parents_edge_states),
+        children_edge_states=np.array(children_edge_states),
+        edge_states_offset=edge_states_offset,
+    )
 
 
 @functools.partial(jax.jit, static_argnames=("temperature"))

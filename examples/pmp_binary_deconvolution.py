@@ -20,6 +20,7 @@
 
 # %%
 import functools
+from collections import defaultdict
 
 import jax
 import matplotlib.pyplot as plt
@@ -27,8 +28,9 @@ import numpy as np
 from scipy.special import logit
 from tqdm.notebook import tqdm
 
-from pgmax.factors import logical
-from pgmax.fg import graph, groups
+from pgmax.fg import graph
+from pgmax.groups import logical
+from pgmax.groups import variables as vgroup
 
 
 # %%
@@ -115,32 +117,32 @@ s_height = im_height - feat_height + 1
 s_width = im_width - feat_width + 1
 
 # Binary features
-W = groups.NDVariableArray(
+W = vgroup.NDVariableArray(
     num_states=2, shape=(n_chan, n_feat, feat_height, feat_width)
 )
 
 # Binary indicators of features locations
-S = groups.NDVariableArray(num_states=2, shape=(n_images, n_feat, s_height, s_width))
+S = vgroup.NDVariableArray(num_states=2, shape=(n_images, n_feat, s_height, s_width))
 
 # Auxiliary binary variables combining W and S
-SW = groups.NDVariableArray(
+SW = vgroup.NDVariableArray(
     num_states=2,
     shape=(n_images, n_chan, im_height, im_width, n_feat, feat_height, feat_width),
 )
 
 # Binary images obtained by convolution
-X = groups.NDVariableArray(num_states=2, shape=X_gt.shape)
+X = vgroup.NDVariableArray(num_states=2, shape=X_gt.shape)
 
+# %% [markdown]
+# For computation efficiency, we add large FactorGroups via `fg.add_factor_group` instead of adding individual Factors
+
+# %%
 # Factor graph
 fg = graph.FactorGraph(variables=dict(S=S, W=W, SW=SW, X=X))
 
-# %%
-# Note: although adding Factors is currently handled via for loops,
-# we have plans to make this more efficient in the near future through the use of FactorGroups
-
-variable_names_for_ORFactors = {}
-
-# Add ANDFactors
+# Define the ANDFactors
+variable_names_for_ANDFactors = []
+variable_names_for_ORFactors_dict = defaultdict(list)
 for idx_img in tqdm(range(n_images)):
     for idx_chan in range(n_chan):
         for idx_s_height in range(s_height):
@@ -161,7 +163,7 @@ for idx_img in tqdm(range(n_images)):
                                 idx_feat_width,
                             )
 
-                            variable_names = [
+                            variable_names_for_ANDFactor = [
                                 ("S", idx_img, idx_feat, idx_s_height, idx_s_width),
                                 (
                                     "W",
@@ -172,28 +174,36 @@ for idx_img in tqdm(range(n_images)):
                                 ),
                                 SW_var,
                             ]
-
-                            fg.add_factor_by_type(
-                                variable_names=variable_names,
-                                factor_type=logical.ANDFactor,
+                            variable_names_for_ANDFactors.append(
+                                variable_names_for_ANDFactor
                             )
 
                             X_var = (idx_img, idx_chan, idx_img_height, idx_img_width)
-                            if X_var not in variable_names_for_ORFactors:
-                                variable_names_for_ORFactors[X_var] = [SW_var]
-                            else:
-                                variable_names_for_ORFactors[X_var].append(SW_var)
+                            variable_names_for_ORFactors_dict[X_var].append(SW_var)
 
+# Add ANDFactorGroup, which is computationally efficient
+fg.add_factor_group(
+    factory=logical.ANDFactorGroup,
+    variable_names_for_factors=variable_names_for_ANDFactors,
+)
 
-# Add ORFactors
-for X_var, variable_names_for_ORFactor in variable_names_for_ORFactors.items():
-    fg.add_factor_by_type(
-        variable_names=variable_names_for_ORFactor + [("X",) + X_var],  # type: ignore
-        factor_type=logical.ORFactor,
-    )
+# Define the ORFactors
+variable_names_for_ORFactors = [
+    list(tuple(variable_names_for_ORFactors_dict[X_var]) + (("X",) + X_var,))
+    for X_var in variable_names_for_ORFactors_dict
+]
 
-for factor_type, factors in fg.factors.items():
-    print(f"The factor graph contains {len(factors)} {factor_type}")
+# Add ORFactorGroup, which is computationally efficient
+fg.add_factor_group(
+    factory=logical.ORFactorGroup,
+    variable_names_for_factors=variable_names_for_ORFactors,
+)
+
+for factor_type, factor_groups in fg.factor_groups.items():
+    if len(factor_groups) > 0:
+        assert len(factor_groups) == 1
+        print(f"The factor graph contains {factor_groups[0].num_factors} {factor_type}")
+
 
 # %% [markdown]
 # ### Run inference and visualize results

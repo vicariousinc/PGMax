@@ -5,15 +5,18 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from pgmax.factors import FAC_TO_VAR_UPDATES, enumeration
+from pgmax.factors import FAC_TO_VAR_UPDATES
+from pgmax.factors import enumeration as enumeration_factor
 from pgmax.fg import graph, groups
+from pgmax.groups import logical
+from pgmax.groups import variables as vgroup
 
 
 def test_factor_graph():
-    variable_group = groups.VariableDict(15, (0,))
+    variable_group = vgroup.VariableDict(15, (0,))
     fg = graph.FactorGraph(variable_group)
     fg.add_factor_by_type(
-        factor_type=enumeration.EnumerationFactor,
+        factor_type=enumeration_factor.EnumerationFactor,
         variable_names=[0],
         configs=np.arange(15)[:, None],
         log_potentials=np.zeros(15),
@@ -32,7 +35,7 @@ def test_factor_graph():
     with pytest.raises(
         ValueError,
         match=re.escape(
-            f"A factor involving variables {frozenset([0])} already exists."
+            f"A Factor of type {enumeration_factor.EnumerationFactor} involving variables {frozenset([0])} already exists."
         ),
     ):
         fg.add_factor(
@@ -49,8 +52,34 @@ def test_factor_graph():
         fg.add_factor_by_type(variable_names=[0], factor_type=groups.FactorGroup)
 
 
+def test_factor_adding():
+    A = vgroup.NDVariableArray(num_states=2, shape=(10,))
+    B = vgroup.NDVariableArray(num_states=2, shape=(10,))
+    fg = graph.FactorGraph(variables=dict(A=A, B=B))
+
+    with pytest.raises(ValueError, match="Do not add a factor group with no factors."):
+        fg.add_factor_group(
+            factory=logical.ORFactorGroup,
+            variable_names_for_factors=[],
+        )
+
+    variables0 = [("A", 0), ("B", 0)]
+    variables1 = [("A", 1), ("B", 1)]
+    ORFactor = logical.ORFactorGroup(
+        fg._variable_group, variable_names_for_factors=[variables0]
+    )
+    with pytest.raises(
+        ValueError, match="SingleFactorGroup should only contain one factor. Got 2"
+    ):
+        groups.SingleFactorGroup(
+            variable_group=fg._variable_group,
+            variable_names_for_factors=[variables0, variables1],
+            factor=ORFactor,
+        )
+
+
 def test_bp_state():
-    variable_group = groups.VariableDict(15, (0,))
+    variable_group = vgroup.VariableDict(15, (0,))
     fg0 = graph.FactorGraph(variable_group)
     fg0.add_factor(
         variable_names=[0],
@@ -75,7 +104,7 @@ def test_bp_state():
 
 
 def test_log_potentials():
-    variable_group = groups.VariableDict(15, (0,))
+    variable_group = vgroup.VariableDict(15, (0,))
     fg = graph.FactorGraph(variable_group)
     fg.add_factor(
         variable_names=[0],
@@ -88,20 +117,11 @@ def test_log_potentials():
     ):
         fg.bp_state.log_potentials["test"] = jnp.zeros((1, 15))
 
-    fg.bp_state.log_potentials[[0]] = np.zeros(10)
     with pytest.raises(
         ValueError,
-        match=re.escape(
-            f"Expected log potentials shape (10,) for factor {frozenset([0])}. Got (15,)"
-        ),
+        match=re.escape(f"Invalid name {frozenset([0])} for log potentials updates."),
     ):
-        fg.bp_state.log_potentials[[0]] = np.zeros(15)
-
-    with pytest.raises(
-        ValueError,
-        match=re.escape(f"Invalid name {frozenset([1])} for log potentials updates."),
-    ):
-        fg.bp_state.log_potentials[frozenset([1])] = np.zeros(10)
+        fg.bp_state.log_potentials[[0]] = np.zeros(10)
 
     with pytest.raises(
         ValueError, match=re.escape("Expected log potentials shape (10,). Got (15,)")
@@ -110,7 +130,6 @@ def test_log_potentials():
 
     log_potentials = graph.LogPotentials(fg_state=fg.fg_state, value=np.zeros(10))
     assert jnp.all(log_potentials["test"] == jnp.zeros(10))
-    assert jnp.all(log_potentials[[0]] == jnp.zeros(10))
     with pytest.raises(
         ValueError,
         match=re.escape(f"Invalid name {frozenset([1])} for log potentials updates."),
@@ -119,7 +138,7 @@ def test_log_potentials():
 
 
 def test_ftov_msgs():
-    variable_group = groups.VariableDict(15, (0,))
+    variable_group = vgroup.VariableDict(15, (0,))
     fg = graph.FactorGraph(variable_group)
     fg.add_factor(
         variable_names=[0],
@@ -128,9 +147,7 @@ def test_ftov_msgs():
     )
     with pytest.raises(
         ValueError,
-        match=re.escape(
-            f"Given message shape (10,) does not match expected shape (15,) from factor {frozenset([0])} to variable 0"
-        ),
+        match=re.escape("Invalid names for setting messages"),
     ):
         fg.bp_state.ftov_msgs[[0], 0] = np.ones(10)
 
@@ -143,23 +160,19 @@ def test_ftov_msgs():
         fg.bp_state.ftov_msgs[0] = np.ones(10)
 
     with pytest.raises(
-        ValueError,
-        match=re.escape("Invalid names for setting messages"),
-    ):
-        fg.bp_state.ftov_msgs[1] = np.ones(10)
-
-    with pytest.raises(
         ValueError, match=re.escape("Expected messages shape (15,). Got (10,)")
     ):
         graph.FToVMessages(fg_state=fg.fg_state, value=np.zeros(10))
 
     ftov_msgs = graph.FToVMessages(fg_state=fg.fg_state, value=np.zeros(15))
-    with pytest.raises(ValueError, match=re.escape("Invalid names (10,)")):
+    with pytest.raises(
+        TypeError, match=re.escape("'FToVMessages' object is not subscriptable")
+    ):
         ftov_msgs[(10,)]
 
 
 def test_evidence():
-    variable_group = groups.VariableDict(15, (0,))
+    variable_group = vgroup.VariableDict(15, (0,))
     fg = graph.FactorGraph(variable_group)
     fg.add_factor(
         variable_names=[0],
@@ -176,7 +189,7 @@ def test_evidence():
 
 
 def test_bp():
-    variable_group = groups.VariableDict(15, (0,))
+    variable_group = vgroup.VariableDict(15, (0,))
     fg = graph.FactorGraph(variable_group)
     fg.add_factor(
         variable_names=[0],
@@ -185,7 +198,7 @@ def test_bp():
     )
     run_bp, get_bp_state, get_beliefs = graph.BP(fg.bp_state, 1)
     bp_arrays = replace(
-        run_bp(ftov_msgs_updates={(frozenset([0]), 0): np.zeros(15)}),
+        run_bp(ftov_msgs_updates={0: np.zeros(15)}),
         log_potentials=jnp.zeros((10)),
     )
     bp_state = get_bp_state(bp_arrays)
