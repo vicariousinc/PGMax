@@ -12,12 +12,14 @@ from typing import (
     Any,
     Callable,
     Dict,
+    FrozenSet,
     Hashable,
     List,
     Mapping,
     Optional,
     OrderedDict,
     Sequence,
+    Set,
     Tuple,
     Type,
     Union,
@@ -77,9 +79,9 @@ class FactorGraph:
         ] = collections.OrderedDict(
             [(factor_type, []) for factor_type in FAC_TO_VAR_UPDATES]
         )
-        self._factors_var_names_to_type: OrderedDict[
-            Tuple[Any, ...], Type
-        ] = collections.OrderedDict()
+        self._factor_types_to_variable_names_for_factors: Dict[
+            Type, Set[FrozenSet]
+        ] = {}
 
         # See FactorGraphState docstrings for documentation on the following fields
         self._num_var_states = vars_num_states_cumsum[-1]
@@ -105,7 +107,7 @@ class FactorGraph:
         self,
         variable_names: List,
         factor_configs: np.ndarray,
-        log_potentials: Optional[np.ndarray] = np.empty((0,)),
+        log_potentials: Optional[np.ndarray] = None,
         name: Optional[str] = None,
     ) -> None:
         """Function to add a single factor to the FactorGraph.
@@ -201,16 +203,16 @@ class FactorGraph:
 
         factor_type = factor_group.factor_type
         for var_names_for_factor in factor_group.variable_names_for_factors:
-            tuple_var_names_for_factor = tuple(var_names_for_factor)
+            var_names = frozenset(var_names_for_factor)
             if (
-                tuple_var_names_for_factor in self._factors_var_names_to_type
-                and factor_type
-                == self._factors_var_names_to_type[tuple_var_names_for_factor]
+                var_names
+                in self._factor_types_to_variable_names_for_factors[factor_type]
             ):
                 raise ValueError(
-                    f"A {factor_type} involving variables {tuple_var_names_for_factor} already exists. Please merge the corresponding factors."
+                    f"A Factor of type {factor_type} involving variables {var_names} already exists. Please merge the corresponding factors."
                 )
-            self._factors_var_names_to_type[tuple_var_names_for_factor] = factor_type
+
+            self._factor_types_to_variable_names_for_factors[factor_type].add(var_names)
 
         factor_type = factor_group.factor_type
         self._factor_types_to_groups[factor_type].append(factor_group)
