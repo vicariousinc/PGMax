@@ -206,9 +206,10 @@ def compile_enumeration_wiring(
     var_states = np.array(
         [vars_to_starts[variable] for variable in variables_for_factors]
     )
-    var_states_for_edges = np.empty(shape=(2 * var_states.shape[0],), dtype=int)
-    start_indices = np.arange(var_states.shape[0])
-    _compile_var_states_numba(var_states_for_edges, start_indices, var_states)
+    num_states = np.array([variable.num_states for variable in variables_for_factors])
+    num_states_cumsum = np.insert(np.cumsum(num_states), 0, 0)
+    var_states_for_edges = np.empty(shape=(num_states_cumsum[-1],), dtype=int)
+    _compile_var_states_numba(var_states_for_edges, num_states_cumsum, var_states)
 
     num_configs, num_variables = factor_configs.shape
     factor_configs_edge_states = np.empty(
@@ -228,12 +229,17 @@ def compile_enumeration_wiring(
 
 
 @nb.jit(parallel=False, cache=True, fastmath=True, nopython=True)
-def _compile_var_states_numba(var_states_for_edges, start_indices, var_states):
+def _compile_var_states_numba(var_states_for_edges, num_states_cumsum, var_states):
     "Fast numba computation of the var_states_for_edges of an EnumerationWiring."
 
-    for idx in start_indices:
-        var_states_for_edges[2 * idx] = var_states[idx]
-        var_states_for_edges[2 * idx + 1] = var_states[idx] + 1
+    for variable_idx in nb.prange(num_states_cumsum.shape[0] - 1):
+        start_variable, end_variable = (
+            num_states_cumsum[variable_idx],
+            num_states_cumsum[variable_idx + 1],
+        )
+        var_states_for_edges[start_variable:end_variable] = var_states[
+            variable_idx
+        ] + np.arange(end_variable - start_variable)
 
 
 @nb.jit(parallel=False, cache=True, fastmath=True, nopython=True)

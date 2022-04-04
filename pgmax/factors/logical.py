@@ -233,10 +233,11 @@ def compile_logical_wiring(
     var_states = np.array(
         [vars_to_starts[variable] for variable in variables_for_factors]
     )
+    # Note: all the variables in a LogicalFactorGroup are binary
+    num_states_cumsum = np.arange(0, 2 * var_states.shape[0] + 2, 2)
     var_states_for_edges = np.empty(shape=(2 * var_states.shape[0],), dtype=int)
-    start_indices = np.arange(var_states.shape[0])
     enumeration._compile_var_states_numba(
-        var_states_for_edges, start_indices, var_states
+        var_states_for_edges, num_states_cumsum, var_states
     )
 
     num_parents = factor_sizes - 1
