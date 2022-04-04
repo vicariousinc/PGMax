@@ -161,8 +161,7 @@ class LogicalFactor(nodes.Factor):
         """
         return compile_logical_wiring(
             factor_edges_num_states=self.edges_num_states,
-            variables_for_factors=self.variables,
-            factor_sizes=[len(self.variables)],
+            variables_for_factors=tuple([self.variables]),
             vars_to_starts=vars_to_starts,
             edge_states_offset=self.edge_states_offset,
         )
@@ -205,7 +204,6 @@ class ANDFactor(LogicalFactor):
 def compile_logical_wiring(
     factor_edges_num_states,
     variables_for_factors,
-    factor_sizes,
     vars_to_starts,
     edge_states_offset,
 ) -> LogicalWiring:
@@ -216,7 +214,6 @@ def compile_logical_wiring(
             Factor of the FactorGroup. Each variable will appear once for each Factor it connects to.
         variables_for_factors: A tuple concatenating the variables (with repetition) connected to each
             Factor of the FactorGroup. Each variable will appear once for each Factor it connects to.
-        factor_sizes: Sizes of the Factors
         vars_to_starts: A dictionary that maps variables to their global starting indices
             For an n-state variable, a global start index of m means the global indices
             of its n variable states are m, m + 1, ..., m + n - 1
@@ -229,20 +226,20 @@ def compile_logical_wiring(
     relevant_state = (-edge_states_offset + 1) // 2
 
     var_states_for_edges = []
-    for variable in variables_for_factors:
-        num_states = variable.num_states
-        this_var_states_for_edges = np.arange(
-            vars_to_starts[variable], vars_to_starts[variable] + num_states
-        )
-        var_states_for_edges.append(this_var_states_for_edges)
+    for variables_for_factor in variables_for_factors:
+        for variable in variables_for_factor:
+            num_states = variable.num_states
+            this_var_states_for_edges = np.arange(
+                vars_to_starts[variable], vars_to_starts[variable] + num_states
+            )
+            var_states_for_edges.append(this_var_states_for_edges)
 
     # Note: edges_num_states_cumsum corresponds to the factor_to_msgs_start for the LogicalFactors
     edges_num_states_cumsum = 0
     parents_edge_states = []
     children_edge_states = []
-    for factor_idx, factor_size in enumerate(factor_sizes):
-        num_parents = factor_size - 1
-
+    for factor_idx, variables_for_factor in enumerate(variables_for_factors):
+        num_parents = len(variables_for_factor) - 1
         this_parents_edge_states = np.vstack(
             [
                 np.full(num_parents, fill_value=factor_idx, dtype=int),

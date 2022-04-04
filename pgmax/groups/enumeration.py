@@ -30,14 +30,14 @@ class EnumerationFactorGroup(groups.FactorGroup):
     """
 
     factor_configs: np.ndarray
-    log_potentials: np.ndarray = field(init=True, default=np.empty((0,)))
+    log_potentials: Optional[np.ndarray] = None
     factor_type: Type = field(init=False, default=enumeration.EnumerationFactor)
 
     def __post_init__(self):
         super().__post_init__()
 
         num_val_configs = self.factor_configs.shape[0]
-        if self.log_potentials.shape[0] == 0:
+        if self.log_potentials is None:
             log_potentials = np.zeros((self.num_factors, num_val_configs), dtype=float)
         else:
             if self.log_potentials.shape != (
@@ -74,7 +74,7 @@ class EnumerationFactorGroup(groups.FactorGroup):
                             self.variable_group[self.variable_names_for_factors[ii]]
                         ),
                         configs=self.factor_configs,
-                        log_potentials=self.log_potentials[ii],
+                        log_potentials=np.array(self.log_potentials)[ii],
                     ),
                 )
                 for ii in range(len(self.variable_names_for_factors))
@@ -204,7 +204,6 @@ class PairwiseFactorGroup(groups.FactorGroup):
                     variables in the factors.
     """
 
-    factor_configs: np.array = field(init=False)
     log_potential_matrix: Optional[np.ndarray] = None
     factor_type: Type = field(init=False, default=enumeration.EnumerationFactor)
 
@@ -264,7 +263,6 @@ class PairwiseFactorGroup(groups.FactorGroup):
                     f"(with {log_potential_matrix.shape[-2:]} configurations)."
                 )
         object.__setattr__(self, "log_potential_matrix", log_potential_matrix)
-
         factor_configs = (
             np.mgrid[
                 : log_potential_matrix.shape[-2],
@@ -274,12 +272,10 @@ class PairwiseFactorGroup(groups.FactorGroup):
             .reshape((-1, 2))
         )
         object.__setattr__(self, "factor_configs", factor_configs)
-
         log_potential_matrix = np.broadcast_to(
             log_potential_matrix,
             (len(self.variable_names_for_factors),) + log_potential_matrix.shape[-2:],
         )
-
         log_potentials = np.array(
             [
                 log_potential_matrix[

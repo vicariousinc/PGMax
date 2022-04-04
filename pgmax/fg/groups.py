@@ -356,55 +356,19 @@ class FactorGroup:
         variable_names_for_factors: A list of list of variable names, where each innermost element is the
             name of a variable in variable_group. Each list within the outer list is taken to contain
             the names of the variables connected to a Factor.
-        num_factors: Number of Factors in the FactorGroup.
-        factor_sizes: Sizes of the Factors in the FactorGroup.
-        factor_edges_num_states: An array concatenating the number of states for the variables connected to each
-            Factor of the FactorGroup. Each variable will appear once for each Factor it connects to.
-        variables_for_factors: A tuple concatenating the variables (with repetition) connected to each
-            Factor of the FactorGroup. Each variable will appear once for each Factor it connects to.
         factor_type: Factor type shared by all the Factors in the FactorGroup.
-        factor_configs: Optional array containing an explicit enumeration of all valid configurations
         log_potentials: Array of log potentials.
     """
 
     variable_group: Union[CompositeVariableGroup, VariableGroup]
     variable_names_for_factors: Sequence[List]
-    num_factors: int = field(init=False)
-    factor_sizes: List[int] = field(init=False)
-    factor_edges_num_states: np.ndarray = field(init=False)
-    variables_for_factors: Tuple[nodes.Variable, ...] = field(init=False)
+    factor_configs: np.ndarray = field(init=False)
     factor_type: Type = field(init=False)
-    factor_configs: np.ndarray = field(init=False, default=None)
     log_potentials: np.ndarray = field(init=False, default=np.empty((0,)))
 
     def __post_init__(self):
         if len(self.variable_names_for_factors) == 0:
             raise ValueError("Do not add a factor group with no factors.")
-
-        object.__setattr__(self, "num_factors", len(self.variable_names_for_factors))
-        object.__setattr__(
-            self,
-            "factor_sizes",
-            [
-                len(variable_names_for_factor)
-                for variable_names_for_factor in self.variable_names_for_factors
-            ],
-        )
-
-        factor_edges_num_states = []
-        variables_for_factors = []
-
-        for variable_names_for_factor in self.variable_names_for_factors:
-            for variable_name in variable_names_for_factor:
-                variable = self.variable_group._names_to_variables[variable_name]
-                num_states = variable.num_states
-                factor_edges_num_states.append(num_states)
-                variables_for_factors.append(variable)
-
-        object.__setattr__(
-            self, "factor_edges_num_states", np.array(factor_edges_num_states)
-        )
-        object.__setattr__(self, "variables_for_factors", tuple(variables_for_factors))
 
     def __getitem__(self, variables: Union[Sequence, Collection]) -> Any:
         """Function to query individual factors in the factor group
@@ -447,6 +411,39 @@ class FactorGroup:
         """Returns all factors in the factor group.
         This function is only called on demand when the user requires it."""
         return tuple(self._variables_to_factors.values())
+
+    @cached_property
+    def num_factors(self) -> int:
+        """Returns the number of factors in the FactorGroup."""
+        return len(self.variable_names_for_factors)
+
+    @cached_property
+    def variables_for_factors(self) -> Tuple[Tuple[nodes.Variable, ...], ...]:
+        """Returns the variables connected to each factor in the FactorGroup."""
+        variables_for_factors = []
+
+        for variable_names_for_factor in self.variable_names_for_factors:
+            variables_for_factors.append(
+                tuple(
+                    [
+                        self.variable_group._names_to_variables[variable_name]
+                        for variable_name in variable_names_for_factor
+                    ]
+                )
+            )
+
+        return tuple(variables_for_factors)
+
+    @cached_property
+    def factor_edges_num_states(self) -> np.ndarray:
+        """Returns An array concatenating the number of states for the variables connected to each Factor of
+        the FactorGroup. Each variable will appear once for each Factor it connects to."""
+        factor_edges_num_states = []
+        for variables_for_factor in self.variables_for_factors:
+            for variable in variables_for_factor:
+                factor_edges_num_states.append(variable.num_states)
+
+        return np.array(factor_edges_num_states)
 
     def _get_variables_to_factors(self) -> OrderedDict[FrozenSet, Any]:
         """Function that generates a dictionary mapping names to factors.

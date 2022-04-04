@@ -36,7 +36,6 @@ class LogicalFactorGroup(groups.FactorGroup):
         return logical.compile_logical_wiring(
             factor_edges_num_states=self.factor_edges_num_states,
             variables_for_factors=self.variables_for_factors,
-            factor_sizes=self.factor_sizes,
             vars_to_starts=vars_to_starts,
             edge_states_offset=self.edge_states_offset,
         )

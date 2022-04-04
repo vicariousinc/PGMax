@@ -202,12 +202,13 @@ def compile_enumeration_wiring(
         The EnumerationWiring
     """
     var_states_for_edges = []
-    for variable in variables_for_factors:
-        num_states = variable.num_states
-        this_var_states_for_edges = np.arange(
-            vars_to_starts[variable], vars_to_starts[variable] + num_states
-        )
-        var_states_for_edges.append(this_var_states_for_edges)
+    for variables_for_factor in variables_for_factors:
+        for variable in variables_for_factor:
+            num_states = variable.num_states
+            this_var_states_for_edges = np.arange(
+                vars_to_starts[variable], vars_to_starts[variable] + num_states
+            )
+            var_states_for_edges.append(this_var_states_for_edges)
 
     # Note: edges_starts corresponds to the factor_to_msgs_start for the LogicalFactors
     edges_starts = np.insert(factor_edges_num_states.cumsum(), 0, 0)[:-1].reshape(
