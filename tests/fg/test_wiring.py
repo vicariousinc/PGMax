@@ -1,3 +1,6 @@
+import os
+
+os.environ["NUMBA_DISABLE_JIT"] = "1"  # before importing numba
 import numpy as np
 
 from pgmax.factors import enumeration as enumeration_factor

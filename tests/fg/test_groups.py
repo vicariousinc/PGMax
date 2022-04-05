@@ -1,4 +1,7 @@
+import os
 import re
+
+os.environ["NUMBA_DISABLE_JIT"] = "1"
 
 import jax
 import jax.numpy as jnp

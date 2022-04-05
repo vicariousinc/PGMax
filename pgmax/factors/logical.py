@@ -219,6 +219,7 @@ def compile_logical_wiring(
             Factor of the FactorGroup. Each variable will appear once for each Factor it connects to.
         variables_for_factors: A tuple of tuples containing variables connected to each Factor of the FactorGroup.
             Each variable will appear once for each Factor it connects to.
+        factor_sizes: An array containing the different factor sizes.
         vars_to_starts: A dictionary that maps variables to their global starting indices
             For an n-state variable, a global start index of m means the global indices
             of its n variable states are m, m + 1, ..., m + n - 1
@@ -275,7 +276,7 @@ def _compile_logical_wiring_numba(
     edges_num_states_cumsum,
     relevant_state,
 ):
-    "Fast numba computation of the parents_edge_states and children_edge_states of an LogicalWiring."
+    "Fast numba computation of the parents_edge_states and children_edge_states of a LogicalWiring."
 
     for factor_idx in nb.prange(num_parents.shape[0]):
         start_parents, end_parents = (
