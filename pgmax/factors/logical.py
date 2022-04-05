@@ -212,7 +212,7 @@ def compile_logical_wiring(
     edge_states_offset: int,
 ) -> LogicalWiring:
     """Compile a LogicalWiring for a LogicalFactor or a FactorGroup with LogicalFactors.
-    Internally calls _compile_var_states_numba and _compile_enumeration_wiring_numba for speed.
+    Internally calls _compile_var_states_numba and _compile_logical_wiring_numba for speed.
 
     Args:
         factor_edges_num_states: An array concatenating the number of states for the variables connected to each
@@ -248,7 +248,7 @@ def compile_logical_wiring(
     # Note: edges_num_states_cumsum corresponds to the factor_to_msgs_start for the LogicalFactor
     edges_num_states_cumsum = np.insert(np.cumsum(2 * factor_sizes), 0, 0)
 
-    compile_logical_wiring_numba(
+    _compile_logical_wiring_numba(
         parents_edge_states=parents_edge_states,
         children_edge_states=children_edge_states,
         num_parents=num_parents,
@@ -267,7 +267,7 @@ def compile_logical_wiring(
 
 
 @nb.jit(parallel=False, cache=True, fastmath=True, nopython=True)
-def compile_logical_wiring_numba(
+def _compile_logical_wiring_numba(
     parents_edge_states,
     children_edge_states,
     num_parents,

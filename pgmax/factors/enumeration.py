@@ -230,7 +230,7 @@ def compile_enumeration_wiring(
 
 @nb.jit(parallel=False, cache=True, fastmath=True, nopython=True)
 def _compile_var_states_numba(var_states_for_edges, num_states_cumsum, var_states):
-    "Fast numba computation of the var_states_for_edges of an EnumerationWiring."
+    "Fast numba computation of the var_states_for_edges of a Wiring."
 
     for variable_idx in nb.prange(num_states_cumsum.shape[0] - 1):
         start_variable, end_variable = (
