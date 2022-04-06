@@ -2,7 +2,7 @@
 
 import functools
 from dataclasses import dataclass, field
-from typing import Mapping, Optional, Sequence, Tuple, Union
+from typing import List, Mapping, Optional, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -105,6 +105,19 @@ class LogicalFactor(nodes.Factor):
             raise ValueError("All variables should all be binary")
 
     @staticmethod
+    def compile_wiring_arguments() -> List[str]:
+        """
+        Returns:
+            A list of the arguments names used to compile wiring.
+        """
+        return [
+            "factor_edges_num_states",
+            "variables_for_factors",
+            "factor_sizes",
+            "edge_states_offset",
+        ]
+
+    @staticmethod
     def concatenate_wirings(wirings: Sequence[LogicalWiring]) -> LogicalWiring:
         """Concatenate a list of LogicalWirings
 
@@ -148,26 +161,89 @@ class LogicalFactor(nodes.Factor):
             edge_states_offset=wirings[0].edge_states_offset,
         )
 
+    @staticmethod
     def compile_wiring(
-        self, vars_to_starts: Mapping[nodes.Variable, int]
+        factor_edges_num_states: np.ndarray,
+        variables_for_factors: Tuple[nodes.Variable, ...],
+        factor_sizes: np.ndarray,
+        vars_to_starts: Mapping[nodes.Variable, int],
+        edge_states_offset: int,
     ) -> LogicalWiring:
-        """Compile LogicalWiring for the LogicalFactor
+        """Compile a LogicalWiring for a LogicalFactor or a FactorGroup with LogicalFactors.
+        Internally calls _compile_var_states_numba and _compile_logical_wiring_numba for speed.
 
         Args:
+            factor_edges_num_states: An array concatenating the number of states for the variables connected to each
+                Factor of the FactorGroup. Each variable will appear once for each Factor it connects to.
+            variables_for_factors: A tuple of tuples containing variables connected to each Factor of the FactorGroup.
+                Each variable will appear once for each Factor it connects to.
+            factor_sizes: An array containing the different factor sizes.
             vars_to_starts: A dictionary that maps variables to their global starting indices
                 For an n-state variable, a global start index of m means the global indices
                 of its n variable states are m, m + 1, ..., m + n - 1
+            edge_states_offset: Offset to go from a variable's relevant state to its other state
+                For ORFactors the edge_states_offset is 1, for ANDFactors the edge_states_offset is -1.
 
         Returns:
-             LogicalWiring for the LogicalFactor
+            The LogicalWiring
         """
-        return compile_logical_wiring(
-            factor_edges_num_states=self.edges_num_states,
-            variables_for_factors=tuple(self.variables),
-            factor_sizes=np.array([len(self.variables)]),
-            vars_to_starts=vars_to_starts,
-            edge_states_offset=self.edge_states_offset,
+        relevant_state = (-edge_states_offset + 1) // 2
+
+        var_states = np.array(
+            [vars_to_starts[variable] for variable in variables_for_factors]
         )
+        # Note: all the variables in a LogicalFactorGroup are binary
+        num_states_cumsum = np.arange(0, 2 * var_states.shape[0] + 2, 2)
+        var_states_for_edges = np.empty(shape=(2 * var_states.shape[0],), dtype=int)
+        enumeration._compile_var_states_numba(
+            var_states_for_edges, num_states_cumsum, var_states
+        )
+
+        num_parents = factor_sizes - 1
+        num_parents_cumsum = np.insert(np.cumsum(num_parents), 0, 0)
+        parents_edge_states = np.empty(shape=(num_parents_cumsum[-1], 2), dtype=int)
+        children_edge_states = np.empty(shape=(factor_sizes.shape[0],), dtype=int)
+
+        # Note: edges_num_states_cumsum corresponds to the factor_to_msgs_start for the LogicalFactor
+        edges_num_states_cumsum = np.insert(np.cumsum(2 * factor_sizes), 0, 0)
+
+        _compile_logical_wiring_numba(
+            parents_edge_states=parents_edge_states,
+            children_edge_states=children_edge_states,
+            num_parents=num_parents,
+            num_parents_cumsum=num_parents_cumsum,
+            edges_num_states_cumsum=edges_num_states_cumsum,
+            relevant_state=relevant_state,
+        )
+
+        return LogicalWiring(
+            edges_num_states=factor_edges_num_states,
+            var_states_for_edges=var_states_for_edges,
+            parents_edge_states=parents_edge_states,
+            children_edge_states=children_edge_states,
+            edge_states_offset=edge_states_offset,
+        )
+
+    # def compile_wiring(
+    #     self, vars_to_starts: Mapping[nodes.Variable, int]
+    # ) -> LogicalWiring:
+    #     """Compile LogicalWiring for the LogicalFactor
+
+    #     Args:
+    #         vars_to_starts: A dictionary that maps variables to their global starting indices
+    #             For an n-state variable, a global start index of m means the global indices
+    #             of its n variable states are m, m + 1, ..., m + n - 1
+
+    #     Returns:
+    #          LogicalWiring for the LogicalFactor
+    #     """
+    #     return compile_logical_wiring(
+    #         factor_edges_num_states=self.edges_num_states,
+    #         variables_for_factors=tuple(self.variables),
+    #         factor_sizes=np.array([len(self.variables)]),
+    #         vars_to_starts=vars_to_starts,
+    #         edge_states_offset=self.edge_states_offset,
+    #     )
 
 
 @dataclass(frozen=True, eq=False)
@@ -204,69 +280,6 @@ class ANDFactor(LogicalFactor):
     edge_states_offset: int = field(init=False, default=-1)
 
 
-def compile_logical_wiring(
-    factor_edges_num_states: np.ndarray,
-    variables_for_factors: Tuple[nodes.Variable, ...],
-    factor_sizes: np.ndarray,
-    vars_to_starts: Mapping[nodes.Variable, int],
-    edge_states_offset: int,
-) -> LogicalWiring:
-    """Compile a LogicalWiring for a LogicalFactor or a FactorGroup with LogicalFactors.
-    Internally calls _compile_var_states_numba and _compile_logical_wiring_numba for speed.
-
-    Args:
-        factor_edges_num_states: An array concatenating the number of states for the variables connected to each
-            Factor of the FactorGroup. Each variable will appear once for each Factor it connects to.
-        variables_for_factors: A tuple of tuples containing variables connected to each Factor of the FactorGroup.
-            Each variable will appear once for each Factor it connects to.
-        factor_sizes: An array containing the different factor sizes.
-        vars_to_starts: A dictionary that maps variables to their global starting indices
-            For an n-state variable, a global start index of m means the global indices
-            of its n variable states are m, m + 1, ..., m + n - 1
-        edge_states_offset: Offset to go from a variable's relevant state to its other state
-            For ORFactors the edge_states_offset is 1, for ANDFactors the edge_states_offset is -1.
-
-    Returns:
-        The LogicalWiring
-    """
-    relevant_state = (-edge_states_offset + 1) // 2
-
-    var_states = np.array(
-        [vars_to_starts[variable] for variable in variables_for_factors]
-    )
-    # Note: all the variables in a LogicalFactorGroup are binary
-    num_states_cumsum = np.arange(0, 2 * var_states.shape[0] + 2, 2)
-    var_states_for_edges = np.empty(shape=(2 * var_states.shape[0],), dtype=int)
-    enumeration._compile_var_states_numba(
-        var_states_for_edges, num_states_cumsum, var_states
-    )
-
-    num_parents = factor_sizes - 1
-    num_parents_cumsum = np.insert(np.cumsum(num_parents), 0, 0)
-    parents_edge_states = np.empty(shape=(num_parents_cumsum[-1], 2), dtype=int)
-    children_edge_states = np.empty(shape=(factor_sizes.shape[0],), dtype=int)
-
-    # Note: edges_num_states_cumsum corresponds to the factor_to_msgs_start for the LogicalFactor
-    edges_num_states_cumsum = np.insert(np.cumsum(2 * factor_sizes), 0, 0)
-
-    _compile_logical_wiring_numba(
-        parents_edge_states=parents_edge_states,
-        children_edge_states=children_edge_states,
-        num_parents=num_parents,
-        num_parents_cumsum=num_parents_cumsum,
-        edges_num_states_cumsum=edges_num_states_cumsum,
-        relevant_state=relevant_state,
-    )
-
-    return LogicalWiring(
-        edges_num_states=factor_edges_num_states,
-        var_states_for_edges=var_states_for_edges,
-        parents_edge_states=parents_edge_states,
-        children_edge_states=children_edge_states,
-        edge_states_offset=edge_states_offset,
-    )
-
-
 @nb.jit(parallel=False, cache=True, fastmath=True, nopython=True)
 def _compile_logical_wiring_numba(
     parents_edge_states: np.ndarray,
@@ -275,7 +288,7 @@ def _compile_logical_wiring_numba(
     num_parents_cumsum: np.ndarray,
     edges_num_states_cumsum: np.ndarray,
     relevant_state: int,
-):
+) -> np.ndarray:
     """Fast numba computation of the parents_edge_states and children_edge_states of a LogicalWiring
     parents_edge_states and children_edge_states are updated in-place.
     """

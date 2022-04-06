@@ -485,11 +485,7 @@ class FactorGroup:
         )
 
     def compile_wiring(self, vars_to_starts: Mapping[nodes.Variable, int]) -> Any:
-        """Compile wiring for the FactorGroup.
-        In pratice, this function is overwritten to implement an efficient wiring directly
-        compiled at the FactorGroup level.
-        If the overwritten does not happen, the slower fallback proposed here compiles
-        all the wirings at the Factor level then concatenates them.
+        """Compile an efficient wiring for the FactorGroup.
 
         Args:
             vars_to_starts: A dictionary that maps variables to their global starting indices
@@ -499,9 +495,13 @@ class FactorGroup:
         Returns:
             Wiring for the FactorGroup
         """
-
-        wirings = [factor.compile_wiring(vars_to_starts) for factor in self.factors]
-        wiring = self.factor_type.concatenate_wirings(wirings)
+        compile_wiring_arguments = {
+            key: getattr(self, key)
+            for key in self.factor_type.compile_wiring_arguments()
+        }
+        wiring = self.factor_type.compile_wiring(
+            vars_to_starts=vars_to_starts, **compile_wiring_arguments
+        )
         return wiring
 
 
@@ -525,6 +525,14 @@ class SingleFactorGroup(FactorGroup):
             )
 
         object.__setattr__(self, "factor_type", type(self.factor))
+
+        if hasattr(self.factor, "configs"):
+            object.__setattr__(self, "factor_configs", self.factor.configs)
+
+        if hasattr(self.factor, "edge_states_offset"):
+            object.__setattr__(
+                self, "edge_states_offset", self.factor.edge_states_offset
+            )
 
     def _get_variables_to_factors(
         self,

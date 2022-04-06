@@ -2,7 +2,7 @@
 
 import collections
 from dataclasses import dataclass, field
-from typing import FrozenSet, Mapping, Optional, OrderedDict, Type, Union
+from typing import FrozenSet, Optional, OrderedDict, Type, Union
 
 import jax
 import jax.numpy as jnp
@@ -10,7 +10,7 @@ import numba as nb
 import numpy as np
 
 from pgmax.factors import enumeration
-from pgmax.fg import groups, nodes
+from pgmax.fg import groups
 
 
 @dataclass(frozen=True, eq=False)
@@ -93,27 +93,6 @@ class EnumerationFactorGroup(groups.FactorGroup):
             ]
         )
         return variables_to_factors
-
-    def compile_wiring(
-        self, vars_to_starts: Mapping[nodes.Variable, int]
-    ) -> enumeration.EnumerationWiring:
-        """Compile EnumerationWiring for the EnumerationFactorGroup
-
-        Args:
-            vars_to_starts: A dictionary that maps variables to their global starting indices
-                For an n-state variable, a global start index of m means the global indices
-                of its n variable states are m, m + 1, ..., m + n - 1
-
-        Returns:
-             EnumerationWiring for the EnumerationFactorGroup
-        """
-        return enumeration.compile_enumeration_wiring(
-            factor_edges_num_states=self.factor_edges_num_states,
-            variables_for_factors=self.variables_for_factors,
-            num_factors=self.num_factors,
-            factor_configs=self.factor_configs,
-            vars_to_starts=vars_to_starts,
-        )
 
     def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
         """Function that turns meaningful structured data into a flat data array for internal use.
@@ -329,26 +308,26 @@ class PairwiseFactorGroup(groups.FactorGroup):
         )
         return variables_to_factors
 
-    def compile_wiring(
-        self, vars_to_starts: Mapping[nodes.Variable, int]
-    ) -> enumeration.EnumerationWiring:
-        """Compile EnumerationWiring for the PairwiseFactorGroup
+    # def compile_wiring(
+    #     self, vars_to_starts: Mapping[nodes.Variable, int]
+    # ) -> enumeration.EnumerationWiring:
+    #     """Compile EnumerationWiring for the PairwiseFactorGroup
 
-        Args:
-            vars_to_starts: A dictionary that maps variables to their global starting indices
-                For an n-state variable, a global start index of m means the global indices
-                of its n variable states are m, m + 1, ..., m + n - 1
+    #     Args:
+    #         vars_to_starts: A dictionary that maps variables to their global starting indices
+    #             For an n-state variable, a global start index of m means the global indices
+    #             of its n variable states are m, m + 1, ..., m + n - 1
 
-        Returns:
-             EnumerationWiring for the PairwiseFactorGroup
-        """
-        return enumeration.compile_enumeration_wiring(
-            factor_edges_num_states=self.factor_edges_num_states,
-            variables_for_factors=self.variables_for_factors,
-            num_factors=self.num_factors,
-            factor_configs=self.factor_configs,
-            vars_to_starts=vars_to_starts,
-        )
+    #     Returns:
+    #          EnumerationWiring for the PairwiseFactorGroup
+    #     """
+    #     return enumeration.compile_enumeration_wiring(
+    #         factor_edges_num_states=self.factor_edges_num_states,
+    #         variables_for_factors=self.variables_for_factors,
+    #         num_factors=self.num_factors,
+    #         factor_configs=self.factor_configs,
+    #         vars_to_starts=vars_to_starts,
+    #     )
 
     def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
         """Function that turns meaningful structured data into a flat data array for internal use.
@@ -435,7 +414,7 @@ def _compute_log_potentials(
     log_potentials: np.ndarray,
     log_potential_matrix: np.ndarray,
     factor_configs: np.ndarray,
-):
+) -> np.ndarray:
     """Fast numba computation of the log_potentials of a PairwiseFactorGroup.
     log_potentials is updated in-place.
     """
