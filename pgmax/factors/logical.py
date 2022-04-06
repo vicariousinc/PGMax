@@ -276,7 +276,9 @@ def _compile_logical_wiring_numba(
     edges_num_states_cumsum,
     relevant_state,
 ):
-    "Fast numba computation of the parents_edge_states and children_edge_states of a LogicalWiring."
+    """Fast numba computation of the parents_edge_states and children_edge_states of a LogicalWiring
+    parents_edge_states and children_edge_states are updated in-place.
+    """
 
     for factor_idx in nb.prange(num_parents.shape[0]):
         start_parents, end_parents = (
