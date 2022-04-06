@@ -269,12 +269,12 @@ def compile_logical_wiring(
 
 @nb.jit(parallel=False, cache=True, fastmath=True, nopython=True)
 def _compile_logical_wiring_numba(
-    parents_edge_states,
-    children_edge_states,
-    num_parents,
-    num_parents_cumsum,
-    edges_num_states_cumsum,
-    relevant_state,
+    parents_edge_states: np.ndarray,
+    children_edge_states: np.ndarray,
+    num_parents: np.ndarray,
+    num_parents_cumsum: np.ndarray,
+    edges_num_states_cumsum: np.ndarray,
+    relevant_state: int,
 ):
     """Fast numba computation of the parents_edge_states and children_edge_states of a LogicalWiring
     parents_edge_states and children_edge_states are updated in-place.

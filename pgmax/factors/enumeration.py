@@ -229,7 +229,11 @@ def compile_enumeration_wiring(
 
 
 @nb.jit(parallel=False, cache=True, fastmath=True, nopython=True)
-def _compile_var_states_numba(var_states_for_edges, num_states_cumsum, var_states):
+def _compile_var_states_numba(
+    var_states_for_edges: np.ndarray,
+    num_states_cumsum: np.ndarray,
+    var_states: np.ndarray,
+):
     """Fast numba computation of the var_states_for_edges of a Wiring.
     var_states_for_edges is updated in-place.
     """
@@ -246,7 +250,10 @@ def _compile_var_states_numba(var_states_for_edges, num_states_cumsum, var_state
 
 @nb.jit(parallel=False, cache=True, fastmath=True, nopython=True)
 def _compile_enumeration_wiring_numba(
-    factor_configs_edge_states, factor_configs, factor_edges_starts, num_factors
+    factor_configs_edge_states: np.ndarray,
+    factor_configs: np.ndarray,
+    factor_edges_starts: np.ndarray,
+    num_factors: int,
 ):
     """Fast numba computation of the factor_configs_edge_states of an EnumerationWiring.
     factor_edges_starts is updated in-place.

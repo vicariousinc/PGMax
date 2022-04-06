@@ -431,7 +431,11 @@ class PairwiseFactorGroup(groups.FactorGroup):
 
 
 @nb.jit(parallel=False, cache=True, fastmath=True, nopython=True)
-def _compute_log_potentials(log_potentials, log_potential_matrix, factor_configs):
+def _compute_log_potentials(
+    log_potentials: np.ndarray,
+    log_potential_matrix: np.ndarray,
+    factor_configs: np.ndarray,
+):
     """Fast numba computation of the log_potentials of a PairwiseFactorGroup.
     log_potentials is updated in-place.
     """
