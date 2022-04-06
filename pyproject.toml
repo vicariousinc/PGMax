@@ -32,6 +32,7 @@ numba = "^0.55.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "^7.0.1"
+pytest-env = "^0.6.2"
 pre-commit = "^2.13.0"
 sphinx-rtd-theme = "^0.5.2"
 pytest-cov = "^2.12.1"

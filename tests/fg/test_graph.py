@@ -1,7 +1,3 @@
-import os
-
-os.environ["NUMBA_DISABLE_JIT"] = "1"  # before importing numba
-
 import re
 from dataclasses import replace
 

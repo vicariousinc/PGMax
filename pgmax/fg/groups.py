@@ -356,11 +356,11 @@ class FactorGroup:
         variable_names_for_factors: A list of list of variable names, where each innermost element is the
             name of a variable in variable_group. Each list within the outer list is taken to contain
             the names of the variables connected to a Factor.
-        factor_type: Factor type shared by all the Factors in the FactorGroup.
         factor_configs: Optional array containing an explicit enumeration of all valid configurations
         log_potentials: Array of log potentials.
 
     Attributes:
+        factor_type: Factor type shared by all the Factors in the FactorGroup.
         factor_sizes: Array of the different factor sizes.
         variables_for_factors: Tuple concatenating the variables connected to each factor in the FactorGroup.
             Each variable will appear once for each Factor it connects to.
@@ -373,9 +373,9 @@ class FactorGroup:
 
     variable_group: Union[CompositeVariableGroup, VariableGroup]
     variable_names_for_factors: Sequence[List]
-    factor_type: Type = field(init=False)
     factor_configs: np.ndarray = field(init=False)
     log_potentials: np.ndarray = field(init=False, default=np.empty((0,)))
+    factor_type: Type = field(init=False)
     factor_sizes: np.ndarray = field(init=False)
     variables_for_factors: Tuple[nodes.Variable, ...] = field(init=False)
     factor_edges_num_states: np.ndarray = field(init=False)
