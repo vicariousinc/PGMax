@@ -197,7 +197,9 @@ def test_bp():
         name="test",
     )
     bp_container = graph.BP(fg.bp_state, temperature=0)
+    bp_arrays = bp_container.update()
     bp_arrays = bp_container.update(
+        bp_arrays=bp_arrays,
         ftov_msgs_updates={0: np.zeros(15)},
     )
     bp_arrays = bp_container.run_bp(bp_arrays, num_iters=1)
