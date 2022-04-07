@@ -857,7 +857,7 @@ class BPArrays:
 class BPContainer(NamedTuple):
     """A container for belief propagation functions.
 
-    Attributes:
+    Arguments:
         init: Function for creating log_potentials, ftov_msgs and evidence.
         update: Function for updating log_potentials, ftov_msgs and evidence.
         run_bp: Function for running belief propagation for num_iters with a damping_factor.
