@@ -382,7 +382,7 @@ def get_evidence(bu_msg: np.ndarray, frc: np.ndarray) -> np.ndarray:
 
 # %%
 frcs_dict = {model_idx: frcs[model_idx] for model_idx in range(frcs.shape[0])}
-run_bp, _, get_beliefs = graph.BP(fg.bp_state, 30)
+bp_container = graph.BP(fg.bp_state, 30)
 scores = np.zeros((len(test_set), frcs.shape[0]))
 map_states_dict = {}
 
@@ -398,9 +398,8 @@ for test_idx in range(len(test_set)):
     print(f"Initializing evidences took {end-start:.3f} seconds for image {test_idx}.")
 
     start = end
-    map_states = graph.decode_map_states(
-        get_beliefs(run_bp(evidence_updates=evidence_updates))
-    )
+    bp_arrays = bp_container.run_bp(bp_container.init(evidence_updates=evidence_updates), num_iters=30)
+    map_states = graph.decode_map_states(bp_container.get_beliefs(bp_arrays))
     end = time.time()
     print(f"Max product inference took {end-start:.3f} seconds for image {test_idx}.")
 

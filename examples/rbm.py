@@ -143,19 +143,17 @@ fg.add_factor_group(
 # Now we are ready to demonstrate PMP sampling from RBM. PMP perturbs the model with [Gumbel](https://numpy.org/doc/stable/reference/random/generated/numpy.random.gumbel.html) unary potentials, and draws a sample from the RBM as the MAP decoding from running max-product LBP on the perturbed model
 
 # %%
-run_bp, get_bp_state, get_beliefs = graph.BP(
-    fg.bp_state, num_iters=100, temperature=0.0
-)
+bp_container = graph.BP(fg.bp_state, temperature=0.0)
 
 # %%
-bp_arrays = run_bp(
+bp_arrays = bp_container.init(
     evidence_updates={
         "hidden": np.random.gumbel(size=(bh.shape[0], 2)),
         "visible": np.random.gumbel(size=(bv.shape[0], 2)),
     },
-    damping=0.5,
 )
-beliefs = get_beliefs(bp_arrays)
+bp_arrays = bp_container.run_bp(bp_arrays, num_iters=100, damping=0.5)
+beliefs = bp_container.get_beliefs(bp_arrays)
 map_states = graph.decode_map_states(beliefs)
 
 # %% [markdown]
@@ -191,13 +189,18 @@ ax.axis("off")
 
 # %%
 n_samples = 10
-bp_arrays = jax.vmap(functools.partial(run_bp, damping=0.5), in_axes=0, out_axes=0)(
+bp_arrays = jax.vmap(bp_container.init, in_axes=0, out_axes=0)(
     evidence_updates={
         "hidden": np.random.gumbel(size=(n_samples, bh.shape[0], 2)),
         "visible": np.random.gumbel(size=(n_samples, bv.shape[0], 2)),
     },
 )
-beliefs = jax.vmap(get_beliefs, in_axes=0, out_axes=0)(bp_arrays)
+bp_arrays = jax.vmap(
+    functools.partial(bp_container.run_bp, num_iters=100, damping=0.5),
+    in_axes=0,
+    out_axes=0,
+)(bp_arrays)
+beliefs = jax.vmap(bp_container.get_beliefs, in_axes=0, out_axes=0)(bp_arrays)
 map_states = graph.decode_map_states(beliefs)
 
 # %% [markdown]
