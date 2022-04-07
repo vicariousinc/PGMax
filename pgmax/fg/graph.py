@@ -5,6 +5,7 @@ from __future__ import annotations
 import collections
 import copy
 import functools
+import inspect
 import typing
 from dataclasses import asdict, dataclass
 from types import MappingProxyType
@@ -880,10 +881,21 @@ def BP(
     var_states_for_edges = np.concatenate(
         [wiring[factor_type].var_states_for_edges for factor_type in FAC_TO_VAR_UPDATES]
     )
-    inference_arguments: Dict[type, Mapping] = {
-        factor_type: wiring[factor_type].inference_arguments
-        for factor_type in FAC_TO_VAR_UPDATES
-    }
+
+    # Inference argumnets per factor type
+    inference_arguments: Dict[type, Mapping] = {}
+    for factor_type in FAC_TO_VAR_UPDATES:
+        this_inference_arguments = inspect.getfullargspec(
+            FAC_TO_VAR_UPDATES[factor_type]
+        ).args
+        this_inference_arguments.remove("vtof_msgs")
+        this_inference_arguments.remove("log_potentials")
+        this_inference_arguments.remove("temperature")
+        this_inference_arguments = {
+            key: getattr(wiring[factor_type], key) for key in this_inference_arguments
+        }
+        inference_arguments[factor_type] = this_inference_arguments
+
     factor_type_to_msgs_range = bp_state.fg_state.factor_type_to_msgs_range
     factor_type_to_potentials_range = bp_state.fg_state.factor_type_to_potentials_range
 

@@ -24,25 +24,19 @@ class EnumerationWiring(nodes.Wiring):
             factor_configs_edge_states[ii, 0] contains the global EnumerationFactor config index,
             factor_configs_edge_states[ii, 1] contains the corresponding global edge_state index.
             Both indices only take into account the EnumerationFactors of the FactorGraph
+
+    Attributes:
+        num_val_configs: Number of valid configurations for this wiring
     """
 
     factor_configs_edge_states: Union[np.ndarray, jnp.ndarray]
 
-    @property
-    def inference_arguments(self) -> Mapping[str, Union[np.ndarray, int]]:
-        """
-        Returns:
-            A dictionnary of elements used to run belief propagation.
-        """
+    def __post_init__(self):
         if self.factor_configs_edge_states.shape[0] == 0:
             num_val_configs = 0
         else:
             num_val_configs = int(self.factor_configs_edge_states[-1, 0]) + 1
-
-        return {
-            "factor_configs_edge_states": self.factor_configs_edge_states,
-            "num_val_configs": num_val_configs,
-        }
+        object.__setattr__(self, "num_val_configs", num_val_configs)
 
 
 @dataclass(frozen=True, eq=False)

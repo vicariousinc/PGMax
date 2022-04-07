@@ -64,18 +64,6 @@ class LogicalWiring(nodes.Wiring):
                     f"The LogicalWiring's edge_states_offset must be 1 (for OR) and -1 (for AND), but is {self.edge_states_offset}"
                 )
 
-    @property
-    def inference_arguments(self) -> Mapping[str, np.ndarray]:
-        """
-        Returns:
-            A dictionnary of elements used to run belief propagation.
-        """
-        return {
-            "parents_edge_states": self.parents_edge_states,
-            "children_edge_states": self.children_edge_states,
-            "edge_states_offset": self.edge_states_offset,
-        }
-
 
 @dataclass(frozen=True, eq=False)
 class LogicalFactor(nodes.Factor):
