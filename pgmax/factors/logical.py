@@ -2,7 +2,7 @@
 
 import functools
 from dataclasses import dataclass, field
-from typing import List, Mapping, Optional, Sequence, Tuple, Union
+from typing import Mapping, Optional, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -103,19 +103,6 @@ class LogicalFactor(nodes.Factor):
 
         if not np.all([variable.num_states == 2 for variable in self.variables]):
             raise ValueError("All variables should all be binary")
-
-    @staticmethod
-    def compile_wiring_arguments() -> List[str]:
-        """
-        Returns:
-            A list of the arguments names used to compile wiring.
-        """
-        return [
-            "factor_edges_num_states",
-            "variables_for_factors",
-            "factor_sizes",
-            "edge_states_offset",
-        ]
 
     @staticmethod
     def concatenate_wirings(wirings: Sequence[LogicalWiring]) -> LogicalWiring:
@@ -223,27 +210,6 @@ class LogicalFactor(nodes.Factor):
             children_edge_states=children_edge_states,
             edge_states_offset=edge_states_offset,
         )
-
-    # def compile_wiring(
-    #     self, vars_to_starts: Mapping[nodes.Variable, int]
-    # ) -> LogicalWiring:
-    #     """Compile LogicalWiring for the LogicalFactor
-
-    #     Args:
-    #         vars_to_starts: A dictionary that maps variables to their global starting indices
-    #             For an n-state variable, a global start index of m means the global indices
-    #             of its n variable states are m, m + 1, ..., m + n - 1
-
-    #     Returns:
-    #          LogicalWiring for the LogicalFactor
-    #     """
-    #     return compile_logical_wiring(
-    #         factor_edges_num_states=self.edges_num_states,
-    #         variables_for_factors=tuple(self.variables),
-    #         factor_sizes=np.array([len(self.variables)]),
-    #         vars_to_starts=vars_to_starts,
-    #         edge_states_offset=self.edge_states_offset,
-    #     )
 
 
 @dataclass(frozen=True, eq=False)

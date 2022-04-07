@@ -2,7 +2,7 @@
 
 import functools
 from dataclasses import dataclass
-from typing import List, Mapping, Sequence, Tuple, Union
+from typing import Mapping, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -102,19 +102,6 @@ class EnumerationFactor(nodes.Factor):
             self.configs >= 0, self.configs < vars_num_states[None]
         ).all():
             raise ValueError("Invalid configurations for given variables")
-
-    @staticmethod
-    def compile_wiring_arguments() -> List[str]:
-        """
-        Returns:
-            A list of the arguments names used to compile wiring.
-        """
-        return [
-            "factor_edges_num_states",
-            "variables_for_factors",
-            "factor_configs",
-            "num_factors",
-        ]
 
     @staticmethod
     def concatenate_wirings(wirings: Sequence[EnumerationWiring]) -> EnumerationWiring:

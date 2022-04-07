@@ -1,7 +1,7 @@
 """A module containing classes that specify the basic components of a Factor Graph."""
 
 from dataclasses import asdict, dataclass
-from typing import Any, List, Mapping, Sequence, Tuple, Union
+from typing import Any, Mapping, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -84,16 +84,6 @@ class Factor:
             [variable.num_states for variable in self.variables], dtype=int
         )
         return edges_num_states
-
-    @property
-    def compile_wiring_arguments(self) -> List[str]:
-        """
-        Returns:
-            A list of the elements used to compile wiring.
-        """
-        raise NotImplementedError(
-            "Please subclass the Factor class and override this method."
-        )
 
     @staticmethod
     def concatenate_wirings(wirings: Sequence) -> Wiring:

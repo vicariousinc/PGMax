@@ -1,6 +1,7 @@
 """A module containing the base classes for variable and factor groups in a Factor Graph."""
 
 import collections
+import inspect
 import typing
 from dataclasses import dataclass, field
 from types import MappingProxyType
@@ -495,10 +496,14 @@ class FactorGroup:
         Returns:
             Wiring for the FactorGroup
         """
+        compile_wiring_arguments = inspect.getfullargspec(
+            self.factor_type.compile_wiring
+        ).args
+        compile_wiring_arguments.remove("vars_to_starts")
         compile_wiring_arguments = {
-            key: getattr(self, key)
-            for key in self.factor_type.compile_wiring_arguments()
+            key: getattr(self, key) for key in compile_wiring_arguments
         }
+
         wiring = self.factor_type.compile_wiring(
             vars_to_starts=vars_to_starts, **compile_wiring_arguments
         )
