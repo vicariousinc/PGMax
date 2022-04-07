@@ -1,5 +1,4 @@
 import re
-from dataclasses import replace
 
 import jax.numpy as jnp
 import numpy as np
@@ -196,10 +195,13 @@ def test_bp():
         factor_configs=np.arange(10)[:, None],
         name="test",
     )
-    run_bp, get_bp_state, get_beliefs = graph.BP(fg.bp_state, 1)
-    bp_arrays = replace(
-        run_bp(ftov_msgs_updates={0: np.zeros(15)}),
+    bp_arrays_init, bp_arrays_update, get_bp_state, _ = graph.BP(
+        fg.bp_state, temperature=0
+    )
+    bp_arrays = bp_arrays_init(
+        ftov_msgs_updates={0: np.zeros(15)},
         log_potentials=jnp.zeros((10)),
     )
+    bp_arrays = bp_arrays_update(bp_arrays, num_iters=1)
     bp_state = get_bp_state(bp_arrays)
     assert bp_state.fg_state == fg.fg_state

@@ -854,21 +854,20 @@ class BPArrays:
 
 
 def BP(
-    bp_state: BPState, num_iters: int, temperature: float = 0.0
-) -> Tuple[Callable, Callable, Callable]:
+    bp_state: BPState, temperature: float = 0.0
+) -> Tuple[Callable, Callable, Callable, Callable]:
     """Function for generating belief propagation functions.
 
     Args:
         bp_state: Belief propagation state.
-        num_iters: Number of belief propagation iterations.
         temperature: Temperature for loopy belief propagation.
             1.0 corresponds to sum-product, 0.0 corresponds to max-product.
 
     Returns:
         Tuple containing\n
-        \trun_bp: Function for running belief propagation for num_iters.\n
-        \t\tOptionally takes as input log_potentials updates, ftov_msgs updates,
-        \t\tevidence updates, and damping factor, and outputs a BPArrays.\n
+        \tbp_arrays_init: Function for updating log_potentials, ftov_msgs and tevidence
+        \t\tbefore running belief propagation.
+        \trun_bp: Function for running belief propagation for num_iters with a damping_factor.\n
         \tget_bp_state: Function to reconstruct the BPState from BPArrays.\n
         \tget_beliefs: Function to calculate beliefs from BPArrays.\n
     """
@@ -899,22 +898,18 @@ def BP(
     factor_type_to_msgs_range = bp_state.fg_state.factor_type_to_msgs_range
     factor_type_to_potentials_range = bp_state.fg_state.factor_type_to_potentials_range
 
-    def run_bp(
+    def bp_arrays_init(
         log_potentials_updates: Optional[Dict[Any, jnp.ndarray]] = None,
         ftov_msgs_updates: Optional[Dict[Any, jnp.ndarray]] = None,
         evidence_updates: Optional[Dict[Any, jnp.ndarray]] = None,
-        damping: float = 0.5,
     ) -> BPArrays:
-        """Function to perform belief propagation.
-
-        Specifically, belief propagation is run for num_iters iterations and
-        returns a BPArrays containing the updated log_potentials, ftov_msgs and evidence.
+        """Function to update belief propagation log_potentials, ftov_msgs, evidence
+        before running belief propagation.
 
         Args:
             log_potentials_updates: Dictionary containing optional log_potentials updates.
             ftov_msgs_updates: Dictionary containing optional ftov_msgs updates.
             evidence_updates: Dictionary containing optional evidence updates.
-            damping: The damping factor to use for message updates between one timestep and the next
 
         Returns:
             A BPArrays containing the updated log_potentials, ftov_msgs and evidence.
@@ -934,6 +929,31 @@ def BP(
         evidence = bp_state.evidence.value
         if evidence_updates is not None:
             evidence = update_evidence(evidence, evidence_updates, bp_state.fg_state)
+
+        return BPArrays(
+            log_potentials=log_potentials, ftov_msgs=ftov_msgs, evidence=evidence
+        )
+
+    def bp_arrays_update(
+        bp_arrays: BPArrays,
+        num_iters: int,
+        damping: float = 0.5,
+    ) -> BPArrays:
+        """Function to perform belief propagation.
+
+        Specifically, belief propagation is run for num_iters iterations and
+        returns a BPArrays containing the updated ftov_msgs.
+
+        Args:
+            num_iters: Number of belief propagation iterations.
+            damping: The damping factor to use for message updates between one timestep and the next.
+
+        Returns:
+            A BPArrays containing the updated ftov_msgs.
+        """
+        log_potentials = bp_arrays.log_potentials
+        evidence = bp_arrays.evidence
+        ftov_msgs = bp_arrays.ftov_msgs
 
         # Normalize the messages to ensure the maximum value is 0.
         ftov_msgs = infer.normalize_and_clip_msgs(
@@ -1013,7 +1033,7 @@ def BP(
         )
         return beliefs
 
-    return run_bp, get_bp_state, get_beliefs
+    return bp_arrays_init, bp_arrays_update, get_bp_state, get_beliefs
 
 
 @jax.jit
