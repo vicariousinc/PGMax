@@ -32,6 +32,8 @@ class EnumerationWiring(nodes.Wiring):
     factor_configs_edge_states: Union[np.ndarray, jnp.ndarray]
 
     def __post_init__(self):
+        super().__post_init__()
+
         if self.factor_configs_edge_states.shape[0] == 0:
             num_val_configs = 0
         else:

@@ -45,6 +45,8 @@ class LogicalWiring(nodes.Wiring):
     edge_states_offset: int
 
     def __post_init__(self):
+        super().__post_init__()
+
         if self.children_edge_states.shape[0] > 0:
             logical_factor_indices = self.parents_edge_states[:, 0]
             num_logical_factors = self.children_edge_states.shape[0]
