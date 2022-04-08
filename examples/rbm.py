@@ -98,6 +98,9 @@ fg.add_factor_group(
 #
 # An alternative way of creating the above factors is to add them iteratively by calling [`fg.add_factor`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.graph.FactorGraph.html#pgmax.fg.graph.FactorGraph.add_factor) as below. This approach is not recommended as it is not computationally efficient.
 # ~~~python
+# import itertools
+# from tqdm import tqdm
+#
 # # Add unary factors
 # for ii in range(bh.shape[0]):
 #     fg.add_factor(
@@ -126,16 +129,16 @@ fg.add_factor_group(
 #
 # Once we have added the factors, we can run max-product LBP and get MAP decoding by
 # ~~~python
-# run_bp, get_bp_state, get_beliefs = graph.BP(fg.bp_state, num_iters=100, temperature=0.0)
-# bp_arrays = run_bp(damping=0.5)
-# beliefs = get_beliefs(bp_arrays)
+# bp = graph.BP(fg.bp_state, temperature=0.0)
+# bp_arrays = bp.run_bp(bp.init(), num_iters=100, damping=0.5)
+# beliefs = bp.get_beliefs(bp_arrays)
 # map_states = graph.decode_map_states(beliefs)
 # ~~~
 # and run sum-product LBP and get estimated marginals by
 # ~~~python
-# run_bp, get_bp_state, get_beliefs = graph.BP(fg.bp_state, num_iters=100, temperature=1.0)
-# bp_arrays = run_bp(damping=0.5)
-# beliefs = get_beliefs(bp_arrays)
+# bp = graph.BP(fg.bp_state, temperature=1.0)
+# bp_arrays = bp.run_bp(bp.init(), num_iters=100, damping=0.5)
+# beliefs = bp.get_beliefs(bp_arrays)
 # marginals = graph.get_marginals(beliefs)
 # ~~~
 # More generally, PGMax implements LBP with temperature, with `temperature=0.0` and `temperature=1.0` corresponding to the commonly used max/sum-product LBP respectively.
@@ -143,17 +146,17 @@ fg.add_factor_group(
 # Now we are ready to demonstrate PMP sampling from RBM. PMP perturbs the model with [Gumbel](https://numpy.org/doc/stable/reference/random/generated/numpy.random.gumbel.html) unary potentials, and draws a sample from the RBM as the MAP decoding from running max-product LBP on the perturbed model
 
 # %%
-bp_container = graph.BP(fg.bp_state, temperature=0.0)
+bp = graph.BP(fg.bp_state, temperature=0.0)
 
 # %%
-bp_arrays = bp_container.init(
+bp_arrays = bp.init(
     evidence_updates={
         "hidden": np.random.gumbel(size=(bh.shape[0], 2)),
         "visible": np.random.gumbel(size=(bv.shape[0], 2)),
     },
 )
-bp_arrays = bp_container.run_bp(bp_arrays, num_iters=100, damping=0.5)
-beliefs = bp_container.get_beliefs(bp_arrays)
+bp_arrays = bp.run_bp(bp_arrays, num_iters=100, damping=0.5)
+beliefs = bp.get_beliefs(bp_arrays)
 map_states = graph.decode_map_states(beliefs)
 
 # %% [markdown]
@@ -189,18 +192,18 @@ ax.axis("off")
 
 # %%
 n_samples = 10
-bp_arrays = jax.vmap(bp_container.init, in_axes=0, out_axes=0)(
+bp_arrays = jax.vmap(bp.init, in_axes=0, out_axes=0)(
     evidence_updates={
         "hidden": np.random.gumbel(size=(n_samples, bh.shape[0], 2)),
         "visible": np.random.gumbel(size=(n_samples, bv.shape[0], 2)),
     },
 )
 bp_arrays = jax.vmap(
-    functools.partial(bp_container.run_bp, num_iters=100, damping=0.5),
+    functools.partial(bp.run_bp, num_iters=100, damping=0.5),
     in_axes=0,
     out_axes=0,
 )(bp_arrays)
-beliefs = jax.vmap(bp_container.get_beliefs, in_axes=0, out_axes=0)(bp_arrays)
+beliefs = jax.vmap(bp.get_beliefs, in_axes=0, out_axes=0)(bp_arrays)
 map_states = graph.decode_map_states(beliefs)
 
 # %% [markdown]
@@ -215,3 +218,5 @@ for ii in range(10):
     ax[np.unravel_index(ii, (2, 5))].axis("off")
 
 fig.tight_layout()
+
+# %%

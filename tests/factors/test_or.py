@@ -141,22 +141,22 @@ def test_run_bp_with_OR_factors():
         )
 
         # Run inference
-        bp_container1 = graph.BP(fg1.bp_state, temperature=temperature)
-        bp_container2 = graph.BP(fg2.bp_state, temperature=temperature)
+        bp1 = graph.BP(fg1.bp_state, temperature=temperature)
+        bp2 = graph.BP(fg2.bp_state, temperature=temperature)
 
         evidence_updates = {
             "parents": jax.device_put(np.random.gumbel(size=(sum(num_parents), 2))),
             "children": jax.device_put(np.random.gumbel(size=(num_factors, 2))),
         }
 
-        bp_arrays1 = bp_container1.init(evidence_updates=evidence_updates)
-        bp_arrays1 = bp_container1.run_bp(bp_arrays1, num_iters=5)
-        bp_arrays2 = bp_container2.init(evidence_updates=evidence_updates)
-        bp_arrays2 = bp_container2.run_bp(bp_arrays2, num_iters=5)
+        bp_arrays1 = bp1.init(evidence_updates=evidence_updates)
+        bp_arrays1 = bp1.run_bp(bp_arrays1, num_iters=5)
+        bp_arrays2 = bp2.init(evidence_updates=evidence_updates)
+        bp_arrays2 = bp2.run_bp(bp_arrays2, num_iters=5)
 
         # Get beliefs
-        beliefs1 = bp_container1.get_beliefs(bp_arrays1)
-        beliefs2 = bp_container2.get_beliefs(bp_arrays2)
+        beliefs1 = bp1.get_beliefs(bp_arrays1)
+        beliefs2 = bp2.get_beliefs(bp_arrays2)
 
         assert np.allclose(beliefs1["children"], beliefs2["children"], atol=1e-4)
         assert np.allclose(beliefs1["parents"], beliefs2["parents"], atol=1e-4)

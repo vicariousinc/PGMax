@@ -215,7 +215,7 @@ for factor_type, factor_groups in fg.factor_groups.items():
 # in the same manner does not change X, so this naturally results in multiple equivalent modes.
 
 # %%
-bp_container = graph.BP(fg.bp_state, temperature=0.0)
+bp = graph.BP(fg.bp_state, temperature=0.0)
 
 # %% [markdown]
 # We first compute the evidence without perturbation, similar to the PMP paper.
@@ -243,7 +243,7 @@ uX[..., 0] = (2 * X_gt - 1) * logit(pX)
 np.random.seed(seed=40)
 n_samples = 4
 
-bp_arrays = jax.vmap(bp_container.init, in_axes=0, out_axes=0)(
+bp_arrays = jax.vmap(bp.init, in_axes=0, out_axes=0)(
     evidence_updates={
         "S": uS[None] + np.random.gumbel(size=(n_samples,) + uS.shape),
         "W": uW[None] + np.random.gumbel(size=(n_samples,) + uW.shape),
@@ -252,11 +252,11 @@ bp_arrays = jax.vmap(bp_container.init, in_axes=0, out_axes=0)(
     },
 )
 bp_arrays = jax.vmap(
-    functools.partial(bp_container.run_bp, num_iters=100, damping=0.5),
+    functools.partial(bp.run_bp, num_iters=100, damping=0.5),
     in_axes=0,
     out_axes=0,
 )(bp_arrays)
-beliefs = jax.vmap(bp_container.get_beliefs, in_axes=0, out_axes=0)(bp_arrays)
+beliefs = jax.vmap(bp.get_beliefs, in_axes=0, out_axes=0)(bp_arrays)
 map_states = graph.decode_map_states(beliefs)
 
 # %% [markdown]

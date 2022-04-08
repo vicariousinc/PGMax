@@ -196,13 +196,13 @@ def test_bp():
         factor_configs=np.arange(10)[:, None],
         name="test",
     )
-    bp_container = graph.BP(fg.bp_state, temperature=0)
-    bp_arrays = bp_container.update()
-    bp_arrays = bp_container.update(
+    bp = graph.BP(fg.bp_state, temperature=0)
+    bp_arrays = bp.update()
+    bp_arrays = bp.update(
         bp_arrays=bp_arrays,
         ftov_msgs_updates={0: np.zeros(15)},
     )
-    bp_arrays = bp_container.run_bp(bp_arrays, num_iters=1)
+    bp_arrays = bp.run_bp(bp_arrays, num_iters=1)
     bp_arrays = replace(bp_arrays, log_potentials=jnp.zeros((10)))
-    bp_state = bp_container.to_bp_state(bp_arrays)
+    bp_state = bp.to_bp_state(bp_arrays)
     assert bp_state.fg_state == fg.fg_state

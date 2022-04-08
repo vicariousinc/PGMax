@@ -49,16 +49,16 @@ fg.add_factor_group(
 # ### Run inference and visualize results
 
 # %%
-bp_container = graph.BP(fg.bp_state, temperature=0)
+bp = graph.BP(fg.bp_state, temperature=0)
 
 # %%
-bp_arrays = bp_container.init(
+bp_arrays = bp.init(
     evidence_updates={None: jax.device_put(np.random.gumbel(size=(50, 50, 2)))}
 )
-bp_arrays = bp_container.run_bp(bp_arrays, num_iters=3000)
+bp_arrays = bp.run_bp(bp_arrays, num_iters=3000)
 
 # %%
-img = graph.decode_map_states(bp_container.get_beliefs(bp_arrays))
+img = graph.decode_map_states(bp.get_beliefs(bp_arrays))
 fig, ax = plt.subplots(1, 1, figsize=(10, 10))
 ax.imshow(img)
 
@@ -68,11 +68,11 @@ ax.imshow(img)
 
 # %%
 def loss(log_potentials_updates, evidence_updates):
-    bp_arrays = bp_container.init(
+    bp_arrays = bp.init(
         log_potentials_updates=log_potentials_updates, evidence_updates=evidence_updates
     )
-    bp_arrays = bp_container.run_bp(bp_arrays, num_iters=3000)
-    beliefs = bp_container.get_beliefs(bp_arrays)
+    bp_arrays = bp.run_bp(bp_arrays, num_iters=3000)
+    beliefs = bp.get_beliefs(bp_arrays)
     loss = -jnp.sum(beliefs)
     return loss
 
@@ -92,7 +92,7 @@ grads = log_potentials_grads(
 # ### Message and evidence manipulation
 
 # %%
-bp_state = bp_container.to_bp_state(bp_arrays)
+bp_state = bp.to_bp_state(bp_arrays)
 
 # Query evidence for variable (0, 0)
 bp_state.evidence[0, 0]
