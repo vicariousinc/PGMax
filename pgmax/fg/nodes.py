@@ -1,7 +1,7 @@
 """A module containing classes that specify the basic components of a Factor Graph."""
 
 from dataclasses import asdict, dataclass
-from typing import Sequence, Tuple, Union
+from typing import Mapping, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -89,19 +89,18 @@ class Factor:
             "Please subclass the Wiring class and override this method."
         )
 
-    # TODO: delete as this creates mypy issues
-    # @staticmethod
-    # def compile_wiring(vars_to_starts: Mapping[Variable, int]) -> Wiring:
-    #     """Compile wiring for the factor
+    @staticmethod
+    def compile_wiring(vars_to_starts: Mapping[Variable, int]) -> Wiring:
+        """Compile wiring for the factor
 
-    #     Args:
-    #         vars_to_starts: A dictionary that maps variables to their global starting indices
-    #             For an n-state variable, a global start index of m means the global indices
-    #             of its n variable states are m, m + 1, ..., m + n - 1
+        Args:
+            vars_to_starts: A dictionary that maps variables to their global starting indices
+                For an n-state variable, a global start index of m means the global indices
+                of its n variable states are m, m + 1, ..., m + n - 1
 
-    #     Returns:
-    #         Wiring for the Factor
-    #     """
-    #     raise NotImplementedError(
-    #         "Please subclass the Factor class and override this method"
-    #     )
+        Returns:
+            Wiring for the Factor
+        """
+        raise NotImplementedError(
+            "Please subclass the Factor class and override this method"
+        )
