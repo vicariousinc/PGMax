@@ -9,6 +9,15 @@ from pgmax.fg import nodes
 
 def test_enumeration_factor():
     variable = nodes.Variable(3)
+
+    with pytest.raises(
+        NotImplementedError, match="Please implement compile_wiring in for your factor"
+    ):
+        nodes.Factor(
+            variables=(variable,),
+            log_potentials=np.array([0.0]),
+        )
+
     with pytest.raises(ValueError, match="Configurations should be integers. Got"):
         enumeration.EnumerationFactor(
             variables=(variable,),
