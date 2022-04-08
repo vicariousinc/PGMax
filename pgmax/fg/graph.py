@@ -855,7 +855,7 @@ class BPArrays:
 
 @dataclass(frozen=True, eq=False)
 class BeliefPropagation:
-    """A container for belief propagation functions.
+    """Belief propagation functions.
 
     Arguments:
         init: Function to create log_potentials, ftov_msgs and evidence.
@@ -1082,14 +1082,14 @@ def BP(bp_state: BPState, temperature: float = 0.0) -> BeliefPropagation:
         )
         return beliefs
 
-    bp_container = BeliefPropagation(
+    bp = BeliefPropagation(
         init=functools.partial(update, None),
         update=update,
         run_bp=run_bp,
         to_bp_state=to_bp_state,
         get_beliefs=get_beliefs,
     )
-    return bp_container
+    return bp
 
 
 @jax.jit
