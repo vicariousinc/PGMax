@@ -18,7 +18,7 @@ def test_factor_graph():
     fg.add_factor_by_type(
         factor_type=enumeration_factor.EnumerationFactor,
         variable_names=[0],
-        configs=np.arange(15)[:, None],
+        factor_configs=np.arange(15)[:, None],
         log_potentials=np.zeros(15),
         name="test",
     )

@@ -85,7 +85,7 @@ class EnumerationFactorGroup(groups.FactorGroup):
                         variables=tuple(
                             self.variable_group[self.variable_names_for_factors[ii]]
                         ),
-                        configs=self.factor_configs,
+                        factor_configs=self.factor_configs,
                         log_potentials=np.array(self.log_potentials)[ii],
                     ),
                 )
@@ -299,7 +299,7 @@ class PairwiseFactorGroup(groups.FactorGroup):
                         variables=tuple(
                             self.variable_group[self.variable_names_for_factors[ii]]
                         ),
-                        configs=self.factor_configs,
+                        factor_configs=self.factor_configs,
                         log_potentials=self.log_potentials[ii],
                     ),
                 )

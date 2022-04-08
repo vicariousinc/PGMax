@@ -12,21 +12,21 @@ def test_enumeration_factor():
     with pytest.raises(ValueError, match="Configurations should be integers. Got"):
         enumeration.EnumerationFactor(
             variables=(variable,),
-            configs=np.array([[1.0]]),
+            factor_configs=np.array([[1.0]]),
             log_potentials=np.array([0.0]),
         )
 
     with pytest.raises(ValueError, match="Potential should be floats. Got"):
         enumeration.EnumerationFactor(
             variables=(variable,),
-            configs=np.array([[1]]),
+            factor_configs=np.array([[1]]),
             log_potentials=np.array([0]),
         )
 
-    with pytest.raises(ValueError, match="configs should be a 2D array"):
+    with pytest.raises(ValueError, match="factor_configs should be a 2D array"):
         enumeration.EnumerationFactor(
             variables=(variable,),
-            configs=np.array([1]),
+            factor_configs=np.array([1]),
             log_potentials=np.array([0.0]),
         )
 
@@ -38,7 +38,7 @@ def test_enumeration_factor():
     ):
         enumeration.EnumerationFactor(
             variables=(variable,),
-            configs=np.array([[1, 2]]),
+            factor_configs=np.array([[1, 2]]),
             log_potentials=np.array([0.0]),
         )
 
@@ -47,14 +47,14 @@ def test_enumeration_factor():
     ):
         enumeration.EnumerationFactor(
             variables=(variable,),
-            configs=np.array([[1]]),
+            factor_configs=np.array([[1]]),
             log_potentials=np.array([0.0, 1.0]),
         )
 
     with pytest.raises(ValueError, match="Invalid configurations for given variables"):
         enumeration.EnumerationFactor(
             variables=(variable,),
-            configs=np.array([[10]]),
+            factor_configs=np.array([[10]]),
             log_potentials=np.array([0.0]),
         )
 

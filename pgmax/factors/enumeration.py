@@ -46,28 +46,28 @@ class EnumerationFactor(nodes.Factor):
     """An enumeration factor
 
     Args:
-        configs: Array of shape (num_val_configs, num_variables)
+        factor_configs: Array of shape (num_val_configs, num_variables)
             An array containing an explicit enumeration of all valid configurations
         log_potentials: Array of shape (num_val_configs,)
             An array containing the log of the potential value for each valid configuration
 
     Raises:
         ValueError: If:
-            (1) The dtype of the configs array is not int
+            (1) The dtype of the factor_configs array is not int
             (2) The dtype of the potential array is not float
-            (3) Configs does not have the correct shape
+            (3) factor_configs does not have the correct shape
             (4) The potential array does not have the correct shape
-            (5) The configs array contains invalid values
+            (5) The factor_configs array contains invalid values
     """
 
-    configs: np.ndarray
+    factor_configs: np.ndarray
     log_potentials: np.ndarray
 
     def __post_init__(self):
-        self.configs.flags.writeable = False
-        if not np.issubdtype(self.configs.dtype, np.integer):
+        self.factor_configs.flags.writeable = False
+        if not np.issubdtype(self.factor_configs.dtype, np.integer):
             raise ValueError(
-                f"Configurations should be integers. Got {self.configs.dtype}."
+                f"Configurations should be integers. Got {self.factor_configs.dtype}."
             )
 
         if not np.issubdtype(self.log_potentials.dtype, np.floating):
@@ -75,27 +75,27 @@ class EnumerationFactor(nodes.Factor):
                 f"Potential should be floats. Got {self.log_potentials.dtype}."
             )
 
-        if self.configs.ndim != 2:
+        if self.factor_configs.ndim != 2:
             raise ValueError(
-                "configs should be a 2D array containing a list of valid configurations for "
-                f"EnumerationFactor. Got a configs array of shape {self.configs.shape}."
+                "factor_configs should be a 2D array containing a list of valid configurations for "
+                f"EnumerationFactor. Got a factor_configs array of shape {self.factor_configs.shape}."
             )
 
-        if len(self.variables) != self.configs.shape[1]:
+        if len(self.variables) != self.factor_configs.shape[1]:
             raise ValueError(
-                f"Number of variables {len(self.variables)} doesn't match given configurations {self.configs.shape}"
+                f"Number of variables {len(self.variables)} doesn't match given configurations {self.factor_configs.shape}"
             )
 
-        if self.log_potentials.shape != (self.configs.shape[0],):
+        if self.log_potentials.shape != (self.factor_configs.shape[0],):
             raise ValueError(
-                f"Expected log potentials of shape {(self.configs.shape[0],)} for "
-                f"({self.configs.shape[0]}) valid configurations. Got log potentials of "
+                f"Expected log potentials of shape {(self.factor_configs.shape[0],)} for "
+                f"({self.factor_configs.shape[0]}) valid configurations. Got log potentials of "
                 f"shape {self.log_potentials.shape}."
             )
 
         vars_num_states = np.array([variable.num_states for variable in self.variables])
         if not np.logical_and(
-            self.configs >= 0, self.configs < vars_num_states[None]
+            self.factor_configs >= 0, self.factor_configs < vars_num_states[None]
         ).all():
             raise ValueError("Invalid configurations for given variables")
 

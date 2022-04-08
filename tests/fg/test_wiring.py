@@ -39,7 +39,7 @@ def test_wiring_with_PairwiseFactorGroup():
             variable_names=[("A", idx), ("B", idx)],
             factor_type=enumeration_factor.EnumerationFactor,
             **{
-                "configs": np.array([[0, 0], [0, 1], [1, 0], [1, 1]]),
+                "factor_configs": np.array([[0, 0], [0, 1], [1, 0], [1, 1]]),
                 "log_potentials": np.zeros((4,)),
             }
         )

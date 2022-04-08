@@ -530,14 +530,13 @@ class SingleFactorGroup(FactorGroup):
             )
 
         object.__setattr__(self, "factor_type", type(self.factor))
-
-        if hasattr(self.factor, "configs"):
-            object.__setattr__(self, "factor_configs", self.factor.configs)
-
-        if hasattr(self.factor, "edge_states_offset"):
-            object.__setattr__(
-                self, "edge_states_offset", self.factor.edge_states_offset
-            )
+        compile_wiring_arguments = inspect.getfullargspec(
+            self.factor_type.compile_wiring
+        ).args
+        compile_wiring_arguments.remove("vars_to_starts")
+        for key in compile_wiring_arguments:
+            if not hasattr(self, key):
+                object.__setattr__(self, key, getattr(self.factor, key))
 
     def _get_variables_to_factors(
         self,
