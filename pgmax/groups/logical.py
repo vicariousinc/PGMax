@@ -22,24 +22,6 @@ class LogicalFactorGroup(groups.FactorGroup):
 
     edge_states_offset: int = field(init=False)
 
-    def compile_wiring(self, vars_to_starts) -> logical.LogicalWiring:
-        """Compile LogicalWiring for the LogicalFactorGroup
-
-        Args:
-            vars_to_starts: A dictionary that maps variables to their global starting indices
-                For an n-state variable, a global start index of m means the global indices
-                of its n variable states are m, m + 1, ..., m + n - 1
-
-        Returns:
-             LogicalWiring for the LogicalFactorGroup
-        """
-        return logical.compile_logical_wiring(
-            factor_edges_num_states=self.factor_edges_num_states,
-            variables_for_factors=self.variables_for_factors,
-            vars_to_starts=vars_to_starts,
-            edge_states_offset=self.edge_states_offset,
-        )
-
     def _get_variables_to_factors(
         self,
     ) -> OrderedDict[FrozenSet, logical.LogicalFactor]:

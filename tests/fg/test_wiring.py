@@ -1,4 +1,7 @@
+import re
+
 import numpy as np
+import pytest
 
 from pgmax.factors import enumeration as enumeration_factor
 from pgmax.factors import logical as logical_factor
@@ -14,6 +17,24 @@ def test_wiring_with_PairwiseFactorGroup():
     """
     A = vgroup.NDVariableArray(num_states=2, shape=(10,))
     B = vgroup.NDVariableArray(num_states=2, shape=(10,))
+
+    # First test that compile_wiring enforces the correct factor_edges_num_states shape
+    fg = graph.FactorGraph(variables=dict(A=A, B=B))
+    fg.add_factor_group(
+        factory=enumeration.PairwiseFactorGroup,
+        variable_names_for_factors=[[("A", idx), ("B", idx)] for idx in range(10)],
+    )
+    factor_group = fg.factor_groups[enumeration_factor.EnumerationFactor][0]
+    object.__setattr__(
+        factor_group,
+        "factor_edges_num_states",
+        factor_group.factor_edges_num_states[:-1],
+    )
+    with pytest.raises(
+        ValueError,
+        match=re.escape("Expected factor_edges_num_states shape is (20,). Got (19,)."),
+    ):
+        factor_group.compile_wiring(fg._vars_to_starts)
 
     # FactorGraph with a single PairwiseFactorGroup
     fg1 = graph.FactorGraph(variables=dict(A=A, B=B))
@@ -39,7 +60,7 @@ def test_wiring_with_PairwiseFactorGroup():
             variable_names=[("A", idx), ("B", idx)],
             factor_type=enumeration_factor.EnumerationFactor,
             **{
-                "configs": np.array([[0, 0], [0, 1], [1, 0], [1, 1]]),
+                "factor_configs": np.array([[0, 0], [0, 1], [1, 0], [1, 1]]),
                 "log_potentials": np.zeros((4,)),
             }
         )

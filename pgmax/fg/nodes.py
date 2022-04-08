@@ -1,7 +1,7 @@
 """A module containing classes that specify the basic components of a Factor Graph."""
 
 from dataclasses import asdict, dataclass
-from typing import Any, Mapping, Sequence, Tuple, Union
+from typing import Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -43,16 +43,6 @@ class Wiring:
             if isinstance(getattr(self, field), np.ndarray):
                 getattr(self, field).flags.writeable = False
 
-    @property
-    def inference_arguments(self) -> Mapping[str, Any]:
-        """
-        Returns:
-            A dictionnary of elements used to run belief propagation.
-        """
-        raise NotImplementedError(
-            "Please subclass the Wiring class and override this method."
-        )
-
     def tree_flatten(self):
         return jax.tree_util.tree_flatten(asdict(self))
 
@@ -67,10 +57,19 @@ class Factor:
 
     Args:
         variables: List of connected variables
+
+    Raises:
+        NotImplementedError: If compile_wiring is not implemented
     """
 
     variables: Tuple[Variable, ...]
     log_potentials: np.ndarray
+
+    def __post_init__(self):
+        if not hasattr(self, "compile_wiring"):
+            raise NotImplementedError(
+                "Please implement compile_wiring in for your factor"
+            )
 
     @utils.cached_property
     def edges_num_states(self) -> np.ndarray:
@@ -97,19 +96,4 @@ class Factor:
         """
         raise NotImplementedError(
             "Please subclass the Wiring class and override this method."
-        )
-
-    def compile_wiring(self, vars_to_starts: Mapping[Variable, int]) -> Wiring:
-        """Compile wiring for the factor
-
-        Args:
-            vars_to_starts: A dictionary that maps variables to their global starting indices
-                For an n-state variable, a global start index of m means the global indices
-                of its n variable states are m, m + 1, ..., m + n - 1
-
-        Returns:
-            Wiring for the Factor
-        """
-        raise NotImplementedError(
-            "Please subclass the Factor class and override this method"
         )

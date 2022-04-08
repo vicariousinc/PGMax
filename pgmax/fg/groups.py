@@ -1,6 +1,7 @@
 """A module containing the base classes for variable and factor groups in a Factor Graph."""
 
 import collections
+import inspect
 import typing
 from dataclasses import dataclass, field
 from types import MappingProxyType
@@ -356,20 +357,49 @@ class FactorGroup:
         variable_names_for_factors: A list of list of variable names, where each innermost element is the
             name of a variable in variable_group. Each list within the outer list is taken to contain
             the names of the variables connected to a Factor.
-        factor_type: Factor type shared by all the Factors in the FactorGroup.
         factor_configs: Optional array containing an explicit enumeration of all valid configurations
         log_potentials: Array of log potentials.
+
+    Attributes:
+        factor_type: Factor type shared by all the Factors in the FactorGroup.
+        factor_sizes: Array of the different factor sizes.
+        variables_for_factors: Tuple concatenating the variables connected to each factor in the FactorGroup.
+            Each variable will appear once for each Factor it connects to.
+        factor_edges_num_states: Array concatenating the number of states for the variables connected to each Factor of
+            the FactorGroup. Each variable will appear once for each Factor it connects to.
+
+    Raises:
+        ValueError: if the FactorGroup does not contain a Factor
     """
 
     variable_group: Union[CompositeVariableGroup, VariableGroup]
     variable_names_for_factors: Sequence[List]
-    factor_type: Type = field(init=False)
     factor_configs: np.ndarray = field(init=False)
     log_potentials: np.ndarray = field(init=False, default=np.empty((0,)))
+    factor_type: Type = field(init=False)
+    factor_sizes: np.ndarray = field(init=False)
+    variables_for_factors: Tuple[nodes.Variable, ...] = field(init=False)
+    factor_edges_num_states: np.ndarray = field(init=False)
 
     def __post_init__(self):
         if len(self.variable_names_for_factors) == 0:
             raise ValueError("Do not add a factor group with no factors.")
+
+        factor_sizes = []
+        variables_for_factors = []
+        factor_edges_num_states = []
+        for variable_names_for_factor in self.variable_names_for_factors:
+            for variable_name in variable_names_for_factor:
+                variable = self.variable_group._names_to_variables[variable_name]
+                variables_for_factors.append(variable)
+                factor_edges_num_states.append(variable.num_states)
+            factor_sizes.append(len(variable_names_for_factor))
+
+        object.__setattr__(self, "factor_sizes", np.array(factor_sizes))
+        object.__setattr__(self, "variables_for_factors", tuple(variables_for_factors))
+        object.__setattr__(
+            self, "factor_edges_num_states", np.array(factor_edges_num_states)
+        )
 
     def __getitem__(self, variables: Union[Sequence, Collection]) -> Any:
         """Function to query individual factors in the factor group
@@ -418,34 +448,6 @@ class FactorGroup:
         """Returns the number of factors in the FactorGroup."""
         return len(self.variable_names_for_factors)
 
-    @cached_property
-    def variables_for_factors(self) -> Tuple[Tuple[nodes.Variable, ...], ...]:
-        """Returns the variables connected to each factor in the FactorGroup."""
-        variables_for_factors = []
-
-        for variable_names_for_factor in self.variable_names_for_factors:
-            variables_for_factors.append(
-                tuple(
-                    [
-                        self.variable_group._names_to_variables[variable_name]
-                        for variable_name in variable_names_for_factor
-                    ]
-                )
-            )
-
-        return tuple(variables_for_factors)
-
-    @cached_property
-    def factor_edges_num_states(self) -> np.ndarray:
-        """Returns An array concatenating the number of states for the variables connected to each Factor of
-        the FactorGroup. Each variable will appear once for each Factor it connects to."""
-        factor_edges_num_states = []
-        for variables_for_factor in self.variables_for_factors:
-            for variable in variables_for_factor:
-                factor_edges_num_states.append(variable.num_states)
-
-        return np.array(factor_edges_num_states)
-
     def _get_variables_to_factors(self) -> OrderedDict[FrozenSet, Any]:
         """Function that generates a dictionary mapping names to factors.
         This function is only called on demand when the user requires it.
@@ -484,11 +486,7 @@ class FactorGroup:
         )
 
     def compile_wiring(self, vars_to_starts: Mapping[nodes.Variable, int]) -> Any:
-        """Compile wiring for the FactorGroup.
-        In pratice, this function is overwritten to implement an efficient wiring directly
-        compiled at the FactorGroup level.
-        If the overwritten does not happen, the slower fallback proposed here compiles
-        all the wirings at the Factor level then concatenates them.
+        """Compile an efficient wiring for the FactorGroup.
 
         Args:
             vars_to_starts: A dictionary that maps variables to their global starting indices
@@ -498,9 +496,17 @@ class FactorGroup:
         Returns:
             Wiring for the FactorGroup
         """
+        compile_wiring_arguments = inspect.getfullargspec(
+            self.factor_type.compile_wiring
+        ).args
+        compile_wiring_arguments.remove("vars_to_starts")
+        compile_wiring_arguments = {
+            key: getattr(self, key) for key in compile_wiring_arguments
+        }
 
-        wirings = [factor.compile_wiring(vars_to_starts) for factor in self.factors]
-        wiring = self.factor_type.concatenate_wirings(wirings)
+        wiring = self.factor_type.compile_wiring(
+            vars_to_starts=vars_to_starts, **compile_wiring_arguments
+        )
         return wiring
 
 
@@ -524,6 +530,13 @@ class SingleFactorGroup(FactorGroup):
             )
 
         object.__setattr__(self, "factor_type", type(self.factor))
+        compile_wiring_arguments = inspect.getfullargspec(
+            self.factor_type.compile_wiring
+        ).args
+        compile_wiring_arguments.remove("vars_to_starts")
+        for key in compile_wiring_arguments:
+            if not hasattr(self, key):
+                object.__setattr__(self, key, getattr(self.factor, key))
 
     def _get_variables_to_factors(
         self,
