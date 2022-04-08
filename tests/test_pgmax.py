@@ -375,11 +375,11 @@ def test_e2e_sanity_check():
     )
     bp_state.evidence["grid_vars"] = grid_evidence_arr
     bp_state.evidence["additional_vars"] = additional_vars_evidence_dict
-    run_bp, _, get_beliefs = graph.BP(bp_state, 100)
-    bp_arrays = run_bp()
+    bp = graph.BP(bp_state)
+    bp_arrays = bp.run_bp(bp.init(), num_iters=100)
     # Test that the output messages are close to the true messages
     assert jnp.allclose(bp_arrays.ftov_msgs, true_final_msgs_output, atol=1e-06)
-    decoded_map_states = graph.decode_map_states(get_beliefs(bp_arrays))
+    decoded_map_states = graph.decode_map_states(bp.get_beliefs(bp_arrays))
     for name in true_map_state_output:
         assert true_map_state_output[name] == decoded_map_states[name[0]][name[1:]]
 
@@ -432,6 +432,7 @@ def test_e2e_heretic():
     bp_state.evidence[1, 0, 0]
     assert isinstance(bp_state.evidence.value, np.ndarray)
     assert len(sum(fg.factors.values(), ())) == 7056
-    run_bp, _, get_beliefs = graph.BP(bp_state, 1, 1.0)
-    marginals = graph.get_marginals(get_beliefs(run_bp()))
+    bp = graph.BP(bp_state, temperature=1.0)
+    bp_arrays = bp.run_bp(bp.init(), num_iters=1)
+    marginals = graph.get_marginals(bp.get_beliefs(bp_arrays))
     assert jnp.allclose(jnp.sum(marginals[0], axis=-1), 1.0)

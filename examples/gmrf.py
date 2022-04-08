@@ -91,7 +91,7 @@ fg.add_factor_group(
 )
 
 # %%
-run_bp, _, get_beliefs = graph.BP(fg.bp_state, 15, 1.0)
+bp = graph.BP(fg.bp_state, temperature=1.0)
 
 # %%
 n_plots = 5
@@ -103,10 +103,13 @@ for plot_idx, idx in tqdm(enumerate(indices), total=n_plots):
     evidence = jnp.log(jnp.where(noisy_image[..., None] == 0, p_contour, 1 - p_contour))
     target = prototype_targets[target_image]
     marginals = graph.get_marginals(
-        get_beliefs(
-            run_bp(
-                evidence_updates={None: evidence},
-                log_potentials_updates=log_potentials,
+        bp.get_beliefs(
+            bp.run_bp(
+                bp.init(
+                    evidence_updates={None: evidence},
+                    log_potentials_updates=log_potentials,
+                ),
+                num_iters=15,
                 damping=0.0,
             )
         )
@@ -147,10 +150,13 @@ def loss(noisy_image, target_image, log_potentials):
     evidence = jnp.log(jnp.where(noisy_image[..., None] == 0, p_contour, 1 - p_contour))
     target = prototype_targets[target_image]
     marginals = graph.get_marginals(
-        get_beliefs(
-            run_bp(
-                evidence_updates={None: evidence},
-                log_potentials_updates=log_potentials,
+        bp.get_beliefs(
+            bp.run_bp(
+                bp.init(
+                    evidence_updates={None: evidence},
+                    log_potentials_updates=log_potentials,
+                ),
+                num_iters=15,
                 damping=0.0,
             )
         )
