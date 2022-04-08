@@ -175,6 +175,9 @@ class EnumerationFactor(nodes.Factor):
                 of its n variable states are m, m + 1, ..., m + n - 1
             num_factors: Number of Factors in the FactorGroup.
 
+        Raises:
+            ValueError: if factor_edges_num_states is not of shape (num_factors * num_variables, )
+
         Returns:
             The EnumerationWiring
         """
@@ -189,10 +192,13 @@ class EnumerationFactor(nodes.Factor):
         _compile_var_states_numba(var_states_for_edges, num_states_cumsum, var_states)
 
         num_configs, num_variables = factor_configs.shape
+        if not factor_edges_num_states.shape == (num_factors * num_variables,):
+            raise ValueError(
+                f"Expected factor_edges_num_states shape is {(num_factors * num_variables,)}. Got {factor_edges_num_states.shape}."
+            )
         factor_configs_edge_states = np.empty(
             (num_factors * num_configs * num_variables, 2), dtype=int
         )
-        assert factor_edges_num_states.shape[0] == num_factors * num_variables
         factor_edges_starts = np.insert(np.cumsum(factor_edges_num_states), 0, 0)
         _compile_enumeration_wiring_numba(
             factor_configs_edge_states, factor_configs, factor_edges_starts, num_factors
