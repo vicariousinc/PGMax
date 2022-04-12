@@ -311,3 +311,18 @@ class SingleFactorGroup(FactorGroup):
         raise NotImplementedError(
             "SingleFactorGroup does not support vectorized factor operations."
         )
+
+
+# def get_ndvariable_names_for_factor_groups(
+#     arrays: List[Any]
+
+# ):
+#     "Util function"
+
+# import numba as nb
+# @nb.jit(parallel=False, cache=True, fastmath=True, nopython=True)
+# def run_numba(h, v, f):
+#     for h_idx in nb.prange(h.shape[0]):
+#         for v_idx in nb.prange(v.shape[0]):
+#             f[h_idx * v.shape[0] + v_idx, 0] = h[h_idx]
+#             f[h_idx * v.shape[0] + v_idx, 1] = v[v_idx]

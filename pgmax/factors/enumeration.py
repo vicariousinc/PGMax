@@ -184,9 +184,6 @@ class EnumerationFactor(nodes.Factor):
         var_states = np.array(
             [vars_to_starts[variable] for variable in variables_for_factors]
         )
-        # num_states = np.array(
-        #     [variable.num_states for variable in variables_for_factors]
-        # )
         num_states_cumsum = np.insert(np.cumsum(factor_edges_num_states), 0, 0)
         var_states_for_edges = np.empty(shape=(num_states_cumsum[-1],), dtype=int)
         _compile_var_states_numba(var_states_for_edges, num_states_cumsum, var_states)

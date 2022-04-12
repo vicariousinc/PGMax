@@ -1,6 +1,7 @@
 """A module containing the variables group classes inheriting from the base VariableGroup."""
 
 import itertools
+import random
 from dataclasses import dataclass
 from typing import Tuple, Union
 
@@ -34,6 +35,10 @@ class NDVariableArray:
             if self.num_states.shape != self.shape:
                 raise ValueError("Should be same shape")
 
+    def __getitem__(self, val):
+        # Numpy indexation will throw IndexError for us if out-of-bounds
+        return self.variable_names[val]
+
     @cached_property
     def variable_names(self) -> np.ndarray:
         """Function that generates a dictionary mapping names to variables.
@@ -41,17 +46,10 @@ class NDVariableArray:
         Returns:
             a dictionary mapping all possible names to different variables.
         """
-        variable_names = np.empty(self.shape, dtype=int)
-        self_hash = self.__hash__()
-        for index in itertools.product(*[list(range(k)) for k in self.shape]):
-            name = hash((self_hash, index))
-            variable_names[index] = name
-        return variable_names
-
-    def __getitem__(self, val):
-        # Numpy indexation will throw IndexError is out-of-bounds
-        # This will be used to add FactorGroups
-        return self.variable_names[val]
+        # Overwite default hash as it does not give enough spacing across consecutive objects
+        this_hash = random.randint(0, 2**63)
+        indices = np.reshape(np.arange(np.product(self.shape)), self.shape)
+        return this_hash + indices
 
     def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
         """Function that turns meaningful structured data into a flat data array for internal use.
@@ -112,32 +110,29 @@ class NDVariableArray:
         return data
 
 
+# TODO: delete?
 # @dataclass(frozen=True, eq=False)
-# class VariableDict(groups.VariableGroup):
+# class VariableDict():
 #     """A variable dictionary that contains a set of variables of the same size
 
 #     Args:
 #         num_states: The size of the variables in this variable group
-#         variable_names: A tuple of all names of the variables in this variable group
+#         num_variables: The number of variables
 
 #     """
 
 #     num_states: int
-#     variable_names: Tuple[Any, ...]
+#     num_variables: int
 
-#     def _get_names_to_variables(self) -> OrderedDict[Tuple[int, ...], nodes.Variable]:
+#     @cached_property
+#     def variable_names(self) -> np.ndarray:
 #         """Function that generates a dictionary mapping names to variables.
 
 #         Returns:
 #             a dictionary mapping all possible names to different variables.
 #         """
-#         names_to_variables: OrderedDict[
-#             Tuple[Any, ...], nodes.Variable
-#         ] = collections.OrderedDict()
-#         for name in self.variable_names:
-#             names_to_variables[name] = nodes.Variable(self.num_states)
+#         return self.__hash__() + np.arange(self.num_states)
 
-#         return names_to_variables
 
 #     def flatten(
 #         self, data: Mapping[Hashable, Union[np.ndarray, jnp.ndarray]]

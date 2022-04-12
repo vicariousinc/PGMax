@@ -46,25 +46,19 @@ fg.add_factor_group(
     log_potential_matrix=0.8 * np.array([[1.0, -1.0], [-1.0, 1.0]]),
 )
 
-# %%
-from pgmax.factors import enumeration as enumeration_factor
-
-factors = fg.factor_groups[enumeration_factor.EnumerationFactor][0].factors
-
 # %% [markdown]
 # ### Run inference and visualize results
 
-import imp
-
 # %%
-from pgmax.fg import graph
-
-imp.reload(graph)
 bp = graph.BP(fg.bp_state, temperature=0)
 
 # %%
+d = {variables: 1, variables.__hash__(): 2}
+hd = graph.HashableDict(d)
+hd[variables]
+
+# %%
 # TODO: check\ time for before BP vs time for BP
-# TODO: why bug when done twice?
 # TODO: time PGMAX vs PMP
 bp_arrays = bp.init(
     evidence_updates={variables: jax.device_put(np.random.gumbel(size=(50, 50, 2)))}

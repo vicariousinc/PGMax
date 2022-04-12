@@ -127,7 +127,6 @@ class FactorGraph:
         variable_names: List,
         factor_configs: np.ndarray,
         log_potentials: Optional[np.ndarray] = None,
-        name: Optional[str] = None,
     ) -> None:
         """Function to add a single factor to the FactorGraph.
 
@@ -151,7 +150,7 @@ class FactorGraph:
             factor_configs=factor_configs,
             log_potentials=log_potentials,
         )
-        self._register_factor_group(factor_group, name)
+        self._register_factor_group(factor_group)
 
     def add_factor_by_type(
         self, variable_names: List[int], factor_type: type, *args, **kwargs
@@ -221,7 +220,6 @@ class FactorGraph:
                 var_names
                 in self._factor_types_to_variable_names_for_factors[factor_type]
             ):
-                print(len(var_names_for_factor))
                 raise ValueError(
                     f"A Factor of type {factor_type} involving variables {var_names} already exists. Please merge the corresponding factors."
                 )
@@ -492,8 +490,7 @@ def update_log_potentials(
         (1) Provided log_potentials shape does not match the expected log_potentials shape.
         (2) Provided name is not valid for log_potentials updates.
     """
-    for name in updates:
-        data = updates[name]
+    for name, data in updates.items():
         if name in fg_state.named_factor_groups:
             factor_group = fg_state.named_factor_groups[name]
 
@@ -613,8 +610,7 @@ def update_ftov_msgs(
         (1) provided ftov_msgs shape does not match the expected ftov_msgs shape.
         (2) provided name is not valid for ftov_msgs updates.
     """
-    for names in updates:
-        data = updates[names]
+    for names, data in updates.items():
         if names in fg_state.variable_group.names:
             variable = fg_state.variable_group[names]
             if data.shape != (variable.num_states,):
@@ -729,7 +725,7 @@ class FToVMessages:
         )
 
 
-# @functools.partial(jax.jit, static_argnames="fg_state")
+@functools.partial(jax.jit, static_argnames="fg_state")
 def update_evidence(
     evidence: jnp.ndarray, updates: Dict[Any, jnp.ndarray], fg_state: FactorGraphState
 ) -> jnp.ndarray:
@@ -743,11 +739,9 @@ def update_evidence(
     Returns:
         A flat jnp array containing updated evidence.
     """
-    for var_group_name in updates:
-        data = updates[var_group_name]
-        print(data.shape)
-        if var_group_name.__hash__() in fg_state.variable_group:
-            variable_group = fg_state.variable_group[var_group_name.__hash__()]
+    for var_group_name, data in updates.items():
+        if var_group_name in fg_state.variable_group:
+            variable_group = fg_state.variable_group[var_group_name]
             first_variable = variable_group.variable_names.flatten()[0]
             start_index = fg_state.vars_to_starts[first_variable]
             flat_data = variable_group.flatten(data)
@@ -974,17 +968,19 @@ def BP(bp_state: BPState, temperature: float = 0.0) -> BeliefPropagation:
 
         if log_potentials_updates is not None:
             log_potentials = update_log_potentials(
-                log_potentials, log_potentials_updates, bp_state.fg_state
+                log_potentials, HashableDict(log_potentials_updates), bp_state.fg_state
             )
 
         if ftov_msgs_updates is not None:
             ftov_msgs = update_ftov_msgs(
-                ftov_msgs, ftov_msgs_updates, bp_state.fg_state
+                ftov_msgs, HashableDict(ftov_msgs_updates), bp_state.fg_state
             )
 
         if evidence_updates is not None:
-            print(type(evidence), type(evidence_updates))
-            evidence = update_evidence(evidence, evidence_updates, bp_state.fg_state)
+            # Note: if we overwrite variables.__hash__ then hash may change when we call jit
+            evidence = update_evidence(
+                evidence, HashableDict(evidence_updates), bp_state.fg_state
+            )
 
         return BPArrays(
             log_potentials=log_potentials, ftov_msgs=ftov_msgs, evidence=evidence
@@ -1082,7 +1078,7 @@ def BP(bp_state: BPState, temperature: float = 0.0) -> BeliefPropagation:
         """
 
         @jax.jit
-        def compute_flat_beliefs(bp_arrays):
+        def compute_flat_beliefs(bp_arrays, var_states_for_edges):
             flat_beliefs = (
                 jax.device_put(bp_arrays.evidence)
                 .at[jax.device_put(var_states_for_edges)]
@@ -1091,7 +1087,8 @@ def BP(bp_state: BPState, temperature: float = 0.0) -> BeliefPropagation:
             return flat_beliefs
 
         return BeliefPropagationOutputs(
-            compute_flat_beliefs(bp_arrays), bp_state.fg_state.variable_group
+            compute_flat_beliefs(bp_arrays, var_states_for_edges),
+            bp_state.fg_state.variable_group,
         )
 
     bp = BeliefPropagation(
@@ -1104,23 +1101,47 @@ def BP(bp_state: BPState, temperature: float = 0.0) -> BeliefPropagation:
     return bp
 
 
+@jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True, eq=False)
 class HashableDict:
+    "A convenient class"
     d: Dict = field(default_factory=dict)
 
+    def __post_init__(self):
+        # Allows to initialize from dict without knowing hash
+        new_d = {k.__hash__(): v for k, v in self.d.items()}
+        object.__setattr__(self, "d", new_d)
+
+    @functools.lru_cache()
+    def keys(self):
+        return self.d.keys()
+
+    def items(self):
+        return self.d.items()
+
     def __setitem__(self, key, value):
+        # Allows to copy keys from another HashableDict
         self.d[key] = value
 
     def __getitem__(self, value):
+        # Allows to retrieve from dict without knowing hash
         return self.d[value.__hash__()]
 
+    def tree_flatten(self):
+        return jax.tree_util.tree_flatten(asdict(self))
 
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        return cls(**aux_data.unflatten(children))
+
+
+@jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True, eq=False)
 class BeliefPropagationOutputs:
     # beliefs: An array or a PyTree container containing the beliefs for the variables.
     flat_beliefs: jnp.ndarray
     variable_groups: Mapping[int, groups.VariableGroup]
-    beliefs: HashableDict = field(init=False, default_factory=dict)
+    beliefs: HashableDict = field(init=False)
 
     def __post_init__(self):
         if self.flat_beliefs.ndim != 1:
@@ -1162,7 +1183,7 @@ class BeliefPropagationOutputs:
                 f"Got {self.flat_beliefs.shape}"
             )
 
-        beliefs = {}
+        beliefs = HashableDict()
         start = 0
         for name, variable_group in self.variable_groups.items():
             if use_num_states:
@@ -1218,3 +1239,11 @@ class BeliefPropagationOutputs:
         for name, beliefs in self.beliefs.items():
             marginals[name] = _get_marginals(beliefs)
         return marginals
+
+    def tree_flatten(self):
+        return jax.tree_util.tree_flatten(asdict(self))
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        # TODO: fix this
+        return cls(**aux_data.unflatten(children))

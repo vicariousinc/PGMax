@@ -106,6 +106,8 @@ _ = plot_images(W_gt[0], nr=1)
 #  - a second set of ORFactors, which maps SW to X and model (binary) features overlapping.
 #
 # See Section 5.6 of the [PMP paper](https://proceedings.neurips.cc/paper/2021/hash/07b1c04a30f798b5506c1ec5acfb9031-Abstract.html) for more details.
+#
+# import imp
 
 import imp
 
@@ -150,7 +152,7 @@ print("Time", time.time() - start)
 start = time.time()
 # Factor graph
 fg = graph.FactorGraph(variables=[S, W, SW, X])
-print("x", time.time() - start)
+print(time.time() - start)
 
 # Define the ANDFactors
 variable_names_for_ANDFactors = []
@@ -232,7 +234,7 @@ print("Time", time.time() - start)
 
 # %%
 pW = 0.25
-pS = 1e-100
+pS = 1e-70
 pX = 1e-100
 
 # Sparsity inducing priors for W and S
@@ -248,7 +250,35 @@ uX[..., 0] = (2 * X_gt - 1) * logit(pX)
 
 # %%
 np.random.seed(seed=40)
-n_samples = 1
+
+start = time.time()
+bp_arrays = bp.init(
+    evidence_updates={
+        S: uS + np.random.gumbel(size=uS.shape),
+        W: uW + np.random.gumbel(size=uW.shape),
+        SW: np.zeros(SW.shape),
+        X: uX + np.zeros(shape=uX.shape),
+    },
+)
+print("Time", time.time() - start)
+bp_arrays = bp.run_bp(bp_arrays, num_iters=100, damping=0.5)
+print("Time", time.time() - start)
+output = bp.get_bp_output(bp_arrays)
+print("Time", time.time() - start)
+
+# %%
+_ = plot_images(output.map_states[W].reshape(-1, feat_height, feat_width), nr=1)
+
+# %%
+
+# %%
+
+# %% [markdown]
+# We draw a batch of samples from the posterior in parallel by transforming `run_bp`/`get_beliefs` with `jax.vmap`
+
+# %%
+np.random.seed(seed=40)
+n_samples = 4
 
 start = time.time()
 bp_arrays = jax.vmap(bp.init, in_axes=0, out_axes=0)(
@@ -268,29 +298,6 @@ bp_arrays = jax.vmap(
 print("Time", time.time() - start)
 # beliefs = jax.vmap(bp.get_beliefs, in_axes=0, out_axes=0)(bp_arrays)
 # map_states = graph.decode_map_states(beliefs)
-
-# %% [markdown]
-# We draw a batch of samples from the posterior in parallel by transforming `run_bp`/`get_beliefs` with `jax.vmap`
-
-# %%
-np.random.seed(seed=40)
-n_samples = 4
-
-bp_arrays = jax.vmap(bp.init, in_axes=0, out_axes=0)(
-    evidence_updates={
-        "S": uS[None] + np.random.gumbel(size=(n_samples,) + uS.shape),
-        "W": uW[None] + np.random.gumbel(size=(n_samples,) + uW.shape),
-        "SW": np.zeros(shape=(n_samples,) + SW.shape),
-        "X": uX[None] + np.zeros(shape=(n_samples,) + uX.shape),
-    },
-)
-bp_arrays = jax.vmap(
-    functools.partial(bp.run_bp, num_iters=100, damping=0.5),
-    in_axes=0,
-    out_axes=0,
-)(bp_arrays)
-beliefs = jax.vmap(bp.get_beliefs, in_axes=0, out_axes=0)(bp_arrays)
-map_states = graph.decode_map_states(beliefs)
 
 # %% [markdown]
 # Visualizing the MAP decoding, we see that we have 4 good random samples (one per row) from the posterior!

@@ -25,6 +25,7 @@ def test_run_bp_with_OR_factors():
     Note: for the first seed, add all the EnumerationFactors to FG1 and all the ORFactors to FG2
     """
     for idx in range(10):
+        print("it", idx)
         np.random.seed(idx)
 
         # Parameters
@@ -43,30 +44,41 @@ def test_run_bp_with_OR_factors():
         parents_variables1 = vgroup.NDVariableArray(
             num_states=2, shape=(num_parents.sum(),)
         )
-        children_variable1 = vgroup.NDVariableArray(num_states=2, shape=(num_factors,))
-        fg1 = graph.FactorGraph(
-            variables=dict(parents=parents_variables1, children=children_variable1)
-        )
+        children_variables1 = vgroup.NDVariableArray(num_states=2, shape=(num_factors,))
+        fg1 = graph.FactorGraph(variables=[parents_variables1, children_variables1])
 
         # Graph 2
         parents_variables2 = vgroup.NDVariableArray(
             num_states=2, shape=(num_parents.sum(),)
         )
-        children_variable2 = vgroup.NDVariableArray(num_states=2, shape=(num_factors,))
-        fg2 = graph.FactorGraph(
-            variables=dict(parents=parents_variables2, children=children_variable2)
-        )
+        children_variables2 = vgroup.NDVariableArray(num_states=2, shape=(num_factors,))
+        fg2 = graph.FactorGraph(variables=[parents_variables2, children_variables2])
 
-        # Option 1: Define EnumerationFactors equivalent to the ORFactors
+        # Variable names for factors
+        variable_names_for_factors1 = []
+        variable_names_for_factors2 = []
         for factor_idx in range(num_factors):
-            this_num_parents = num_parents[factor_idx]
-            variable_names = [
-                ("parents", idx)
+            variable_names1 = [
+                parents_variables1[idx]
                 for idx in range(
                     num_parents_cumsum[factor_idx],
                     num_parents_cumsum[factor_idx + 1],
                 )
-            ] + [("children", factor_idx)]
+            ] + [children_variables1[factor_idx]]
+            variable_names_for_factors1.append(variable_names1)
+
+            variable_names2 = [
+                parents_variables2[idx]
+                for idx in range(
+                    num_parents_cumsum[factor_idx],
+                    num_parents_cumsum[factor_idx + 1],
+                )
+            ] + [children_variables2[factor_idx]]
+            variable_names_for_factors2.append(variable_names2)
+
+        # Option 1: Define EnumerationFactors equivalent to the ORFactors
+        for factor_idx in range(num_factors):
+            this_num_parents = num_parents[factor_idx]
 
             configs = np.array(list(product([0, 1], repeat=this_num_parents + 1)))
             # Children state is last
@@ -82,7 +94,7 @@ def test_run_bp_with_OR_factors():
             if factor_idx < num_factors // 2:
                 # Add the first half of factors to FactorGraph1
                 fg1.add_factor(
-                    variable_names=variable_names,
+                    variable_names=variable_names_for_factors1[factor_idx],
                     factor_configs=valid_configs,
                     log_potentials=np.zeros(valid_configs.shape[0]),
                 )
@@ -90,14 +102,14 @@ def test_run_bp_with_OR_factors():
                 if idx != 0:
                     # Add the second half of factors to FactorGraph2
                     fg2.add_factor(
-                        variable_names=variable_names,
+                        variable_names=variable_names_for_factors2[factor_idx],
                         factor_configs=valid_configs,
                         log_potentials=np.zeros(valid_configs.shape[0]),
                     )
                 else:
                     # Add all the EnumerationFactors to FactorGraph1 for the first iter
                     fg1.add_factor(
-                        variable_names=variable_names,
+                        variable_names=variable_names_for_factors1[factor_idx],
                         factor_configs=valid_configs,
                         log_potentials=np.zeros(valid_configs.shape[0]),
                     )
@@ -108,28 +120,22 @@ def test_run_bp_with_OR_factors():
         variable_names_for_ORFactors_fg2 = []
 
         for factor_idx in range(num_factors):
-            variables_names_for_ORFactor = [
-                ("parents", idx)
-                for idx in range(
-                    num_parents_cumsum[factor_idx],
-                    num_parents_cumsum[factor_idx + 1],
-                )
-            ] + [("children", factor_idx)]
             if factor_idx < num_factors // 2:
                 # Add the first half of factors to FactorGraph2
-                variable_names_for_ORFactors_fg2.append(variables_names_for_ORFactor)
+                variable_names_for_ORFactors_fg2.append(
+                    variable_names_for_factors2[factor_idx]
+                )
             else:
                 if idx != 0:
                     # Add the second half of factors to FactorGraph1
                     variable_names_for_ORFactors_fg1.append(
-                        variables_names_for_ORFactor
+                        variable_names_for_factors1[factor_idx]
                     )
                 else:
                     # Add all the ORFactors to FactorGraph2 for the first iter
                     variable_names_for_ORFactors_fg2.append(
-                        variables_names_for_ORFactor
+                        variable_names_for_factors2[factor_idx]
                     )
-
         if idx != 0:
             fg1.add_factor_group(
                 factory=logical.ORFactorGroup,
@@ -144,19 +150,30 @@ def test_run_bp_with_OR_factors():
         bp1 = graph.BP(fg1.bp_state, temperature=temperature)
         bp2 = graph.BP(fg2.bp_state, temperature=temperature)
 
-        evidence_updates = {
-            "parents": jax.device_put(np.random.gumbel(size=(sum(num_parents), 2))),
-            "children": jax.device_put(np.random.gumbel(size=(num_factors, 2))),
+        evidence_parents = jax.device_put(np.random.gumbel(size=(sum(num_parents), 2)))
+        evidence_children = jax.device_put(np.random.gumbel(size=(num_factors, 2)))
+
+        evidence_updates1 = {
+            parents_variables1: evidence_parents,
+            children_variables1: evidence_children,
+        }
+        evidence_updates2 = {
+            parents_variables2: evidence_parents,
+            children_variables2: evidence_children,
         }
 
-        bp_arrays1 = bp1.init(evidence_updates=evidence_updates)
+        bp_arrays1 = bp1.init(evidence_updates=evidence_updates1)
         bp_arrays1 = bp1.run_bp(bp_arrays1, num_iters=5)
-        bp_arrays2 = bp2.init(evidence_updates=evidence_updates)
+        bp_arrays2 = bp2.init(evidence_updates=evidence_updates2)
         bp_arrays2 = bp2.run_bp(bp_arrays2, num_iters=5)
 
         # Get beliefs
-        beliefs1 = bp1.get_beliefs(bp_arrays1)
-        beliefs2 = bp2.get_beliefs(bp_arrays2)
+        beliefs1 = bp1.get_bp_output(bp_arrays1).beliefs
+        beliefs2 = bp2.get_bp_output(bp_arrays2).beliefs
 
-        assert np.allclose(beliefs1["children"], beliefs2["children"], atol=1e-4)
-        assert np.allclose(beliefs1["parents"], beliefs2["parents"], atol=1e-4)
+        assert np.allclose(
+            beliefs1[children_variables1], beliefs2[children_variables2], atol=1e-4
+        )
+        assert np.allclose(
+            beliefs1[parents_variables1], beliefs2[parents_variables2], atol=1e-4
+        )

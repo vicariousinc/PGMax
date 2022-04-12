@@ -61,6 +61,49 @@ visible_variables = vgroup.NDVariableArray(num_states=2, shape=bv.shape)
 fg = graph.FactorGraph(variables=[hidden_variables, visible_variables])
 print("Time", time.time() - start)
 
+# %%
+import itertools
+
+start = time.time()
+variable_names_for_factors = factors = list(
+    map(
+        lambda ij: (
+            hidden_variables.variable_names[ij[0]],
+            visible_variables.variable_names[ij[1]],
+        ),
+        list(itertools.product(range(bh.shape[0]), range(bv.shape[0]))),
+    )
+)
+print("Time", time.time() - start, len(variable_names_for_factors))
+
+import numba as nb
+
+
+@nb.jit(parallel=False, cache=True, fastmath=True, nopython=True)
+def run_numba(h, v, f):
+    for h_idx in nb.prange(h.shape[0]):
+        for v_idx in nb.prange(v.shape[0]):
+            f[h_idx * v.shape[0] + v_idx, 0] = h[h_idx]
+            f[h_idx * v.shape[0] + v_idx, 1] = v[v_idx]
+
+
+start = time.time()
+variable_names_for_factors = np.empty(shape=(bv.shape[0] * bh.shape[0], 2), dtype=int)
+run_numba(
+    hidden_variables.variable_names,
+    visible_variables.variable_names,
+    variable_names_for_factors,
+)
+print("Time", time.time() - start, len(variable_names_for_factors))
+
+start = time.time()
+variable_names_for_factors = [
+    [hidden_variables[ii], visible_variables[jj]]
+    for ii in range(bh.shape[0])
+    for jj in range(bv.shape[0])
+]
+print("Time", time.time() - start, len(variable_names_for_factors))
+
 # %% [markdown]
 # [`NDVariableArray`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.groups.NDVariableArray.html#pgmax.fg.groups.NDVariableArray) is a convenient class for specifying a group of variables living on a multidimensional grid with the same number of states, and shares some similarities with [`numpy.ndarray`](https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html). The [`FactorGraph`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.graph.FactorGraph.html#pgmax.fg.graph.FactorGraph) `fg` is initialized with a set of variables, which can be either a single [`VariableGroup`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.groups.VariableGroup.html#pgmax.fg.groups.VariableGroup) (e.g. an [`NDVariableArray`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.groups.NDVariableArray.html#pgmax.fg.groups.NDVariableArray)), or a list/dictionary of [`VariableGroup`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.groups.VariableGroup.html#pgmax.fg.groups.VariableGroup)s. Once initialized, the set of variables in `fg` is fixed and cannot be changed.
 #
@@ -82,7 +125,6 @@ fg.add_factor_group(
     factor_configs=np.arange(2)[:, None],
     log_potentials=np.stack([np.zeros_like(bv), bv], axis=1),
 )
-
 # Add pairwise factors
 log_potential_matrix = np.zeros(W.shape + (2, 2)).reshape((-1, 2, 2))
 log_potential_matrix[:, 1, 1] = W.ravel()
@@ -94,10 +136,11 @@ fg.add_factor_group(
         for ii in range(bh.shape[0])
         for jj in range(bv.shape[0])
     ],
+    #    variable_names_for_factors=variable_names_for_factors,
     log_potential_matrix=log_potential_matrix,
 )
 
-# fg.add_factor_group(factory=enumeration.PairwiseFactorGroup, variable_names_for_factors=[[hidden_variables[ii], visible_variables[jj]]for ii in range(bh.shape[0])for jj in range(bv.shape[0])], log_potential_matrix=log_potential_matrix,)
+# # %snakeviz fg.add_factor_group(factory=enumeration.PairwiseFactorGroup, variable_names_for_factors=v, log_potential_matrix=log_potential_matrix,)
 print("Time", time.time() - start)
 
 
@@ -168,7 +211,7 @@ bp_arrays = bp.init(
     evidence_updates={
         hidden_variables: np.random.gumbel(size=(bh.shape[0], 2)),
         visible_variables: np.random.gumbel(size=(bv.shape[0], 2)),
-    },
+    }
 )
 print("Time", time.time() - start)
 bp_arrays = bp.run_bp(bp_arrays, num_iters=100, damping=0.5)
@@ -221,11 +264,11 @@ bp_arrays = jax.vmap(
     out_axes=0,
 )(bp_arrays)
 
+# TODO: problem
 outputs = jax.vmap(bp.get_bp_output, in_axes=0, out_axes=0)(bp_arrays)
 # map_states = graph.decode_map_states(beliefs)
 
 # %%
-O
 
 # %% [markdown]
 # Visualizing the MAP decodings (Figure [fig:rbm_multiple_digits]), we see that we have sampled 10 MNIST digits in parallel!
