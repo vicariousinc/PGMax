@@ -1,19 +1,8 @@
 """A module containing the variables group classes inheriting from the base VariableGroup."""
 
-import collections
 import itertools
 from dataclasses import dataclass
-from typing import (
-    Any,
-    Dict,
-    Hashable,
-    Mapping,
-    Optional,
-    OrderedDict,
-    Set,
-    Tuple,
-    Union,
-)
+from typing import Tuple, Union
 
 import jax
 import jax.numpy as jnp

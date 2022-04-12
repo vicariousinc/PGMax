@@ -1,15 +1,10 @@
 """A module containing the base classes for variable and factor groups in a Factor Graph."""
 
-import collections
 import inspect
-import typing
 from dataclasses import dataclass, field
-from types import MappingProxyType
 from typing import (
     Any,
-    Collection,
     FrozenSet,
-    Hashable,
     List,
     Mapping,
     OrderedDict,

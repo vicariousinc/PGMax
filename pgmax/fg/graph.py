@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from this import d
-
 """A module containing the core class to specify a Factor Graph."""
 
 import collections
@@ -102,9 +100,7 @@ class FactorGraph:
         print("2", time.time() - start)
 
         # Used to add FactorGroups
-        # TODO: dict is faster
-        aa = zip(vars_names, vars_num_states)
-        print("3", time.time() - start)
+        # TODO: move to dict, which is faster
         self._vars_to_num_states: OrderedDict[int, int] = collections.OrderedDict(
             zip(vars_names, vars_num_states)
         )
@@ -434,12 +430,14 @@ class FactorGraphState:
     wiring: OrderedDict[type, nodes.Wiring]
 
     def __post_init__(self):
-        for field in self.__dataclass_fields__:
-            if isinstance(getattr(self, field), np.ndarray):
-                getattr(self, field).flags.writeable = False
+        for this_field in self.__dataclass_fields__:
+            if isinstance(getattr(self, this_field), np.ndarray):
+                getattr(self, this_field).flags.writeable = False
 
-            if isinstance(getattr(self, field), Mapping):
-                object.__setattr__(self, field, MappingProxyType(getattr(self, field)))
+            if isinstance(getattr(self, this_field), Mapping):
+                object.__setattr__(
+                    self, this_field, MappingProxyType(getattr(self, this_field))
+                )
 
 
 @dataclass(frozen=True, eq=False)
@@ -848,9 +846,9 @@ class BPArrays:
     evidence: Union[np.ndarray, jnp.ndarray]
 
     def __post_init__(self):
-        for field in self.__dataclass_fields__:
-            if isinstance(getattr(self, field), np.ndarray):
-                getattr(self, field).flags.writeable = False
+        for this_field in self.__dataclass_fields__:
+            if isinstance(getattr(self, this_field), np.ndarray):
+                getattr(self, this_field).flags.writeable = False
 
     def tree_flatten(self):
         return jax.tree_util.tree_flatten(asdict(self))
