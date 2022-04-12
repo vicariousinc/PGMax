@@ -80,16 +80,19 @@ class EnumerationFactorGroup(groups.FactorGroup):
         variables_to_factors = collections.OrderedDict(
             [
                 (
-                    frozenset(self.variable_names_for_factors[ii]),
+                    frozenset(variable_names_for_factor),
                     enumeration.EnumerationFactor(
-                        variables=tuple(
-                            self.variable_group[self.variable_names_for_factors[ii]]
+                        vars_to_num_states=collections.OrderedDict(
+                            (var, self.vars_to_num_states[var])
+                            for var in variable_names_for_factor
                         ),
                         factor_configs=self.factor_configs,
                         log_potentials=np.array(self.log_potentials)[ii],
                     ),
                 )
-                for ii in range(len(self.variable_names_for_factors))
+                for ii, variable_names_for_factor in enumerate(
+                    self.variable_names_for_factors
+                )
             ]
         )
         return variables_to_factors
@@ -207,12 +210,8 @@ class PairwiseFactorGroup(groups.FactorGroup):
         if self.log_potential_matrix is None:
             log_potential_matrix = np.zeros(
                 (
-                    self.variable_group[
-                        self.variable_names_for_factors[0][0]
-                    ].num_states,
-                    self.variable_group[
-                        self.variable_names_for_factors[0][1]
-                    ].num_states,
+                    self.vars_to_num_states[self.variable_names_for_factors[0][0]],
+                    self.vars_to_num_states[self.variable_names_for_factors[0][1]],
                 )
             )
         else:
@@ -245,18 +244,11 @@ class PairwiseFactorGroup(groups.FactorGroup):
                     f" {len(fac_list)} variables ({fac_list})."
                 )
 
-            # Note: num_states0 = self.variable_group[fac_list[0]] is 2x slower
-            num_states0 = self.variable_group._names_to_variables[
-                fac_list[0]
-            ].num_states
-            num_states1 = self.variable_group._names_to_variables[
-                fac_list[1]
-            ].num_states
-
+            num_states0 = self.vars_to_num_states[fac_list[0]]
+            num_states1 = self.vars_to_num_states[fac_list[1]]
             if not log_potential_matrix.shape[-2:] == (num_states0, num_states1):
                 raise ValueError(
-                    f"The specified pairwise factor {fac_list} (with "
-                    f"{(self.variable_group[fac_list[0]].num_states, self.variable_group[fac_list[1]].num_states)} "
+                    f"The specified pairwise factor {fac_list} (with {(num_states0, num_states1)}"
                     f"configurations) does not match the specified log_potential_matrix "
                     f"(with {log_potential_matrix.shape[-2:]} configurations)."
                 )
@@ -294,16 +286,19 @@ class PairwiseFactorGroup(groups.FactorGroup):
         variables_to_factors = collections.OrderedDict(
             [
                 (
-                    frozenset(self.variable_names_for_factors[ii]),
+                    frozenset(variable_names_for_factor),
                     enumeration.EnumerationFactor(
-                        variables=tuple(
-                            self.variable_group[self.variable_names_for_factors[ii]]
+                        vars_to_num_states=collections.OrderedDict(
+                            (var, self.vars_to_num_states[var])
+                            for var in variable_names_for_factor
                         ),
                         factor_configs=self.factor_configs,
                         log_potentials=self.log_potentials[ii],
                     ),
                 )
-                for ii in range(len(self.variable_names_for_factors))
+                for ii, variable_names_for_factor in enumerate(
+                    self.variable_names_for_factors
+                )
             ]
         )
         return variables_to_factors

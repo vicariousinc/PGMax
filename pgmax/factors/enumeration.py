@@ -81,9 +81,9 @@ class EnumerationFactor(nodes.Factor):
                 f"EnumerationFactor. Got a factor_configs array of shape {self.factor_configs.shape}."
             )
 
-        if len(self.variables) != self.factor_configs.shape[1]:
+        if len(self.vars_to_num_states.keys()) != self.factor_configs.shape[1]:
             raise ValueError(
-                f"Number of variables {len(self.variables)} doesn't match given configurations {self.factor_configs.shape}"
+                f"Number of variables {len(self.vars_to_num_states.keys())} doesn't match given configurations {self.factor_configs.shape}"
             )
 
         if self.log_potentials.shape != (self.factor_configs.shape[0],):
@@ -93,7 +93,7 @@ class EnumerationFactor(nodes.Factor):
                 f"shape {self.log_potentials.shape}."
             )
 
-        vars_num_states = np.array([variable.num_states for variable in self.variables])
+        vars_num_states = np.array([list(self.vars_to_num_states.values())])
         if not np.logical_and(
             self.factor_configs >= 0, self.factor_configs < vars_num_states[None]
         ).all():
@@ -155,9 +155,9 @@ class EnumerationFactor(nodes.Factor):
     @staticmethod
     def compile_wiring(
         factor_edges_num_states: np.ndarray,
-        variables_for_factors: Tuple[nodes.Variable, ...],
+        variables_for_factors: Tuple[int, ...],  # TODO: rename
         factor_configs: np.ndarray,
-        vars_to_starts: Mapping[nodes.Variable, int],
+        vars_to_starts: Mapping[int, int],
         num_factors: int,
     ) -> EnumerationWiring:
         """Compile an EnumerationWiring for an EnumerationFactor or a FactorGroup with EnumerationFactors.
@@ -166,7 +166,7 @@ class EnumerationFactor(nodes.Factor):
         Args:
             factor_edges_num_states: An array concatenating the number of states for the variables connected to each
                 Factor of the FactorGroup. Each variable will appear once for each Factor it connects to.
-            variables_for_factors: A tuple of tuples containing variables connected to each Factor of the FactorGroup.
+            variables_for_factors: A tuple containing variables connected to each Factor of the FactorGroup.
                 Each variable will appear once for each Factor it connects to.
             factor_configs: Array of shape (num_val_configs, num_variables) containing an explicit enumeration
                 of all valid configurations.
@@ -184,10 +184,10 @@ class EnumerationFactor(nodes.Factor):
         var_states = np.array(
             [vars_to_starts[variable] for variable in variables_for_factors]
         )
-        num_states = np.array(
-            [variable.num_states for variable in variables_for_factors]
-        )
-        num_states_cumsum = np.insert(np.cumsum(num_states), 0, 0)
+        # num_states = np.array(
+        #     [variable.num_states for variable in variables_for_factors]
+        # )
+        num_states_cumsum = np.insert(np.cumsum(factor_edges_num_states), 0, 0)
         var_states_for_edges = np.empty(shape=(num_states_cumsum[-1],), dtype=int)
         _compile_var_states_numba(var_states_for_edges, num_states_cumsum, var_states)
 

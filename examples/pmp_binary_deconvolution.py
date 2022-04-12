@@ -107,7 +107,13 @@ _ = plot_images(W_gt[0], nr=1)
 #
 # See Section 5.6 of the [PMP paper](https://proceedings.neurips.cc/paper/2021/hash/07b1c04a30f798b5506c1ec5acfb9031-Abstract.html) for more details.
 
+import imp
+
 # %%
+from pgmax.fg import graph
+
+imp.reload(graph)
+
 # The dimensions of W used for the generation of X were (4, 5, 5) but we set them to (5, 6, 6)
 # to simulate a more realistic scenario in which we do not know their ground truth values
 n_feat, feat_height, feat_width = 5, 6, 6
@@ -116,6 +122,9 @@ n_images, n_chan, im_height, im_width = X_gt.shape
 s_height = im_height - feat_height + 1
 s_width = im_width - feat_width + 1
 
+import time
+
+start = time.time()
 # Binary features
 W = vgroup.NDVariableArray(
     num_states=2, shape=(n_chan, n_feat, feat_height, feat_width)
@@ -132,13 +141,16 @@ SW = vgroup.NDVariableArray(
 
 # Binary images obtained by convolution
 X = vgroup.NDVariableArray(num_states=2, shape=X_gt.shape)
+print("Time", time.time() - start)
 
 # %% [markdown]
 # For computation efficiency, we add large FactorGroups via `fg.add_factor_group` instead of adding individual Factors
 
 # %%
+start = time.time()
 # Factor graph
-fg = graph.FactorGraph(variables=dict(S=S, W=W, SW=SW, X=X))
+fg = graph.FactorGraph(variables=[S, W, SW, X])
+print("x", time.time() - start)
 
 # Define the ANDFactors
 variable_names_for_ANDFactors = []
@@ -152,8 +164,7 @@ for idx_img in tqdm(range(n_images)):
                         for idx_feat_width in range(feat_width):
                             idx_img_height = idx_feat_height + idx_s_height
                             idx_img_width = idx_feat_width + idx_s_width
-                            SW_var = (
-                                "SW",
+                            SW_var = SW[
                                 idx_img,
                                 idx_chan,
                                 idx_img_height,
@@ -161,35 +172,31 @@ for idx_img in tqdm(range(n_images)):
                                 idx_feat,
                                 idx_feat_height,
                                 idx_feat_width,
-                            )
+                            ]
 
                             variable_names_for_ANDFactor = [
-                                ("S", idx_img, idx_feat, idx_s_height, idx_s_width),
-                                (
-                                    "W",
-                                    idx_chan,
-                                    idx_feat,
-                                    idx_feat_height,
-                                    idx_feat_width,
-                                ),
+                                S[idx_img, idx_feat, idx_s_height, idx_s_width],
+                                W[idx_chan, idx_feat, idx_feat_height, idx_feat_width],
                                 SW_var,
                             ]
                             variable_names_for_ANDFactors.append(
                                 variable_names_for_ANDFactor
                             )
 
-                            X_var = (idx_img, idx_chan, idx_img_height, idx_img_width)
+                            X_var = X[idx_img, idx_chan, idx_img_height, idx_img_width]
                             variable_names_for_ORFactors_dict[X_var].append(SW_var)
+print(time.time() - start)
 
 # Add ANDFactorGroup, which is computationally efficient
 fg.add_factor_group(
     factory=logical.ANDFactorGroup,
     variable_names_for_factors=variable_names_for_ANDFactors,
 )
+print(time.time() - start)
 
 # Define the ORFactors
 variable_names_for_ORFactors = [
-    list(tuple(variable_names_for_ORFactors_dict[X_var]) + (("X",) + X_var,))
+    list(tuple(variable_names_for_ORFactors_dict[X_var]) + (X_var,))
     for X_var in variable_names_for_ORFactors_dict
 ]
 
@@ -198,6 +205,7 @@ fg.add_factor_group(
     factory=logical.ORFactorGroup,
     variable_names_for_factors=variable_names_for_ORFactors,
 )
+print("Time", time.time() - start)
 
 for factor_type, factor_groups in fg.factor_groups.items():
     if len(factor_groups) > 0:
@@ -215,7 +223,9 @@ for factor_type, factor_groups in fg.factor_groups.items():
 # in the same manner does not change X, so this naturally results in multiple equivalent modes.
 
 # %%
+start = time.time()
 bp = graph.BP(fg.bp_state, temperature=0.0)
+print("Time", time.time() - start)
 
 # %% [markdown]
 # We first compute the evidence without perturbation, similar to the PMP paper.
@@ -235,6 +245,29 @@ uS[..., 1] = logit(pS)
 # Likelihood the binary images given X
 uX = np.zeros((X_gt.shape) + (2,))
 uX[..., 0] = (2 * X_gt - 1) * logit(pX)
+
+# %%
+np.random.seed(seed=40)
+n_samples = 1
+
+start = time.time()
+bp_arrays = jax.vmap(bp.init, in_axes=0, out_axes=0)(
+    evidence_updates={
+        "S": uS[None] + np.random.gumbel(size=(n_samples,) + uS.shape),
+        "W": uW[None] + np.random.gumbel(size=(n_samples,) + uW.shape),
+        "SW": np.zeros(shape=(n_samples,) + SW.shape),
+        "X": uX[None] + np.zeros(shape=(n_samples,) + uX.shape),
+    },
+)
+print("Time", time.time() - start)
+bp_arrays = jax.vmap(
+    functools.partial(bp.run_bp, num_iters=100, damping=0.5),
+    in_axes=0,
+    out_axes=0,
+)(bp_arrays)
+print("Time", time.time() - start)
+# beliefs = jax.vmap(bp.get_beliefs, in_axes=0, out_axes=0)(bp_arrays)
+# map_states = graph.decode_map_states(beliefs)
 
 # %% [markdown]
 # We draw a batch of samples from the posterior in parallel by transforming `run_bp`/`get_beliefs` with `jax.vmap`

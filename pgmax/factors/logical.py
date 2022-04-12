@@ -86,12 +86,14 @@ class LogicalFactor(nodes.Factor):
     edge_states_offset: int = field(init=False)
 
     def __post_init__(self):
-        if len(self.variables) < 2:
+        if len(self.vars_to_num_states.keys()) < 2:
             raise ValueError(
                 "At least one parent variable and one child variable is required"
             )
 
-        if not np.all([variable.num_states == 2 for variable in self.variables]):
+        if not np.all(
+            [num_states == 2 for num_states in self.vars_to_num_states.values()]
+        ):
             raise ValueError("All variables should all be binary")
 
     @staticmethod
@@ -141,9 +143,9 @@ class LogicalFactor(nodes.Factor):
     @staticmethod
     def compile_wiring(
         factor_edges_num_states: np.ndarray,
-        variables_for_factors: Tuple[nodes.Variable, ...],
+        variables_for_factors: Tuple[int, ...],  # notsure
         factor_sizes: np.ndarray,
-        vars_to_starts: Mapping[nodes.Variable, int],
+        vars_to_starts: Mapping[int, int],
         edge_states_offset: int,
     ) -> LogicalWiring:
         """Compile a LogicalWiring for a LogicalFactor or a FactorGroup with LogicalFactors.

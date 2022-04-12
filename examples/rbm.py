@@ -45,13 +45,21 @@ W = params["W"]
 # %% [markdown]
 # We can then initialize the factor graph for the RBM with
 
+import imp
+
 # %%
+from pgmax.fg import graph
+
+imp.reload(graph)
+
+import time
+
+start = time.time()
 # Initialize factor graph
 hidden_variables = vgroup.NDVariableArray(num_states=2, shape=bh.shape)
 visible_variables = vgroup.NDVariableArray(num_states=2, shape=bv.shape)
-fg = graph.FactorGraph(
-    variables=dict(hidden=hidden_variables, visible=visible_variables),
-)
+fg = graph.FactorGraph(variables=[hidden_variables, visible_variables])
+print("Time", time.time() - start)
 
 # %% [markdown]
 # [`NDVariableArray`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.groups.NDVariableArray.html#pgmax.fg.groups.NDVariableArray) is a convenient class for specifying a group of variables living on a multidimensional grid with the same number of states, and shares some similarities with [`numpy.ndarray`](https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html). The [`FactorGraph`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.graph.FactorGraph.html#pgmax.fg.graph.FactorGraph) `fg` is initialized with a set of variables, which can be either a single [`VariableGroup`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.groups.VariableGroup.html#pgmax.fg.groups.VariableGroup) (e.g. an [`NDVariableArray`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.groups.NDVariableArray.html#pgmax.fg.groups.NDVariableArray)), or a list/dictionary of [`VariableGroup`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.groups.VariableGroup.html#pgmax.fg.groups.VariableGroup)s. Once initialized, the set of variables in `fg` is fixed and cannot be changed.
@@ -59,17 +67,18 @@ fg = graph.FactorGraph(
 # After initialization, `fg` does not have any factors. PGMax supports imperatively adding factors to a [`FactorGraph`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.graph.FactorGraph.html#pgmax.fg.graph.FactorGraph). We can add the unary and pairwise factors by grouping them using
 
 # %%
+start = time.time()
 # Add unary factors
 fg.add_factor_group(
     factory=enumeration.EnumerationFactorGroup,
-    variable_names_for_factors=[[("hidden", ii)] for ii in range(bh.shape[0])],
+    variable_names_for_factors=[[hidden_variables[ii]] for ii in range(bh.shape[0])],
     factor_configs=np.arange(2)[:, None],
     log_potentials=np.stack([np.zeros_like(bh), bh], axis=1),
 )
 
 fg.add_factor_group(
     factory=enumeration.EnumerationFactorGroup,
-    variable_names_for_factors=[[("visible", jj)] for jj in range(bv.shape[0])],
+    variable_names_for_factors=[[visible_variables[jj]] for jj in range(bv.shape[0])],
     factor_configs=np.arange(2)[:, None],
     log_potentials=np.stack([np.zeros_like(bv), bv], axis=1),
 )
@@ -81,12 +90,15 @@ log_potential_matrix[:, 1, 1] = W.ravel()
 fg.add_factor_group(
     factory=enumeration.PairwiseFactorGroup,
     variable_names_for_factors=[
-        [("hidden", ii), ("visible", jj)]
+        [hidden_variables[ii], visible_variables[jj]]
         for ii in range(bh.shape[0])
         for jj in range(bv.shape[0])
     ],
     log_potential_matrix=log_potential_matrix,
 )
+
+# fg.add_factor_group(factory=enumeration.PairwiseFactorGroup, variable_names_for_factors=[[hidden_variables[ii], visible_variables[jj]]for ii in range(bh.shape[0])for jj in range(bv.shape[0])], log_potential_matrix=log_potential_matrix,)
+print("Time", time.time() - start)
 
 
 # %% [markdown]
@@ -146,18 +158,23 @@ fg.add_factor_group(
 # Now we are ready to demonstrate PMP sampling from RBM. PMP perturbs the model with [Gumbel](https://numpy.org/doc/stable/reference/random/generated/numpy.random.gumbel.html) unary potentials, and draws a sample from the RBM as the MAP decoding from running max-product LBP on the perturbed model
 
 # %%
+start = time.time()
 bp = graph.BP(fg.bp_state, temperature=0.0)
+print("Time", time.time() - start)
 
 # %%
+start = time.time()
 bp_arrays = bp.init(
     evidence_updates={
-        "hidden": np.random.gumbel(size=(bh.shape[0], 2)),
-        "visible": np.random.gumbel(size=(bv.shape[0], 2)),
+        hidden_variables: np.random.gumbel(size=(bh.shape[0], 2)),
+        visible_variables: np.random.gumbel(size=(bv.shape[0], 2)),
     },
 )
+print("Time", time.time() - start)
 bp_arrays = bp.run_bp(bp_arrays, num_iters=100, damping=0.5)
-beliefs = bp.get_beliefs(bp_arrays)
-map_states = graph.decode_map_states(beliefs)
+print("Time", time.time() - start)
+output = bp.get_bp_output(bp_arrays)
+print("Time", time.time() - start)
 
 # %% [markdown]
 # Here we use the `evidence_updates` argument of `run_bp` to perturb the model with Gumbel unary potentials. In general, `evidence_updates` can be used to incorporate evidence in the form of externally applied unary potentials in PGM inference.
@@ -166,7 +183,7 @@ map_states = graph.decode_map_states(beliefs)
 
 # %%
 fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-ax.imshow(map_states["visible"].copy().reshape((28, 28)), cmap="gray")
+ax.imshow(output.map_states[visible_variables].copy().reshape((28, 28)), cmap="gray")
 ax.axis("off")
 
 # %% [markdown]
@@ -203,8 +220,12 @@ bp_arrays = jax.vmap(
     in_axes=0,
     out_axes=0,
 )(bp_arrays)
-beliefs = jax.vmap(bp.get_beliefs, in_axes=0, out_axes=0)(bp_arrays)
-map_states = graph.decode_map_states(beliefs)
+
+outputs = jax.vmap(bp.get_bp_output, in_axes=0, out_axes=0)(bp_arrays)
+# map_states = graph.decode_map_states(beliefs)
+
+# %%
+O
 
 # %% [markdown]
 # Visualizing the MAP decodings (Figure [fig:rbm_multiple_digits]), we see that we have sampled 10 MNIST digits in parallel!

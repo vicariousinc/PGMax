@@ -1,26 +1,13 @@
 """A module containing classes that specify the basic components of a Factor Graph."""
 
 from dataclasses import asdict, dataclass
-from typing import Sequence, Tuple, Union
+from typing import OrderedDict, Sequence, Union
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 
 from pgmax import utils
-
-
-@dataclass(frozen=True, eq=False)
-class Variable:
-    """Base class for variables.
-    If desired, this can be sub-classed to add additional concrete
-    meta-information
-
-    Args:
-        num_states: an int representing the number of states this variable has.
-    """
-
-    num_states: int
 
 
 @jax.tree_util.register_pytree_node_class
@@ -56,13 +43,14 @@ class Factor:
     """A factor
 
     Args:
-        variables: List of connected variables
+        vars_to_num_states: Dictionnary mapping the variables names, represented
+            in the form of a hash, to the variables number of states.
 
     Raises:
         NotImplementedError: If compile_wiring is not implemented
     """
 
-    variables: Tuple[Variable, ...]
+    vars_to_num_states: OrderedDict[int, int]
     log_potentials: np.ndarray
 
     def __post_init__(self):
@@ -79,10 +67,7 @@ class Factor:
             Array of shape (num_edges,)
             Number of states for the variables connected to each edge
         """
-        edges_num_states = np.array(
-            [variable.num_states for variable in self.variables], dtype=int
-        )
-        return edges_num_states
+        return self.vars_to_num_states.values()
 
     @staticmethod
     def concatenate_wirings(wirings: Sequence) -> Wiring:

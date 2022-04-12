@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from this import d
+
 """A module containing the core class to specify a Factor Graph."""
 
 import collections
@@ -7,7 +9,7 @@ import copy
 import functools
 import inspect
 import typing
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from types import MappingProxyType
 from typing import (
     Any,
@@ -35,6 +37,7 @@ from jax.scipy.special import logsumexp
 from pgmax.bp import infer
 from pgmax.factors import FAC_TO_VAR_UPDATES
 from pgmax.fg import groups, nodes
+from pgmax.groups import variables as vgroup
 from pgmax.groups.enumeration import EnumerationFactorGroup
 from pgmax.utils import cached_property
 
@@ -53,23 +56,34 @@ class FactorGraph:
             this input, and the individual VariableGroups will need to be accessed by indexing.
     """
 
-    variables: Union[
-        Mapping[Any, groups.VariableGroup],
-        Sequence[groups.VariableGroup],
-        groups.VariableGroup,
-    ]
+    variables: Union[groups.VariableGroup, Sequence[groups.VariableGroup]]
 
     def __post_init__(self):
-        if isinstance(self.variables, groups.VariableGroup):
-            self._variable_group = self.variables
-        else:
-            self._variable_group = groups.CompositeVariableGroup(self.variables)
+        import time
 
+        start = time.time()
+        # if isinstance(self.variables, groups.VariableGroup):
+        if isinstance(self.variables, vgroup.NDVariableArray):
+            self.variables = [self.variables]
+
+        self._variable_group: Mapping[
+            int, groups.VariableGroup
+        ] = collections.OrderedDict()
+        for variable_group in self.variables:
+            self._variable_group[variable_group.__hash__()] = variable_group
+
+        vars_names = []
+        vars_num_states = []
+        for variable_group in self.variables:
+            if isinstance(variable_group, vgroup.NDVariableArray):
+                vars_names.append(variable_group.variable_names.flatten())
+                vars_num_states.append(variable_group.num_states.flatten())
+        print("1", time.time() - start)
+
+        vars_names = np.concatenate(vars_names)
+        vars_num_states = np.concatenate(vars_num_states)
         vars_num_states_cumsum = np.insert(
-            np.array(
-                [variable.num_states for variable in self._variable_group.variables],
-                dtype=int,
-            ).cumsum(),
+            np.array(vars_num_states).cumsum(),
             0,
             0,
         )
@@ -85,16 +99,22 @@ class FactorGraph:
         ] = collections.OrderedDict(
             [(factor_type, set()) for factor_type in FAC_TO_VAR_UPDATES]
         )
+        print("2", time.time() - start)
 
+        # Used to add FactorGroups
+        # TODO: dict is faster
+        aa = zip(vars_names, vars_num_states)
+        print("3", time.time() - start)
+        self._vars_to_num_states: OrderedDict[int, int] = collections.OrderedDict(
+            zip(vars_names, vars_num_states)
+        )
         # See FactorGraphState docstrings for documentation on the following fields
         self._num_var_states = vars_num_states_cumsum[-1]
-        self._vars_to_starts = MappingProxyType(
-            {
-                variable: vars_num_states_cumsum[vv]
-                for vv, variable in enumerate(self._variable_group.variables)
-            }
+        self._vars_to_starts: OrderedDict[int, int] = collections.OrderedDict(
+            zip(vars_names, vars_num_states_cumsum[:-1])
         )
         self._named_factor_groups: Dict[Hashable, groups.FactorGroup] = {}
+        print("3", time.time() - start)
 
     def __hash__(self) -> int:
         all_factor_groups = tuple(
@@ -130,7 +150,7 @@ class FactorGraph:
                 initialized.
         """
         factor_group = EnumerationFactorGroup(
-            self._variable_group,
+            self._vars_to_num_states,
             variable_names_for_factors=[variable_names],
             factor_configs=factor_configs,
             log_potentials=log_potentials,
@@ -138,7 +158,7 @@ class FactorGraph:
         self._register_factor_group(factor_group, name)
 
     def add_factor_by_type(
-        self, variable_names: List, factor_type: type, *args, **kwargs
+        self, variable_names: List[int], factor_type: type, *args, **kwargs
     ) -> None:
         """Function to add a single factor to the FactorGraph.
 
@@ -163,15 +183,16 @@ class FactorGraph:
                 f"Type {factor_type} is not one of the supported factor types {FAC_TO_VAR_UPDATES.keys()}"
             )
 
-        name = kwargs.pop("name", None)
-        variables = tuple(self._variable_group[variable_names])
-        factor = factor_type(variables, *args, **kwargs)
+        vars_to_num_states = collections.OrderedDict(
+            (var, self._vars_to_num_states[var]) for var in variable_names
+        )
+        factor = factor_type(vars_to_num_states, *args, **kwargs)
         factor_group = groups.SingleFactorGroup(
-            variable_group=self._variable_group,
+            vars_to_num_states=self._vars_to_num_states,
             variable_names_for_factors=[variable_names],
             factor=factor,
         )
-        self._register_factor_group(factor_group, name)
+        self._register_factor_group(factor_group)
 
     def add_factor_group(self, factory: Callable, *args, **kwargs) -> None:
         """Add a factor group to the factor graph
@@ -182,13 +203,10 @@ class FactorGraph:
             kwargs: kwargs to be passed to the factory function, and an optional "name" argument
                 for specifying the name of a named factor group.
         """
-        name = kwargs.pop("name", None)
-        factor_group = factory(self._variable_group, *args, **kwargs)
-        self._register_factor_group(factor_group, name)
+        factor_group = factory(self._vars_to_num_states, *args, **kwargs)
+        self._register_factor_group(factor_group)
 
-    def _register_factor_group(
-        self, factor_group: groups.FactorGroup, name: Optional[str] = None
-    ) -> None:
+    def _register_factor_group(self, factor_group: groups.FactorGroup) -> None:
         """Register a factor group to the factor graph, by updating the factor graph state.
 
         Args:
@@ -199,10 +217,6 @@ class FactorGraph:
             ValueError: If the factor group with the same name or a factor involving the same variables
                 already exists in the factor graph.
         """
-        if name in self._named_factor_groups:
-            raise ValueError(
-                f"A factor group with the name {name} already exists. Please choose a different name!"
-            )
 
         factor_type = factor_group.factor_type
         for var_names_for_factor in factor_group.variable_names_for_factors:
@@ -211,15 +225,13 @@ class FactorGraph:
                 var_names
                 in self._factor_types_to_variable_names_for_factors[factor_type]
             ):
+                print(len(var_names_for_factor))
                 raise ValueError(
                     f"A Factor of type {factor_type} involving variables {var_names} already exists. Please merge the corresponding factors."
                 )
-
             self._factor_types_to_variable_names_for_factors[factor_type].add(var_names)
 
         self._factor_types_to_groups[factor_type].append(factor_group)
-        if name is not None:
-            self._named_factor_groups[name] = factor_group
 
     @functools.lru_cache(None)
     def compute_offsets(self) -> None:
@@ -411,7 +423,7 @@ class FactorGraphState:
     """
 
     variable_group: groups.VariableGroup
-    vars_to_starts: Mapping[nodes.Variable, int]
+    vars_to_starts: Mapping[int, int]
     num_var_states: int
     total_factor_num_states: int
     named_factor_groups: Mapping[Hashable, groups.FactorGroup]
@@ -719,7 +731,7 @@ class FToVMessages:
         )
 
 
-@functools.partial(jax.jit, static_argnames="fg_state")
+# @functools.partial(jax.jit, static_argnames="fg_state")
 def update_evidence(
     evidence: jnp.ndarray, updates: Dict[Any, jnp.ndarray], fg_state: FactorGraphState
 ) -> jnp.ndarray:
@@ -733,26 +745,21 @@ def update_evidence(
     Returns:
         A flat jnp array containing updated evidence.
     """
-    for name in updates:
-        data = updates[name]
-        if name in fg_state.variable_group.container_names:
-            if name is None:
-                variable_group = fg_state.variable_group
-            else:
-                assert isinstance(
-                    fg_state.variable_group, groups.CompositeVariableGroup
-                )
-                variable_group = fg_state.variable_group.variable_group_container[name]
-
-            start_index = fg_state.vars_to_starts[variable_group.variables[0]]
+    for var_group_name in updates:
+        data = updates[var_group_name]
+        print(data.shape)
+        if var_group_name.__hash__() in fg_state.variable_group:
+            variable_group = fg_state.variable_group[var_group_name.__hash__()]
+            first_variable = variable_group.variable_names.flatten()[0]
+            start_index = fg_state.vars_to_starts[first_variable]
             flat_data = variable_group.flatten(data)
             evidence = evidence.at[start_index : start_index + flat_data.shape[0]].set(
                 flat_data
             )
-        else:
-            var = fg_state.variable_group[name]
-            start_index = fg_state.vars_to_starts[var]
-            evidence = evidence.at[start_index : start_index + var.num_states].set(data)
+        # else:
+        #     var = fg_state.variable_group[name]
+        #     start_index = fg_state.vars_to_starts[var]
+        #     evidence = evidence.at[start_index : start_index + var.num_states].set(data)
     return evidence
 
 
@@ -889,18 +896,18 @@ class BeliefPropagation:
             Returns:
                 The reconstructed BPState
 
-        get_beliefs: Function to calculate beliefs from a BPArrays.
+        get_bp_output: Function to calculate beliefs from a BPArrays.
             Args:
                 bp_arrays: A BPArrays containing log_potentials, ftov_msgs, evidence.
             Returns:
-                beliefs: An array or a PyTree container containing the beliefs for the variables.
+                bp_output: Belief propagation output.
     """
 
     init: Callable
     update: Callable
     run_bp: Callable
     to_bp_state: Callable
-    get_beliefs: Callable
+    get_bp_output: Callable
 
 
 def BP(bp_state: BPState, temperature: float = 0.0) -> BeliefPropagation:
@@ -978,6 +985,7 @@ def BP(bp_state: BPState, temperature: float = 0.0) -> BeliefPropagation:
             )
 
         if evidence_updates is not None:
+            print(type(evidence), type(evidence_updates))
             evidence = update_evidence(evidence, evidence_updates, bp_state.fg_state)
 
         return BPArrays(
@@ -1065,62 +1073,150 @@ def BP(bp_state: BPState, temperature: float = 0.0) -> BeliefPropagation:
             evidence=Evidence(fg_state=bp_state.fg_state, value=bp_arrays.evidence),
         )
 
-    @jax.jit
-    def get_beliefs(bp_arrays: BPArrays) -> Any:
+    def get_bp_output(bp_arrays: BPArrays) -> Any:
         """Function to calculate beliefs from a BPArrays
 
         Args:
             bp_arrays: A BPArrays containing log_potentials, ftov_msgs, evidence.
 
         Returns:
-            beliefs: An array or a PyTree container containing the beliefs for the variables.
+            bp_output: Belief propagation output.
         """
-        beliefs = bp_state.fg_state.variable_group.unflatten(
-            jax.device_put(bp_arrays.evidence)
-            .at[jax.device_put(var_states_for_edges)]
-            .add(bp_arrays.ftov_msgs)
+
+        @jax.jit
+        def compute_flat_beliefs(bp_arrays):
+            flat_beliefs = (
+                jax.device_put(bp_arrays.evidence)
+                .at[jax.device_put(var_states_for_edges)]
+                .add(bp_arrays.ftov_msgs)
+            )
+            return flat_beliefs
+
+        return BeliefPropagationOutputs(
+            compute_flat_beliefs(bp_arrays), bp_state.fg_state.variable_group
         )
-        return beliefs
 
     bp = BeliefPropagation(
         init=functools.partial(update, None),
         update=update,
         run_bp=run_bp,
         to_bp_state=to_bp_state,
-        get_beliefs=get_beliefs,
+        get_bp_output=get_bp_output,
     )
     return bp
 
 
-@jax.jit
-def decode_map_states(beliefs: Any) -> Any:
-    """Function to decode MAP states given the calculated beliefs.
+@dataclass(frozen=True, eq=False)
+class HashableDict:
+    d: Dict = field(default_factory=dict)
 
-    Args:
-        beliefs: An array or a PyTree container containing beliefs for different variables.
+    def __setitem__(self, key, value):
+        self.d[key] = value
 
-    Returns:
-        An array or a PyTree container containing the MAP states for different variables.
-    """
-    map_states = jax.tree_util.tree_map(
-        lambda x: jnp.argmax(x, axis=-1),
-        beliefs,
-    )
-    return map_states
+    def __getitem__(self, value):
+        return self.d[value.__hash__()]
 
 
-@jax.jit
-def get_marginals(beliefs: Any) -> Any:
-    """Function to get marginal probabilities given the calculated beliefs.
+@dataclass(frozen=True, eq=False)
+class BeliefPropagationOutputs:
+    # beliefs: An array or a PyTree container containing the beliefs for the variables.
+    flat_beliefs: jnp.ndarray
+    variable_groups: Mapping[int, groups.VariableGroup]
+    beliefs: HashableDict = field(init=False, default_factory=dict)
 
-    Args:
-        beliefs: An array or a PyTree container containing beliefs for different variables.
+    def __post_init__(self):
+        if self.flat_beliefs.ndim != 1:
+            raise ValueError(
+                f"Can only unflatten 1D array. Got a {self.flat_beliefs.ndim}D array."
+            )
+        beliefs = self.unflatten()
+        object.__setattr__(self, "beliefs", beliefs)
 
-    Returns:
-        An array or a PyTree container containing the marginal probabilities different variables.
-    """
-    marginals = jax.tree_util.tree_map(
-        lambda x: jnp.exp(x - logsumexp(x, axis=-1, keepdims=True)),
-        beliefs,
-    )
-    return marginals
+    @functools.lru_cache
+    def unflatten(self) -> None:
+        """Function that recovers meaningful structured data from internal flat data array
+
+        Args:
+            variable_groups: TODO
+
+        Returns:
+            Meaningful structured data, with structure matching that of self.variable_group_container.
+
+        Raises:
+            ValueError: if flat_data is not of the right shape
+        """
+        # Note: this is a reimplementation of CompositeVariableGroup.unflatten
+        num_variables = 0
+        num_variable_states = 0
+        for variable_group in self.variable_groups.values():
+            if isinstance(variable_group, vgroup.NDVariableArray):
+                num_variables += variable_group.num_states.size
+                num_variable_states += variable_group.num_states.sum()
+
+        if self.flat_beliefs.shape[0] == num_variables:
+            use_num_states = False
+        elif self.flat_beliefs.shape[0] == num_variable_states:
+            use_num_states = True
+        else:
+            raise ValueError(
+                f"flat_data should be either of shape (num_variables(={len(self.variables)}),), "
+                f"or (num_variable_states(={num_variable_states}),). "
+                f"Got {self.flat_beliefs.shape}"
+            )
+
+        beliefs = {}
+        start = 0
+        for name, variable_group in self.variable_groups.items():
+            if use_num_states:
+                length = variable_group.num_states.sum()
+            else:
+                length = variable_group.num_states.size
+
+            beliefs[name] = variable_group.unflatten(
+                self.flat_beliefs[start : start + length]
+            )
+            start += length
+        return beliefs
+
+    @cached_property
+    def map_states(self) -> Any:
+        """Function to decode MAP states given the calculated beliefs.
+
+        Args:
+            beliefs: An array or a PyTree container containing beliefs for different variables.
+
+        Returns:
+            An array or a PyTree container containing the MAP states for different variables.
+        """
+
+        @jax.jit
+        def _decode_map_states(beliefs) -> Any:
+            return jax.tree_util.tree_map(lambda x: jnp.argmax(x, axis=-1), beliefs)
+
+        map_states = HashableDict()
+        for name, beliefs in self.beliefs.items():
+            map_states[name] = _decode_map_states(beliefs)
+        return map_states
+
+    @cached_property
+    def get_marginals(self) -> Any:
+        """Function to get marginal probabilities given the calculated beliefs.
+
+        Args:
+            beliefs: An array or a PyTree container containing beliefs for different variables.
+
+        Returns:
+            An array or a PyTree container containing the marginal probabilities different variables.
+        """
+
+        @jax.jit
+        def _get_marginals(beliefs) -> Any:
+            return jax.tree_util.tree_map(
+                lambda x: jnp.exp(x - logsumexp(x, axis=-1, keepdims=True)),
+                beliefs,
+            )
+
+        marginals = HashableDict()
+        for name, beliefs in self.beliefs.items():
+            marginals[name] = _get_marginals(beliefs)
+        return marginals
