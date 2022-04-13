@@ -44,6 +44,8 @@ W = params["W"]
 
 # %% [markdown]
 # We can then initialize the factor graph for the RBM with
+#
+# import imp
 
 import imp
 

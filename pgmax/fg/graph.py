@@ -1104,7 +1104,7 @@ def BP(bp_state: BPState, temperature: float = 0.0) -> BeliefPropagation:
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True, eq=False)
 class HashableDict:
-    "A convenient class"
+    "Represents a dictionnary where stored keys are the hash of the elements"
     d: Dict = field(default_factory=dict)
 
     def __post_init__(self):
