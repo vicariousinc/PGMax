@@ -80,19 +80,14 @@ class EnumerationFactorGroup(groups.FactorGroup):
         variables_to_factors = collections.OrderedDict(
             [
                 (
-                    frozenset(variable_names_for_factor),
+                    frozenset(variables_for_factor),
                     enumeration.EnumerationFactor(
-                        vars_to_num_states=collections.OrderedDict(
-                            (var, self.vars_to_num_states[var])
-                            for var in variable_names_for_factor
-                        ),
+                        variables=variables_for_factor,
                         factor_configs=self.factor_configs,
                         log_potentials=np.array(self.log_potentials)[ii],
                     ),
                 )
-                for ii, variable_names_for_factor in enumerate(
-                    self.variable_names_for_factors
-                )
+                for ii, variables_for_factor in enumerate(self.variables_for_factors)
             ]
         )
         return variables_to_factors
@@ -188,7 +183,7 @@ class PairwiseFactorGroup(groups.FactorGroup):
     Args:
         log_potential_matrix: array of shape (var1.num_states, var2.num_states),
             where var1 and var2 are the 2 VariableGroups (that may refer to the same
-            VariableGroup) whose names are present in each sub-list from self.variable_names_for_factors.
+            VariableGroup) whose names are present in each sub-list from self.variables_for_factors.
         factor_type: Factor type shared by all the Factors in the FactorGroup.
 
     Raises:
@@ -210,8 +205,8 @@ class PairwiseFactorGroup(groups.FactorGroup):
         if self.log_potential_matrix is None:
             log_potential_matrix = np.zeros(
                 (
-                    self.vars_to_num_states[self.variable_names_for_factors[0][0]],
-                    self.vars_to_num_states[self.variable_names_for_factors[0][1]],
+                    self.variables_for_factors[0][0][1],
+                    self.variables_for_factors[0][1][1],
                 )
             )
         else:
@@ -230,25 +225,25 @@ class PairwiseFactorGroup(groups.FactorGroup):
             )
 
         if log_potential_matrix.ndim == 3 and log_potential_matrix.shape[0] != len(
-            self.variable_names_for_factors
+            self.variables_for_factors
         ):
             raise ValueError(
-                f"Expected log_potential_matrix for {len(self.variable_names_for_factors)} factors. "
+                f"Expected log_potential_matrix for {len(self.variables_for_factors)} factors. "
                 f"Got log_potential_matrix for {log_potential_matrix.shape[0]} factors."
             )
 
-        for fac_list in self.variable_names_for_factors:
-            if len(fac_list) != 2:
+        for variables_for_factor in self.variables_for_factors:
+            if len(variables_for_factor) != 2:
                 raise ValueError(
                     "All pairwise factors should connect to exactly 2 variables. Got a factor connecting to"
-                    f" {len(fac_list)} variables ({fac_list})."
+                    f" {len(variables_for_factor)} variables ({variables_for_factor})."
                 )
 
-            num_states0 = self.vars_to_num_states[fac_list[0]]
-            num_states1 = self.vars_to_num_states[fac_list[1]]
+            num_states0 = variables_for_factor[0][1]
+            num_states1 = variables_for_factor[1][1]
             if not log_potential_matrix.shape[-2:] == (num_states0, num_states1):
                 raise ValueError(
-                    f"The specified pairwise factor {fac_list} (with {(num_states0, num_states1)}"
+                    f"The specified pairwise factor {variables_for_factor} (with {(num_states0, num_states1)}"
                     f"configurations) does not match the specified log_potential_matrix "
                     f"(with {log_potential_matrix.shape[-2:]} configurations)."
                 )
@@ -264,7 +259,7 @@ class PairwiseFactorGroup(groups.FactorGroup):
         object.__setattr__(self, "factor_configs", factor_configs)
         log_potential_matrix = np.broadcast_to(
             log_potential_matrix,
-            (len(self.variable_names_for_factors),) + log_potential_matrix.shape[-2:],
+            (len(self.variables_for_factors),) + log_potential_matrix.shape[-2:],
         )
         log_potentials = np.empty(
             shape=(self.num_factors, self.factor_configs.shape[0])
@@ -286,19 +281,14 @@ class PairwiseFactorGroup(groups.FactorGroup):
         variables_to_factors = collections.OrderedDict(
             [
                 (
-                    frozenset(variable_names_for_factor),
+                    frozenset(variable_for_factor),
                     enumeration.EnumerationFactor(
-                        vars_to_num_states=collections.OrderedDict(
-                            (var, self.vars_to_num_states[var])
-                            for var in variable_names_for_factor
-                        ),
+                        variables=variable_for_factor,
                         factor_configs=self.factor_configs,
                         log_potentials=self.log_potentials[ii],
                     ),
                 )
-                for ii, variable_names_for_factor in enumerate(
-                    self.variable_names_for_factors
-                )
+                for ii, variable_for_factor in enumerate(self.variables_for_factors)
             ]
         )
         return variables_to_factors

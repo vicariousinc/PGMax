@@ -22,17 +22,15 @@ def test_wiring_with_PairwiseFactorGroup():
     fg = graph.FactorGraph(variables=[A, B])
     fg.add_factor_group(
         factory=enumeration.PairwiseFactorGroup,
-        variable_names_for_factors=[[A[idx], B[idx]] for idx in range(10)],
+        variables_for_factors=[[A[idx], B[idx]] for idx in range(10)],
     )
     factor_group = fg.factor_groups[enumeration_factor.EnumerationFactor][0]
     object.__setattr__(
-        factor_group,
-        "factor_edges_num_states",
-        factor_group.factor_edges_num_states[:-1],
+        factor_group, "factor_configs", factor_group.factor_configs[:, :1]
     )
     with pytest.raises(
         ValueError,
-        match=re.escape("Expected factor_edges_num_states shape is (20,). Got (19,)."),
+        match=re.escape("Expected factor_edges_num_states shape is (10,). Got (20,)."),
     ):
         factor_group.compile_wiring(fg._vars_to_starts)
 
@@ -40,7 +38,7 @@ def test_wiring_with_PairwiseFactorGroup():
     fg1 = graph.FactorGraph(variables=[A, B])
     fg1.add_factor_group(
         factory=enumeration.PairwiseFactorGroup,
-        variable_names_for_factors=[[A[idx], B[idx]] for idx in range(10)],
+        variables_for_factors=[[A[idx], B[idx]] for idx in range(10)],
     )
     assert len(fg1.factor_groups[enumeration_factor.EnumerationFactor]) == 1
 
@@ -49,7 +47,7 @@ def test_wiring_with_PairwiseFactorGroup():
     for idx in range(10):
         fg2.add_factor_group(
             factory=enumeration.PairwiseFactorGroup,
-            variable_names_for_factors=[[A[idx], B[idx]]],
+            variables_for_factors=[[A[idx], B[idx]]],
         )
     assert len(fg2.factor_groups[enumeration_factor.EnumerationFactor]) == 10
 
@@ -57,7 +55,7 @@ def test_wiring_with_PairwiseFactorGroup():
     fg3 = graph.FactorGraph(variables=[A, B])
     for idx in range(10):
         fg3.add_factor_by_type(
-            variable_names=[A[idx], B[idx]],
+            variables=[A[idx], B[idx]],
             factor_type=enumeration_factor.EnumerationFactor,
             **{
                 "factor_configs": np.array([[0, 0], [0, 1], [1, 0], [1, 1]]),
@@ -101,7 +99,7 @@ def test_wiring_with_ORFactorGroup():
     fg1 = graph.FactorGraph(variables=[A, B, C])
     fg1.add_factor_group(
         factory=logical.ORFactorGroup,
-        variable_names_for_factors=[[A[idx], B[idx], C[idx]] for idx in range(10)],
+        variables_for_factors=[[A[idx], B[idx], C[idx]] for idx in range(10)],
     )
     assert len(fg1.factor_groups[logical_factor.ORFactor]) == 1
 
@@ -110,7 +108,7 @@ def test_wiring_with_ORFactorGroup():
     for idx in range(10):
         fg2.add_factor_group(
             factory=logical.ORFactorGroup,
-            variable_names_for_factors=[[A[idx], B[idx], C[idx]]],
+            variables_for_factors=[[A[idx], B[idx], C[idx]]],
         )
     assert len(fg2.factor_groups[logical_factor.ORFactor]) == 10
 
@@ -118,7 +116,7 @@ def test_wiring_with_ORFactorGroup():
     fg3 = graph.FactorGraph(variables=[A, B, C])
     for idx in range(10):
         fg3.add_factor_by_type(
-            variable_names=[A[idx], B[idx], C[idx]],
+            variables=[A[idx], B[idx], C[idx]],
             factor_type=logical_factor.ORFactor,
         )
     assert len(fg3.factor_groups[logical_factor.ORFactor]) == 10
@@ -156,7 +154,7 @@ def test_wiring_with_ANDFactorGroup():
     fg1 = graph.FactorGraph(variables=[A, B, C])
     fg1.add_factor_group(
         factory=logical.ANDFactorGroup,
-        variable_names_for_factors=[[A[idx], B[idx], C[idx]] for idx in range(10)],
+        variables_for_factors=[[A[idx], B[idx], C[idx]] for idx in range(10)],
     )
     assert len(fg1.factor_groups[logical_factor.ANDFactor]) == 1
 
@@ -165,7 +163,7 @@ def test_wiring_with_ANDFactorGroup():
     for idx in range(10):
         fg2.add_factor_group(
             factory=logical.ANDFactorGroup,
-            variable_names_for_factors=[[A[idx], B[idx], C[idx]]],
+            variables_for_factors=[[A[idx], B[idx], C[idx]]],
         )
     assert len(fg2.factor_groups[logical_factor.ANDFactor]) == 10
 
@@ -173,7 +171,7 @@ def test_wiring_with_ANDFactorGroup():
     fg3 = graph.FactorGraph(variables=[A, B, C])
     for idx in range(10):
         fg3.add_factor_by_type(
-            variable_names=[A[idx], B[idx], C[idx]],
+            variables=[A[idx], B[idx], C[idx]],
             factor_type=logical_factor.ANDFactor,
         )
     assert len(fg3.factor_groups[logical_factor.ANDFactor]) == 10

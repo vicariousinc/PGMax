@@ -89,54 +89,27 @@ class FactorGroup:
     """Class to represent a group of Factors.
 
     Args:
-        vars_to_num_states: TODO
-        variable_names_for_factors: A list of list of variable names, where each innermost element is the
-            name of a variable. Each list within the outer list is taken to contain the names of the
+        variables_for_factors: A list of list of variables, where each innermost element is a
+            variable. Each list within the outer list is taken to contain the names of the
             variables connected to a Factor.
         factor_configs: Optional array containing an explicit enumeration of all valid configurations
         log_potentials: Array of log potentials.
 
     Attributes:
         factor_type: Factor type shared by all the Factors in the FactorGroup.
-        factor_sizes: Array of the different factor sizes.
-        factor_edges_num_states: Array concatenating the number of states for the variables connected to each Factor of
-            the FactorGroup. Each variable will appear once for each Factor it connects to.
 
     Raises:
         ValueError: if the FactorGroup does not contain a Factor
     """
 
-    vars_to_num_states: Mapping[int, int]
-    variable_names_for_factors: Sequence[List]
+    variables_for_factors: Sequence[List]
     factor_configs: np.ndarray = field(init=False)
     log_potentials: np.ndarray = field(init=False, default=np.empty((0,)))
     factor_type: Type = field(init=False)
-    factor_sizes: np.ndarray = field(init=False)
-    variables_for_factors: Tuple[Tuple[int], ...] = field(init=False)
-    factor_edges_num_states: np.ndarray = field(init=False)
 
     def __post_init__(self):
-        if len(self.variable_names_for_factors) == 0:
+        if len(self.variables_for_factors) == 0:
             raise ValueError("Do not add a factor group with no factors.")
-
-        # Note: variable_names_for_factors contains the HASHes
-        # Note: this can probably be sped up by numba
-        factor_sizes = []
-        flat_var_names_for_factors = []
-        factor_edges_num_states = []
-        for variable_names_for_factor in self.variable_names_for_factors:
-            for variable_name in variable_names_for_factor:
-                factor_edges_num_states.append(self.vars_to_num_states[variable_name])
-                flat_var_names_for_factors.append(variable_name)
-            factor_sizes.append(len(variable_names_for_factor))
-
-        object.__setattr__(self, "factor_sizes", np.array(factor_sizes))
-        object.__setattr__(
-            self, "variables_for_factors", np.array(flat_var_names_for_factors)
-        )
-        object.__setattr__(
-            self, "factor_edges_num_states", np.array(factor_edges_num_states)
-        )
 
     def __getitem__(self, variables: Sequence[int]) -> Any:
         """Function to query individual factors in the factor group
@@ -169,6 +142,17 @@ class FactorGroup:
         return self._get_variables_to_factors()
 
     @cached_property
+    def total_num_states(self) -> int:
+        """TODO"""
+        return sum(
+            [
+                variable[1]
+                for variables_for_factor in self.variables_for_factors
+                for variable in variables_for_factor
+            ]
+        )
+
+    @cached_property
     def factor_group_log_potentials(self) -> np.ndarray:
         """Flattened array of log potentials"""
         return self.log_potentials.flatten()
@@ -182,7 +166,7 @@ class FactorGroup:
     @cached_property
     def num_factors(self) -> int:
         """Returns the number of factors in the FactorGroup."""
-        return len(self.variable_names_for_factors)
+        return len(self.variables_for_factors)
 
     def _get_variables_to_factors(self) -> OrderedDict[FrozenSet, Any]:
         """Function that generates a dictionary mapping names to factors.
@@ -260,9 +244,9 @@ class SingleFactorGroup(FactorGroup):
     def __post_init__(self):
         super().__post_init__()
 
-        if not len(self.variable_names_for_factors) == 1:
+        if not len(self.variables_for_factors) == 1:
             raise ValueError(
-                f"SingleFactorGroup should only contain one factor. Got {len(self.variable_names_for_factors)}"
+                f"SingleFactorGroup should only contain one factor. Got {len(self.variables_for_factors)}"
             )
 
         object.__setattr__(self, "factor_type", type(self.factor))
@@ -282,9 +266,7 @@ class SingleFactorGroup(FactorGroup):
         Returns:
             A dictionary mapping all possible names to different factors.
         """
-        return OrderedDict(
-            [(frozenset(self.variable_names_for_factors[0]), self.factor)]
-        )
+        return OrderedDict([(frozenset(self.variables_for_factors[0]), self.factor)])
 
     def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
         """Function that turns meaningful structured data into a flat data array for internal use.

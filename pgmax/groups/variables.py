@@ -1,9 +1,9 @@
 """A module containing the variables group classes inheriting from the base VariableGroup."""
 
-import itertools
 import random
 from dataclasses import dataclass
-from typing import Tuple, Union
+from functools import total_ordering
+from typing import List, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -12,6 +12,7 @@ import numpy as np
 from pgmax.utils import cached_property
 
 
+@total_ordering
 @dataclass(frozen=True, eq=False)
 class NDVariableArray:
     """Subclass of VariableGroup for n-dimensional grids of variables.
@@ -21,6 +22,9 @@ class NDVariableArray:
         shape: a tuple specifying the size of each dimension of the grid (similar to
             the notion of a NumPy ndarray shape)
     """
+
+    # TODO: Variables = (hash, num_states)
+    # TODO: VariableGroup can be deleted
 
     shape: Tuple[int, ...]
     num_states: Union[int, np.ndarray]
@@ -34,10 +38,27 @@ class NDVariableArray:
         elif isinstance(self.num_states, np.ndarray):
             if self.num_states.shape != self.shape:
                 raise ValueError("Should be same shape")
+        random_hash = random.randint(0, 2**63)
+        object.__setattr__(self, "random_hash", random_hash)
+
+    def __hash__(self):
+        return self.random_hash
+
+    def __eq__(self, other):
+        return hash(self) == hash(other)
+
+    def __lt__(self, other):
+        return hash(self) < hash(other)
 
     def __getitem__(self, val):
         # Numpy indexation will throw IndexError for us if out-of-bounds
-        return self.variable_names[val]
+        return (self.variable_names[val], self.num_states[val])
+
+    @cached_property
+    def variables(self) -> List[Tuple]:
+        vars_names = self.variable_names.flatten()
+        vars_num_states = self.num_states.flatten()
+        return list(zip(vars_names, vars_num_states))
 
     @cached_property
     def variable_names(self) -> np.ndarray:
@@ -47,9 +68,8 @@ class NDVariableArray:
             a dictionary mapping all possible names to different variables.
         """
         # Overwite default hash as it does not give enough spacing across consecutive objects
-        this_hash = random.randint(0, 2**63)
         indices = np.reshape(np.arange(np.product(self.shape)), self.shape)
-        return this_hash + indices
+        return self.__hash__() + indices
 
     def flatten(self, data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
         """Function that turns meaningful structured data into a flat data array for internal use.
@@ -64,7 +84,7 @@ class NDVariableArray:
         Raises:
             ValueError: If the data is not of the correct shape.
         """
-        # TODO: what should we do for different number of states
+        # TODO: what should we do for different number of states -> look at maask_array
         if data.shape != self.shape and data.shape != self.shape + (
             self.num_states.max(),
         ):
@@ -110,7 +130,9 @@ class NDVariableArray:
         return data
 
 
-# TODO: delete?
+# TODO: delete? -- NO
+
+
 # @dataclass(frozen=True, eq=False)
 # class VariableDict():
 #     """A variable dictionary that contains a set of variables of the same size

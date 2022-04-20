@@ -8,7 +8,7 @@ from pgmax.groups import logical
 from pgmax.groups import variables as vgroup
 
 
-def test_run_bp_with_OR_factors():
+def test_run_bp_with_ORFactors():
     """
     Simultaneously test
     (1) the support of ORFactors in a FactorGraph and their specialized inference for different temperatures
@@ -55,8 +55,8 @@ def test_run_bp_with_OR_factors():
         fg2 = graph.FactorGraph(variables=[parents_variables2, children_variables2])
 
         # Variable names for factors
-        variable_names_for_factors1 = []
-        variable_names_for_factors2 = []
+        variables_for_factors1 = []
+        variables_for_factors2 = []
         for factor_idx in range(num_factors):
             variable_names1 = [
                 parents_variables1[idx]
@@ -65,7 +65,7 @@ def test_run_bp_with_OR_factors():
                     num_parents_cumsum[factor_idx + 1],
                 )
             ] + [children_variables1[factor_idx]]
-            variable_names_for_factors1.append(variable_names1)
+            variables_for_factors1.append(variable_names1)
 
             variable_names2 = [
                 parents_variables2[idx]
@@ -74,7 +74,7 @@ def test_run_bp_with_OR_factors():
                     num_parents_cumsum[factor_idx + 1],
                 )
             ] + [children_variables2[factor_idx]]
-            variable_names_for_factors2.append(variable_names2)
+            variables_for_factors2.append(variable_names2)
 
         # Option 1: Define EnumerationFactors equivalent to the ORFactors
         for factor_idx in range(num_factors):
@@ -94,7 +94,7 @@ def test_run_bp_with_OR_factors():
             if factor_idx < num_factors // 2:
                 # Add the first half of factors to FactorGraph1
                 fg1.add_factor(
-                    variable_names=variable_names_for_factors1[factor_idx],
+                    variable_names=variables_for_factors1[factor_idx],
                     factor_configs=valid_configs,
                     log_potentials=np.zeros(valid_configs.shape[0]),
                 )
@@ -102,48 +102,46 @@ def test_run_bp_with_OR_factors():
                 if idx != 0:
                     # Add the second half of factors to FactorGraph2
                     fg2.add_factor(
-                        variable_names=variable_names_for_factors2[factor_idx],
+                        variable_names=variables_for_factors2[factor_idx],
                         factor_configs=valid_configs,
                         log_potentials=np.zeros(valid_configs.shape[0]),
                     )
                 else:
                     # Add all the EnumerationFactors to FactorGraph1 for the first iter
                     fg1.add_factor(
-                        variable_names=variable_names_for_factors1[factor_idx],
+                        variable_names=variables_for_factors1[factor_idx],
                         factor_configs=valid_configs,
                         log_potentials=np.zeros(valid_configs.shape[0]),
                     )
 
         # Option 2: Define the ORFactors
         num_parents_cumsum = np.insert(np.cumsum(num_parents), 0, 0)
-        variable_names_for_ORFactors_fg1 = []
-        variable_names_for_ORFactors_fg2 = []
+        variables_for_ORFactors_fg1 = []
+        variables_for_ORFactors_fg2 = []
 
         for factor_idx in range(num_factors):
             if factor_idx < num_factors // 2:
                 # Add the first half of factors to FactorGraph2
-                variable_names_for_ORFactors_fg2.append(
-                    variable_names_for_factors2[factor_idx]
-                )
+                variables_for_ORFactors_fg2.append(variables_for_factors2[factor_idx])
             else:
                 if idx != 0:
                     # Add the second half of factors to FactorGraph1
-                    variable_names_for_ORFactors_fg1.append(
-                        variable_names_for_factors1[factor_idx]
+                    variables_for_ORFactors_fg1.append(
+                        variables_for_factors1[factor_idx]
                     )
                 else:
                     # Add all the ORFactors to FactorGraph2 for the first iter
-                    variable_names_for_ORFactors_fg2.append(
-                        variable_names_for_factors2[factor_idx]
+                    variables_for_ORFactors_fg2.append(
+                        variables_for_factors2[factor_idx]
                     )
         if idx != 0:
             fg1.add_factor_group(
                 factory=logical.ORFactorGroup,
-                variable_names_for_factors=variable_names_for_ORFactors_fg1,
+                variables_for_factors=variables_for_ORFactors_fg1,
             )
         fg2.add_factor_group(
             factory=logical.ORFactorGroup,
-            variable_names_for_factors=variable_names_for_ORFactors_fg2,
+            variables_for_factors=variables_for_ORFactors_fg2,
         )
 
         # Run inference
@@ -168,8 +166,8 @@ def test_run_bp_with_OR_factors():
         bp_arrays2 = bp2.run_bp(bp_arrays2, num_iters=5)
 
         # Get beliefs
-        beliefs1 = bp1.get_bp_output(bp_arrays1).beliefs
-        beliefs2 = bp2.get_bp_output(bp_arrays2).beliefs
+        beliefs1 = bp1.get_beliefs(bp_arrays1)
+        beliefs2 = bp2.get_beliefs(bp_arrays2)
 
         assert np.allclose(
             beliefs1[children_variables1], beliefs2[children_variables2], atol=1e-4

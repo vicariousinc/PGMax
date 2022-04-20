@@ -86,14 +86,12 @@ class LogicalFactor(nodes.Factor):
     edge_states_offset: int = field(init=False)
 
     def __post_init__(self):
-        if len(self.vars_to_num_states.keys()) < 2:
+        if len(self.variables) < 2:
             raise ValueError(
-                "At least one parent variable and one child variable is required"
+                "A LogicalFactor requires at least one parent variable and one child variable "
             )
 
-        if not np.all(
-            [num_states == 2 for num_states in self.vars_to_num_states.values()]
-        ):
+        if not np.all([variable[1] == 2 for variable in self.variables]):
             raise ValueError("All variables should all be binary")
 
     @staticmethod
@@ -142,9 +140,7 @@ class LogicalFactor(nodes.Factor):
 
     @staticmethod
     def compile_wiring(
-        factor_edges_num_states: np.ndarray,
-        variables_for_factors: Tuple[int, ...],  # notsure
-        factor_sizes: np.ndarray,
+        variables_for_factors: Tuple[Tuple[int, int], ...],
         vars_to_starts: Mapping[int, int],
         edge_states_offset: int,
     ) -> LogicalWiring:
@@ -152,11 +148,9 @@ class LogicalFactor(nodes.Factor):
         Internally calls _compile_var_states_numba and _compile_logical_wiring_numba for speed.
 
         Args:
-            factor_edges_num_states: An array concatenating the number of states for the variables connected to each
-                Factor of the FactorGroup. Each variable will appear once for each Factor it connects to.
-            variables_for_factors: A tuple of tuples containing variables connected to each Factor of the FactorGroup.
-                Each variable will appear once for each Factor it connects to.
-            factor_sizes: An array containing the different factor sizes.
+            variables_for_factors: A list of list of variables, where each innermost element is a
+                variable. Each list within the outer list is taken to contain the names of the
+                variables connected to a Factor.
             vars_to_starts: A dictionary that maps variables to their global starting indices
                 For an n-state variable, a global start index of m means the global indices
                 of its n variable states are m, m + 1, ..., m + n - 1
@@ -166,11 +160,21 @@ class LogicalFactor(nodes.Factor):
         Returns:
             The LogicalWiring
         """
+        factor_sizes = []
+        var_states = []
+        factor_edges_num_states = []
+        for variables_for_factor in variables_for_factors:
+            factor_sizes.append(len(variables_for_factor))
+            for variable in variables_for_factor:
+                var_states.append(vars_to_starts[variable])
+                factor_edges_num_states.append(variable[1])
+        factor_sizes = np.array(factor_sizes)
+        var_states = np.array(var_states)
+        factor_edges_num_states = np.array(factor_edges_num_states)
+
+        # Relevant state differs for ANDFactors and ORFactors
         relevant_state = (-edge_states_offset + 1) // 2
 
-        var_states = np.array(
-            [vars_to_starts[variable] for variable in variables_for_factors]
-        )
         # Note: all the variables in a LogicalFactorGroup are binary
         num_states_cumsum = np.arange(0, 2 * var_states.shape[0] + 2, 2)
         var_states_for_edges = np.empty(shape=(2 * var_states.shape[0],), dtype=int)

@@ -21,7 +21,7 @@ class EnumerationWiring(nodes.Wiring):
     Args:
         factor_configs_edge_states: Array of shape (num_factor_configs, 2)
             factor_configs_edge_states[ii] contains a pair of global enumeration factor_config and global edge_state indices
-            factor_configs_edge_states[ii, 0] contains the global EnumerationFactor config index,
+            factor_configs_edge_states[ii, 0] contains the global EnumerExpected factor_edges_num_statesationFactor config index,
             factor_configs_edge_states[ii, 1] contains the corresponding global edge_state index.
             Both indices only take into account the EnumerationFactors of the FactorGraph
 
@@ -81,9 +81,9 @@ class EnumerationFactor(nodes.Factor):
                 f"EnumerationFactor. Got a factor_configs array of shape {self.factor_configs.shape}."
             )
 
-        if len(self.vars_to_num_states.keys()) != self.factor_configs.shape[1]:
+        if len(self.variables) != self.factor_configs.shape[1]:
             raise ValueError(
-                f"Number of variables {len(self.vars_to_num_states.keys())} doesn't match given configurations {self.factor_configs.shape}"
+                f"Number of variables {len(self.variables)} doesn't match given configurations {self.factor_configs.shape}"
             )
 
         if self.log_potentials.shape != (self.factor_configs.shape[0],):
@@ -93,7 +93,7 @@ class EnumerationFactor(nodes.Factor):
                 f"shape {self.log_potentials.shape}."
             )
 
-        vars_num_states = np.array([list(self.vars_to_num_states.values())])
+        vars_num_states = np.array([variable[1] for variable in self.variables])
         if not np.logical_and(
             self.factor_configs >= 0, self.factor_configs < vars_num_states[None]
         ).all():
@@ -154,20 +154,18 @@ class EnumerationFactor(nodes.Factor):
 
     @staticmethod
     def compile_wiring(
-        factor_edges_num_states: np.ndarray,
-        variables_for_factors: Tuple[int, ...],  # TODO: rename
+        variables_for_factors: Tuple[Tuple[int, int], ...],
         factor_configs: np.ndarray,
-        vars_to_starts: Mapping[int, int],
+        vars_to_starts: Mapping[Tuple[int, int], int],
         num_factors: int,
     ) -> EnumerationWiring:
         """Compile an EnumerationWiring for an EnumerationFactor or a FactorGroup with EnumerationFactors.
         Internally calls _compile_var_states_numba and _compile_enumeration_wiring_numba for speed.
 
         Args:
-            factor_edges_num_states: An array concatenating the number of states for the variables connected to each
-                Factor of the FactorGroup. Each variable will appear once for each Factor it connects to.
-            variables_for_factors: A tuple containing variables connected to each Factor of the FactorGroup.
-                Each variable will appear once for each Factor it connects to.
+            variables_for_factors: A list of list of variables, where each innermost element is a
+                variable. Each list within the outer list is taken to contain the names of the
+                variables connected to a Factor.
             factor_configs: Array of shape (num_val_configs, num_variables) containing an explicit enumeration
                 of all valid configurations.
             vars_to_starts: A dictionary that maps variables to their global starting indices
@@ -181,9 +179,15 @@ class EnumerationFactor(nodes.Factor):
         Returns:
             The EnumerationWiring
         """
-        var_states = np.array(
-            [vars_to_starts[variable] for variable in variables_for_factors]
-        )
+        var_states = []
+        factor_edges_num_states = []
+        for variables_for_factor in variables_for_factors:
+            for variable in variables_for_factor:
+                var_states.append(vars_to_starts[variable])
+                factor_edges_num_states.append(variable[1])
+        var_states = np.array(var_states)
+        factor_edges_num_states = np.array(factor_edges_num_states)
+
         num_states_cumsum = np.insert(np.cumsum(factor_edges_num_states), 0, 0)
         var_states_for_edges = np.empty(shape=(num_states_cumsum[-1],), dtype=int)
         _compile_var_states_numba(var_states_for_edges, num_states_cumsum, var_states)

@@ -44,8 +44,6 @@ W = params["W"]
 
 # %% [markdown]
 # We can then initialize the factor graph for the RBM with
-#
-# import imp
 
 import imp
 
@@ -116,14 +114,14 @@ start = time.time()
 # Add unary factors
 fg.add_factor_group(
     factory=enumeration.EnumerationFactorGroup,
-    variable_names_for_factors=[[hidden_variables[ii]] for ii in range(bh.shape[0])],
+    variables_for_factors=[[hidden_variables[ii]] for ii in range(bh.shape[0])],
     factor_configs=np.arange(2)[:, None],
     log_potentials=np.stack([np.zeros_like(bh), bh], axis=1),
 )
 
 fg.add_factor_group(
     factory=enumeration.EnumerationFactorGroup,
-    variable_names_for_factors=[[visible_variables[jj]] for jj in range(bv.shape[0])],
+    variables_for_factors=[[visible_variables[jj]] for jj in range(bv.shape[0])],
     factor_configs=np.arange(2)[:, None],
     log_potentials=np.stack([np.zeros_like(bv), bv], axis=1),
 )
@@ -133,7 +131,7 @@ log_potential_matrix[:, 1, 1] = W.ravel()
 
 fg.add_factor_group(
     factory=enumeration.PairwiseFactorGroup,
-    variable_names_for_factors=[
+    variables_for_factors=[
         [hidden_variables[ii], visible_variables[jj]]
         for ii in range(bh.shape[0])
         for jj in range(bv.shape[0])
@@ -218,7 +216,7 @@ bp_arrays = bp.init(
 print("Time", time.time() - start)
 bp_arrays = bp.run_bp(bp_arrays, num_iters=100, damping=0.5)
 print("Time", time.time() - start)
-output = bp.get_bp_output(bp_arrays)
+beliefs = bp.get_beliefs(bp_arrays)
 print("Time", time.time() - start)
 
 # %% [markdown]
@@ -228,7 +226,9 @@ print("Time", time.time() - start)
 
 # %%
 fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-ax.imshow(output.map_states[visible_variables].copy().reshape((28, 28)), cmap="gray")
+ax.imshow(
+    graph.map_states(beliefs)[visible_variables].copy().reshape((28, 28)), cmap="gray"
+)
 ax.axis("off")
 
 # %% [markdown]
@@ -256,8 +256,8 @@ ax.axis("off")
 n_samples = 10
 bp_arrays = jax.vmap(bp.init, in_axes=0, out_axes=0)(
     evidence_updates={
-        "hidden": np.random.gumbel(size=(n_samples, bh.shape[0], 2)),
-        "visible": np.random.gumbel(size=(n_samples, bv.shape[0], 2)),
+        hidden_variables: np.random.gumbel(size=(n_samples, bh.shape[0], 2)),
+        visible_variables: np.random.gumbel(size=(n_samples, bv.shape[0], 2)),
     },
 )
 bp_arrays = jax.vmap(
@@ -266,11 +266,8 @@ bp_arrays = jax.vmap(
     out_axes=0,
 )(bp_arrays)
 
-# TODO: problem
-outputs = jax.vmap(bp.get_bp_output, in_axes=0, out_axes=0)(bp_arrays)
-# map_states = graph.decode_map_states(beliefs)
-
-# %%
+beliefs = jax.vmap(bp.get_beliefs, in_axes=0, out_axes=0)(bp_arrays)
+map_states = graph.decode_map_states(beliefs)
 
 # %% [markdown]
 # Visualizing the MAP decodings (Figure [fig:rbm_multiple_digits]), we see that we have sampled 10 MNIST digits in parallel!
@@ -279,10 +276,8 @@ outputs = jax.vmap(bp.get_bp_output, in_axes=0, out_axes=0)(bp_arrays)
 fig, ax = plt.subplots(2, 5, figsize=(20, 8))
 for ii in range(10):
     ax[np.unravel_index(ii, (2, 5))].imshow(
-        map_states["visible"][ii].copy().reshape((28, 28)), cmap="gray"
+        map_states[visible_variables][ii].copy().reshape((28, 28)), cmap="gray"
     )
     ax[np.unravel_index(ii, (2, 5))].axis("off")
 
 fig.tight_layout()
-
-# %%

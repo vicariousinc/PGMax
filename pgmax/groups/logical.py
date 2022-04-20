@@ -34,15 +34,10 @@ class LogicalFactorGroup(groups.FactorGroup):
         variables_to_factors = collections.OrderedDict(
             [
                 (
-                    frozenset(variable_names_for_factor),
-                    self.factor_type(
-                        vars_to_num_states=collections.OrderedDict(
-                            (var, self.vars_to_num_states[var])
-                            for var in variable_names_for_factor
-                        ),
-                    ),
+                    frozenset(variables_for_factor),
+                    self.factor_type(variables=variables_for_factor),
                 )
-                for variable_names_for_factor in self.variable_names_for_factors
+                for variables_for_factor in self.variables_for_factors
             ]
         )
         return variables_to_factors

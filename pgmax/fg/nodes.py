@@ -1,7 +1,7 @@
 """A module containing classes that specify the basic components of a Factor Graph."""
 
 from dataclasses import asdict, dataclass
-from typing import OrderedDict, Sequence, Union
+from typing import List, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -43,14 +43,14 @@ class Factor:
     """A factor
 
     Args:
-        vars_to_num_states: Dictionnary mapping the variables names, represented
-            in the form of a hash, to the variables number of states.
+        variables: List of variables in the factors. Each variable is represented
+            by a tuple containing the variable hash and number of states.
 
     Raises:
         NotImplementedError: If compile_wiring is not implemented
     """
 
-    vars_to_num_states: OrderedDict[int, int]
+    variables: List[Tuple[int, int]]
     log_potentials: np.ndarray
 
     def __post_init__(self):

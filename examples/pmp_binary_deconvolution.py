@@ -106,10 +106,6 @@ _ = plot_images(W_gt[0], nr=1)
 #  - a second set of ORFactors, which maps SW to X and model (binary) features overlapping.
 #
 # See Section 5.6 of the [PMP paper](https://proceedings.neurips.cc/paper/2021/hash/07b1c04a30f798b5506c1ec5acfb9031-Abstract.html) for more details.
-#
-# import imp
-#
-# import imp
 
 import imp
 
@@ -157,8 +153,8 @@ fg = graph.FactorGraph(variables=[S, W, SW, X])
 print(time.time() - start)
 
 # Define the ANDFactors
-variable_names_for_ANDFactors = []
-variable_names_for_ORFactors_dict = defaultdict(list)
+variables_for_ANDFactors = []
+variables_for_ORFactors_dict = defaultdict(list)
 for idx_img in tqdm(range(n_images)):
     for idx_chan in range(n_chan):
         for idx_s_height in range(s_height):
@@ -178,36 +174,34 @@ for idx_img in tqdm(range(n_images)):
                                 idx_feat_width,
                             ]
 
-                            variable_names_for_ANDFactor = [
+                            variables_for_ANDFactor = [
                                 S[idx_img, idx_feat, idx_s_height, idx_s_width],
                                 W[idx_chan, idx_feat, idx_feat_height, idx_feat_width],
                                 SW_var,
                             ]
-                            variable_names_for_ANDFactors.append(
-                                variable_names_for_ANDFactor
-                            )
+                            variables_for_ANDFactors.append(variables_for_ANDFactor)
 
                             X_var = X[idx_img, idx_chan, idx_img_height, idx_img_width]
-                            variable_names_for_ORFactors_dict[X_var].append(SW_var)
+                            variables_for_ORFactors_dict[X_var].append(SW_var)
 print(time.time() - start)
 
 # Add ANDFactorGroup, which is computationally efficient
 fg.add_factor_group(
     factory=logical.ANDFactorGroup,
-    variable_names_for_factors=variable_names_for_ANDFactors,
+    variables_for_factors=variables_for_ANDFactors,
 )
 print(time.time() - start)
 
 # Define the ORFactors
-variable_names_for_ORFactors = [
-    list(tuple(variable_names_for_ORFactors_dict[X_var]) + (X_var,))
-    for X_var in variable_names_for_ORFactors_dict
+variables_for_ORFactors = [
+    list(tuple(variables_for_ORFactors_dict[X_var]) + (X_var,))
+    for X_var in variables_for_ORFactors_dict
 ]
 
 # Add ORFactorGroup, which is computationally efficient
 fg.add_factor_group(
     factory=logical.ORFactorGroup,
-    variable_names_for_factors=variable_names_for_ORFactors,
+    variables_for_factors=variables_for_ORFactors,
 )
 print("Time", time.time() - start)
 
@@ -236,7 +230,7 @@ print("Time", time.time() - start)
 
 # %%
 pW = 0.25
-pS = 1e-70
+pS = 1e-72
 pX = 1e-100
 
 # Sparsity inducing priors for W and S
@@ -250,31 +244,6 @@ uS[..., 1] = logit(pS)
 uX = np.zeros((X_gt.shape) + (2,))
 uX[..., 0] = (2 * X_gt - 1) * logit(pX)
 
-# %%
-np.random.seed(seed=40)
-
-start = time.time()
-bp_arrays = bp.init(
-    evidence_updates={
-        S: uS + np.random.gumbel(size=uS.shape),
-        W: uW + np.random.gumbel(size=uW.shape),
-        SW: np.zeros(SW.shape),
-        X: uX + np.zeros(shape=uX.shape),
-    },
-)
-print("Time", time.time() - start)
-bp_arrays = bp.run_bp(bp_arrays, num_iters=100, damping=0.5)
-print("Time", time.time() - start)
-output = bp.get_bp_output(bp_arrays)
-print("Time", time.time() - start)
-
-# %%
-_ = plot_images(output.map_states[W].reshape(-1, feat_height, feat_width), nr=1)
-
-# %%
-
-# %%
-
 # %% [markdown]
 # We draw a batch of samples from the posterior in parallel by transforming `run_bp`/`get_beliefs` with `jax.vmap`
 
@@ -285,10 +254,10 @@ n_samples = 4
 start = time.time()
 bp_arrays = jax.vmap(bp.init, in_axes=0, out_axes=0)(
     evidence_updates={
-        "S": uS[None] + np.random.gumbel(size=(n_samples,) + uS.shape),
-        "W": uW[None] + np.random.gumbel(size=(n_samples,) + uW.shape),
-        "SW": np.zeros(shape=(n_samples,) + SW.shape),
-        "X": uX[None] + np.zeros(shape=(n_samples,) + uX.shape),
+        S: uS[None] + np.random.gumbel(size=(n_samples,) + uS.shape),
+        W: uW[None] + np.random.gumbel(size=(n_samples,) + uW.shape),
+        SW: np.zeros(shape=(n_samples,) + SW.shape),
+        X: uX[None] + np.zeros(shape=(n_samples,) + uX.shape),
     },
 )
 print("Time", time.time() - start)
@@ -298,8 +267,8 @@ bp_arrays = jax.vmap(
     out_axes=0,
 )(bp_arrays)
 print("Time", time.time() - start)
-# beliefs = jax.vmap(bp.get_beliefs, in_axes=0, out_axes=0)(bp_arrays)
-# map_states = graph.decode_map_states(beliefs)
+beliefs = jax.vmap(bp.get_beliefs, in_axes=0, out_axes=0)(bp_arrays)
+map_states = graph.decode_map_states(beliefs)
 
 # %% [markdown]
 # Visualizing the MAP decoding, we see that we have 4 good random samples (one per row) from the posterior!
@@ -307,4 +276,4 @@ print("Time", time.time() - start)
 # Because we have used one extra feature for inference, each posterior sample recovers the 4 basic features used to generate the images, and includes an extra symbol.
 
 # %%
-_ = plot_images(map_states["W"].reshape(-1, feat_height, feat_width), nr=n_samples)
+_ = plot_images(map_states[W].reshape(-1, feat_height, feat_width), nr=n_samples)
