@@ -3,18 +3,19 @@
 import random
 from dataclasses import dataclass
 from functools import total_ordering
-from typing import List, Tuple, Union
+from typing import Any, List, Tuple, Union
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 
+from pgmax.fg import groups
 from pgmax.utils import cached_property
 
 
 @total_ordering
 @dataclass(frozen=True, eq=False)
-class NDVariableArray:
+class NDVariableArray(groups.VariableGroup):
     """Subclass of VariableGroup for n-dimensional grids of variables.
 
     Args:
@@ -23,11 +24,8 @@ class NDVariableArray:
             the notion of a NumPy ndarray shape)
     """
 
-    # TODO: Variables = (hash, num_states)
-    # TODO: VariableGroup can be deleted
-
     shape: Tuple[int, ...]
-    num_states: Union[int, np.ndarray]
+    num_states: np.ndarray
 
     def __post_init__(self):
         # super().__post_init__()
@@ -52,7 +50,10 @@ class NDVariableArray:
 
     def __getitem__(self, val):
         # Numpy indexation will throw IndexError for us if out-of-bounds
-        return (self.variable_names[val], self.num_states[val])
+        result = (self.variable_names[val], self.num_states[val])
+        if isinstance(val, slice):
+            return tuple(zip(result))
+        return result
 
     @cached_property
     def variables(self) -> List[Tuple]:
@@ -84,7 +85,7 @@ class NDVariableArray:
         Raises:
             ValueError: If the data is not of the correct shape.
         """
-        # TODO: what should we do for different number of states -> look at maask_array
+        # TODO: what should we do for different number of states -> look at mask_array
         if data.shape != self.shape and data.shape != self.shape + (
             self.num_states.max(),
         ):
@@ -130,109 +131,105 @@ class NDVariableArray:
         return data
 
 
-# TODO: delete? -- NO
+@dataclass(frozen=True, eq=False)
+class VariableDict(groups.VariableGroup):
+    """A variable dictionary that contains a set of variables of the same size
 
+    Args:
+        num_states: The size of the variables in this variable group
+        variable_names: A tuple of all names of the variables in this variable group
+    """
 
-# @dataclass(frozen=True, eq=False)
-# class VariableDict():
-#     """A variable dictionary that contains a set of variables of the same size
+    num_states: int
+    variable_names: Tuple[Any, ...]
 
-#     Args:
-#         num_states: The size of the variables in this variable group
-#         num_variables: The number of variables
+    @cached_property
+    def variables(self) -> List[Tuple]:
+        return list(
+            zip(self.variable_names, [self.num_states] * len(self.variable_names))
+        )
 
-#     """
+    def __getitem__(self, val):
+        # Numpy indexation will throw IndexError for us if out-of-bounds
+        return (val, self.num_states)
 
-#     num_states: int
-#     num_variables: int
+    # def flatten(
+    #     self, data: Mapping[Hashable, Union[np.ndarray, jnp.ndarray]]
+    # ) -> jnp.ndarray:
+    #     """Function that turns meaningful structured data into a flat data array for internal use.
 
-#     @cached_property
-#     def variable_names(self) -> np.ndarray:
-#         """Function that generates a dictionary mapping names to variables.
+    #     Args:
+    #         data: Meaningful structured data. Should be a mapping with names from self.variable_names.
+    #             Each value should be an array of shape (1,) (for e.g. MAP decodings) or
+    #             (self.num_states,) (for e.g. evidence, beliefs).
 
-#         Returns:
-#             a dictionary mapping all possible names to different variables.
-#         """
-#         return self.__hash__() + np.arange(self.num_states)
+    #     Returns:
+    #         A flat jnp.array for internal use
 
+    #     Raises:
+    #         ValueError if:
+    #             (1) data is referring to a non-existing variable
+    #             (2) data is not of the correct shape
+    #     """
+    #     for name in data:
+    #         if name not in self.variable_names:
+    #             raise ValueError(
+    #                 f"data is referring to a non-existent variable {name}."
+    #             )
 
-#     def flatten(
-#         self, data: Mapping[Hashable, Union[np.ndarray, jnp.ndarray]]
-#     ) -> jnp.ndarray:
-#         """Function that turns meaningful structured data into a flat data array for internal use.
+    #         if data[name].shape != (self.num_states,) and data[name].shape != (1,):
+    #             raise ValueError(
+    #                 f"Variable {name} expects a data array of shape "
+    #                 f"{(self.num_states,)} or (1,). Got {data[name].shape}."
+    #             )
 
-#         Args:
-#             data: Meaningful structured data. Should be a mapping with names from self.variable_names.
-#                 Each value should be an array of shape (1,) (for e.g. MAP decodings) or
-#                 (self.num_states,) (for e.g. evidence, beliefs).
+    #     flat_data = jnp.concatenate([data[name].flatten() for name in self.variable_names])
+    #     return flat_data
 
-#         Returns:
-#             A flat jnp.array for internal use
+    # def unflatten(
+    #     self, flat_data: Union[np.ndarray, jnp.ndarray]
+    # ) -> Dict[Hashable, Union[np.ndarray, jnp.ndarray]]:
+    #     """Function that recovers meaningful structured data from internal flat data array
 
-#         Raises:
-#             ValueError if:
-#                 (1) data is referring to a non-existing variable
-#                 (2) data is not of the correct shape
-#         """
-#         for name in data:
-#             if name not in self._names_to_variables:
-#                 raise ValueError(
-#                     f"data is referring to a non-existent variable {name}."
-#                 )
+    #     Args:
+    #         flat_data: Internal flat data array.
 
-#             if data[name].shape != (self.num_states,) and data[name].shape != (1,):
-#                 raise ValueError(
-#                     f"Variable {name} expects a data array of shape "
-#                     f"{(self.num_states,)} or (1,). Got {data[name].shape}."
-#                 )
+    #     Returns:
+    #         Meaningful structured data. Should be a mapping with names from self.variable_names.
+    #             Each value should be an array of shape (1,) (for e.g. MAP decodings) or
+    #             (self.num_states,) (for e.g. evidence, beliefs).
 
-#         flat_data = jnp.concatenate([data[name].flatten() for name in self.names])
-#         return flat_data
+    #     Raises:
+    #         ValueError if:
+    #             (1) flat_data is not a 1D array
+    #             (2) flat_data is not of the right shape
+    #     """
+    #     if flat_data.ndim != 1:
+    #         raise ValueError(
+    #             f"Can only unflatten 1D array. Got a {flat_data.ndim}D array."
+    #         )
 
-#     def unflatten(
-#         self, flat_data: Union[np.ndarray, jnp.ndarray]
-#     ) -> Dict[Hashable, Union[np.ndarray, jnp.ndarray]]:
-#         """Function that recovers meaningful structured data from internal flat data array
+    #     num_variables = len(self.variable_names)
+    #     num_variable_states = len(self.variable_names) * self.num_states
+    #     if flat_data.shape[0] == num_variables:
+    #         use_num_states = False
+    #     elif flat_data.shape[0] == num_variable_states:
+    #         use_num_states = True
+    #     else:
+    #         raise ValueError(
+    #             f"flat_data should be either of shape (num_variables(={len(self.variables)}),), "
+    #             f"or (num_variable_states(={num_variable_states}),). "
+    #             f"Got {flat_data.shape}"
+    #         )
 
-#         Args:
-#             flat_data: Internal flat data array.
+    #     start = 0
+    #     data = {}
+    #     for name in self.variable_names:
+    #         if use_num_states:
+    #             data[name] = flat_data[start : start + self.num_states]
+    #             start += self.num_states
+    #         else:
+    #             data[name] = flat_data[np.array([start])]
+    #             start += 1
 
-#         Returns:
-#             Meaningful structured data. Should be a mapping with names from self.variable_names.
-#                 Each value should be an array of shape (1,) (for e.g. MAP decodings) or
-#                 (self.num_states,) (for e.g. evidence, beliefs).
-
-#         Raises:
-#             ValueError if:
-#                 (1) flat_data is not a 1D array
-#                 (2) flat_data is not of the right shape
-#         """
-#         if flat_data.ndim != 1:
-#             raise ValueError(
-#                 f"Can only unflatten 1D array. Got a {flat_data.ndim}D array."
-#             )
-
-#         num_variables = len(self.variable_names)
-#         num_variable_states = len(self.variable_names) * self.num_states
-#         if flat_data.shape[0] == num_variables:
-#             use_num_states = False
-#         elif flat_data.shape[0] == num_variable_states:
-#             use_num_states = True
-#         else:
-#             raise ValueError(
-#                 f"flat_data should be either of shape (num_variables(={len(self.variables)}),), "
-#                 f"or (num_variable_states(={num_variable_states}),). "
-#                 f"Got {flat_data.shape}"
-#             )
-
-#         start = 0
-#         data = {}
-#         for name in self.variable_names:
-#             if use_num_states:
-#                 data[name] = flat_data[start : start + self.num_states]
-#                 start += self.num_states
-#             else:
-#                 data[name] = flat_data[np.array([start])]
-#                 start += 1
-
-#         return data
+    #     return data

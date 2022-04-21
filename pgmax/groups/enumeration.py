@@ -109,16 +109,12 @@ class EnumerationFactorGroup(groups.FactorGroup):
         num_factors = len(self.factors)
         if (
             data.shape != (num_factors, self.factor_configs.shape[0])
-            and data.shape
-            != (
-                num_factors,
-                np.sum(self.factors[0].edges_num_states),
-            )
+            and data.shape != (num_factors, np.prod(self.factor_configs.shape))
             and data.shape != (self.factor_configs.shape[0],)
         ):
             raise ValueError(
                 f"data should be of shape {(num_factors, self.factor_configs.shape[0])} or "
-                f"{(num_factors, np.sum(self.factors[0].edges_num_states))} or "
+                f"{(num_factors, np.prod(self.factor_configs.shape))} or "
                 f"{(self.factor_configs.shape[0],)}. Got {data.shape}."
             )
 

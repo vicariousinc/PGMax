@@ -31,27 +31,26 @@ class VariableGroup:
     """
 
     def __getitem__(self, val):
-        """Given a name, retrieve the associated Variable.
+        """Given a variable name, retrieve the associated Variable.
 
         Args:
             val: a single name corresponding to a single variable, or a list of such names
 
         Returns:
             A single variable if the name is not a list. A list of variables if name is a list
-
-        Raises:
-            ValueError: if the name is not found in the group
         """
         raise NotImplementedError(
             "Please subclass the VariableGroup class and override this method"
         )
 
     @cached_property
-    def variables_names(self) -> Any:
-        """Function that generates a dictionary mapping names to variables.
+    def variables(self) -> Tuple[Any, int]:
+        """Function that returns the list of variables. Each variable is represented
+        by a tuple of the variable name (which can be a hash or a string) and its
+        number of states.
 
         Returns:
-            a dictionary mapping all possible names to different variables.
+           List of variables in the VariableGroup
         """
         raise NotImplementedError(
             "Please subclass the VariableGroup class and override this method"
@@ -205,7 +204,7 @@ class FactorGroup:
             "Please subclass the FactorGroup class and override this method"
         )
 
-    def compile_wiring(self, vars_to_starts: Mapping[int, int]) -> Any:
+    def compile_wiring(self, vars_to_starts: Mapping[Tuple[int, int], int]) -> Any:
         """Compile an efficient wiring for the FactorGroup.
 
         Args:

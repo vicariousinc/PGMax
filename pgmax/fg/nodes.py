@@ -7,8 +7,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from pgmax import utils
-
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True, eq=False)
@@ -59,15 +57,15 @@ class Factor:
                 "Please implement compile_wiring in for your factor"
             )
 
-    @utils.cached_property
-    def edges_num_states(self) -> np.ndarray:
-        """Number of states for the variables connected to each edge
+    # @utils.cached_property
+    # def edges_num_states(self) -> np.ndarray:
+    #     """Number of states for the variables connected to each edge
 
-        Returns:
-            Array of shape (num_edges,)
-            Number of states for the variables connected to each edge
-        """
-        return self.vars_to_num_states.values()
+    #     Returns:
+    #         Array of shape (num_edges,)
+    #         Number of states for the variables connected to each edge
+    #     """
+    #     return self.variables.values()
 
     @staticmethod
     def concatenate_wirings(wirings: Sequence) -> Wiring:

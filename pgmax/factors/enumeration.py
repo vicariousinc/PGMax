@@ -2,7 +2,7 @@
 
 import functools
 from dataclasses import dataclass
-from typing import Mapping, Sequence, Tuple, Union
+from typing import List, Mapping, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -21,7 +21,7 @@ class EnumerationWiring(nodes.Wiring):
     Args:
         factor_configs_edge_states: Array of shape (num_factor_configs, 2)
             factor_configs_edge_states[ii] contains a pair of global enumeration factor_config and global edge_state indices
-            factor_configs_edge_states[ii, 0] contains the global EnumerExpected factor_edges_num_statesationFactor config index,
+            factor_configs_edge_states[ii, 0] contains the global EnumerationFactor config index,
             factor_configs_edge_states[ii, 1] contains the corresponding global edge_state index.
             Both indices only take into account the EnumerationFactors of the FactorGraph
 
@@ -154,7 +154,7 @@ class EnumerationFactor(nodes.Factor):
 
     @staticmethod
     def compile_wiring(
-        variables_for_factors: Tuple[Tuple[int, int], ...],
+        variables_for_factors: Sequence[List],
         factor_configs: np.ndarray,
         vars_to_starts: Mapping[Tuple[int, int], int],
         num_factors: int,

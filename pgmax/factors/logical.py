@@ -2,7 +2,7 @@
 
 import functools
 from dataclasses import dataclass, field
-from typing import Mapping, Optional, Sequence, Tuple, Union
+from typing import List, Mapping, Optional, Sequence, Union
 
 import jax
 import jax.numpy as jnp
@@ -88,7 +88,7 @@ class LogicalFactor(nodes.Factor):
     def __post_init__(self):
         if len(self.variables) < 2:
             raise ValueError(
-                "A LogicalFactor requires at least one parent variable and one child variable "
+                "A LogicalFactor requires at least one parent variable and one child variable"
             )
 
         if not np.all([variable[1] == 2 for variable in self.variables]):
@@ -140,7 +140,7 @@ class LogicalFactor(nodes.Factor):
 
     @staticmethod
     def compile_wiring(
-        variables_for_factors: Tuple[Tuple[int, int], ...],
+        variables_for_factors: Sequence[List],
         vars_to_starts: Mapping[int, int],
         edge_states_offset: int,
     ) -> LogicalWiring:

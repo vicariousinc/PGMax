@@ -60,8 +60,7 @@ class FactorGraph:
         import time
 
         start = time.time()
-        # if isinstance(self.variables, groups.VariableGroup):
-        if isinstance(self.variables, vgroup.NDVariableArray):
+        if isinstance(self.variables, (vgroup.NDVariableArray, vgroup.VariableDict)):
             self.variable_groups = [self.variables]
         else:
             self.variable_groups = self.variables
@@ -103,9 +102,9 @@ class FactorGraph:
         )
         # See FactorGraphState docstrings for documentation on the following fields
         self._num_var_states = vars_num_states_cumsum[-1]
-        self._vars_to_starts: OrderedDict[int, int] = collections.OrderedDict(
-            zip(self._variables, vars_num_states_cumsum[:-1])
-        )
+        self._vars_to_starts: OrderedDict[
+            Tuple[int, int], int
+        ] = collections.OrderedDict(zip(self._variables, vars_num_states_cumsum[:-1]))
         self._named_factor_groups: Dict[Hashable, groups.FactorGroup] = {}
         print("3", time.time() - start)
 
@@ -121,7 +120,7 @@ class FactorGraph:
 
     def add_factor(
         self,
-        variable_names: List,
+        variables: List,
         factor_configs: np.ndarray,
         log_potentials: Optional[np.ndarray] = None,
         name: Optional[str] = None,
@@ -129,7 +128,7 @@ class FactorGraph:
         """Function to add a single factor to the FactorGraph.
 
         Args:
-            variable_names: A list containing the connected variable names.
+            variables: A list containing the connected variable names.
                 Variable names are tuples of the type (variable_group_name, variable_name_within_variable_group)
             factor_configs: Array of shape (num_val_configs, num_variables)
                 An array containing explicit enumeration of all valid configurations.
@@ -143,7 +142,7 @@ class FactorGraph:
                 initialized.
         """
         factor_group = EnumerationFactorGroup(
-            variables_for_factors=[variable_names],
+            variables_for_factors=[variables],
             factor_configs=factor_configs,
             log_potentials=log_potentials,
         )
@@ -369,7 +368,7 @@ class FactorGraph:
         )
 
         return FactorGraphState(
-            variable_group=self._variable_group,
+            variable_groups=self._variable_group,
             vars_to_starts=self._vars_to_starts,
             num_var_states=self._num_var_states,
             total_factor_num_states=self._total_factor_num_states,
@@ -417,8 +416,8 @@ class FactorGraphState:
         wiring: Wiring derived for each factor type.
     """
 
-    variable_group: groups.VariableGroup
-    vars_to_starts: Mapping[int, int]
+    variable_groups: Sequence[groups.VariableGroup]
+    vars_to_starts: Mapping[Tuple[int, int], int]
     num_var_states: int
     total_factor_num_states: int
     named_factor_groups: Mapping[Hashable, groups.FactorGroup]
@@ -612,12 +611,11 @@ def update_ftov_msgs(
         (2) provided name is not valid for ftov_msgs updates.
     """
     for names, data in updates.items():
-        if names in fg_state.variable_group.names:
-            variable = fg_state.variable_group[names]
-            if data.shape != (variable.num_states,):
+        if names in fg_state.variable_groups:
+            if data.shape != (names.total_num_states,):
                 raise ValueError(
                     f"Given belief shape {data.shape} does not match expected "
-                    f"shape {(variable.num_states,)} for variable {names}."
+                    f"shape {(names.total_num_states,)} for variable."
                 )
 
             var_states_for_edges = np.concatenate(
@@ -627,13 +625,13 @@ def update_ftov_msgs(
                 ]
             )
 
-            starts = np.nonzero(
-                var_states_for_edges == fg_state.vars_to_starts[variable]
-            )[0]
-            for start in starts:
-                ftov_msgs = ftov_msgs.at[start : start + variable.num_states].set(
-                    data / starts.shape[0]
-                )
+            # starts = np.nonzero(
+            #     var_states_for_edges == fg_state.vars_to_starts[variable]
+            # )[0]
+            # for start in starts:
+            #     ftov_msgs = ftov_msgs.at[start : start + variable.num_states].set(
+            #         data / starts.shape[0]
+            #     )
         else:
             raise ValueError(
                 "Invalid names for setting messages. "
@@ -709,7 +707,7 @@ class FToVMessages:
         if (
             isinstance(names, tuple)
             and len(names) == 2
-            and names[1] in self.fg_state.variable_group.names
+            and names[1] in self.fg_state.variable_groups
         ):
             names = (frozenset(names[0]), names[1])
 
@@ -742,7 +740,7 @@ def update_evidence(
     """
     for name, data in updates.items():
         # Name is a variable_group or a variable
-        if name in fg_state.variable_group:
+        if name in fg_state.variable_groups:
             first_variable = name.variables[0]
             start_index = fg_state.vars_to_starts[first_variable]
             flat_data = name.flatten(data)
@@ -811,7 +809,7 @@ class Evidence:
                 If name is the name of a variable group, updates are derived by using the variable group to
                 flatten the data.
                 If name is the name of a variable, data should be of an array shape (num_states,)
-                If name is None, updates are derived by using self.fg_state.variable_group to flatten the data.
+                If name is None, updates are derived by using self.fg_state.variable_groups to flatten the data.
             data: Array containing the evidence updates.
         """
         object.__setattr__(
@@ -1097,7 +1095,7 @@ def BP(bp_state: BPState, temperature: float = 0.0) -> BeliefPropagation:
             use_num_states = True
         else:
             raise ValueError(
-                f"flat_data should be either of shape (num_variables(={len(num_variables)}),), "
+                f"flat_data should be either of shape (num_variables(={num_variables}),), "
                 f"or (num_variable_states(={num_variable_states}),). "
                 f"Got {flat_beliefs.shape}"
             )
@@ -1137,7 +1135,7 @@ def BP(bp_state: BPState, temperature: float = 0.0) -> BeliefPropagation:
 
         return unflatten_beliefs(
             compute_flat_beliefs(bp_arrays, var_states_for_edges),
-            bp_state.fg_state.variable_group,
+            bp_state.fg_state.variable_groups,
         )
 
     bp = BeliefPropagation(
