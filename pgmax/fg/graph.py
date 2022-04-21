@@ -61,21 +61,13 @@ class FactorGraph:
 
         start = time.time()
         if isinstance(self.variables, (vgroup.NDVariableArray, vgroup.VariableDict)):
-            self.variable_groups = [self.variables]
+            self._variable_groups = [self.variables]
         else:
-            self.variable_groups = self.variables
-
-        # TODO: remove?
-        self._variable_group = self.variable_groups
-        # self._variable_group: Mapping[
-        #     int, groups.VariableGroup
-        # ] = collections.OrderedDict()
-        # for variable_group in self.variables:
-        #     self._variable_group[variable_group.__hash__()] = variable_group
+            self._variable_groups = self.variables
 
         self._variables = [
             variable
-            for variable_group in self.variable_groups
+            for variable_group in self._variable_groups
             for variable in variable_group.variables
         ]
         print("1", time.time() - start)
@@ -368,7 +360,7 @@ class FactorGraph:
         )
 
         return FactorGraphState(
-            variable_groups=self._variable_group,
+            variable_groups=self._variable_groups,
             vars_to_starts=self._vars_to_starts,
             num_var_states=self._num_var_states,
             total_factor_num_states=self._total_factor_num_states,
@@ -610,12 +602,12 @@ def update_ftov_msgs(
         (1) provided ftov_msgs shape does not match the expected ftov_msgs shape.
         (2) provided name is not valid for ftov_msgs updates.
     """
-    for names, data in updates.items():
-        if names in fg_state.variable_groups:
-            if data.shape != (names.total_num_states,):
+    for variable, data in updates.items():
+        if variable in fg_state.vars_to_starts:
+            if data.shape != (variable[1],):
                 raise ValueError(
                     f"Given belief shape {data.shape} does not match expected "
-                    f"shape {(names.total_num_states,)} for variable."
+                    f"shape {(variable[1],)} for variable {variable}."
                 )
 
             var_states_for_edges = np.concatenate(
@@ -625,13 +617,13 @@ def update_ftov_msgs(
                 ]
             )
 
-            # starts = np.nonzero(
-            #     var_states_for_edges == fg_state.vars_to_starts[variable]
-            # )[0]
-            # for start in starts:
-            #     ftov_msgs = ftov_msgs.at[start : start + variable.num_states].set(
-            #         data / starts.shape[0]
-            #     )
+            starts = np.nonzero(
+                var_states_for_edges == fg_state.vars_to_starts[variable]
+            )[0]
+            for start in starts:
+                ftov_msgs = ftov_msgs.at[start : start + variable[1]].set(
+                    data / starts.shape[0]
+                )
         else:
             raise ValueError(
                 "Invalid names for setting messages. "
@@ -691,26 +683,19 @@ class FToVMessages:
     @typing.overload
     def __setitem__(
         self,
-        names: Any,
+        names: Tuple[int, int],
         data: Union[np.ndarray, jnp.ndarray],
     ) -> None:
         """Spreading beliefs at a variable to all connected factors
 
         Args:
-            names: The name of the variable
+            variable: A tuple representing a variable
             data: An array containing the beliefs to be spread uniformly
                 across all factor to variable messages involving this
                 variable.
         """
 
     def __setitem__(self, names, data) -> None:
-        if (
-            isinstance(names, tuple)
-            and len(names) == 2
-            and names[1] in self.fg_state.variable_groups
-        ):
-            names = (frozenset(names[0]), names[1])
-
         object.__setattr__(
             self,
             "value",

@@ -107,14 +107,17 @@ class EnumerationFactorGroup(groups.FactorGroup):
             ValueError: if data is not of the right shape.
         """
         num_factors = len(self.factors)
+        factor_edges_num_states = sum(
+            [variable[1] for variable in self.variables_for_factors[0]]
+        )
         if (
             data.shape != (num_factors, self.factor_configs.shape[0])
-            and data.shape != (num_factors, np.prod(self.factor_configs.shape))
+            and data.shape != (num_factors, factor_edges_num_states)
             and data.shape != (self.factor_configs.shape[0],)
         ):
             raise ValueError(
                 f"data should be of shape {(num_factors, self.factor_configs.shape[0])} or "
-                f"{(num_factors, np.prod(self.factor_configs.shape))} or "
+                f"{(num_factors, factor_edges_num_states)} or "
                 f"{(self.factor_configs.shape[0],)}. Got {data.shape}."
             )
 
@@ -149,18 +152,19 @@ class EnumerationFactorGroup(groups.FactorGroup):
             )
 
         num_factors = len(self.factors)
+        factor_edges_num_states = sum(
+            [variable[1] for variable in self.variables_for_factors[0]]
+        )
         if flat_data.size == num_factors * self.factor_configs.shape[0]:
             data = flat_data.reshape(
                 (num_factors, self.factor_configs.shape[0]),
             )
-        elif flat_data.size == num_factors * np.sum(self.factors[0].edges_num_states):
-            data = flat_data.reshape(
-                (num_factors, np.sum(self.factors[0].edges_num_states))
-            )
+        elif flat_data.size == num_factors * np.sum(factor_edges_num_states):
+            data = flat_data.reshape((num_factors, np.sum(factor_edges_num_states)))
         else:
             raise ValueError(
                 f"flat_data should be compatible with shape {(num_factors, self.factor_configs.shape[0])} "
-                f"or {(num_factors, np.sum(self.factors[0].edges_num_states))}. Got {flat_data.shape}."
+                f"or {(num_factors, np.sum(factor_edges_num_states))}. Got {flat_data.shape}."
             )
 
         return data

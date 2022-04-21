@@ -214,18 +214,13 @@ def test_e2e_sanity_check():
     # We create a NDVariableArray such that the [0,i,j] entry corresponds to the vertical cut variable (i.e, the one
     # attached horizontally to the factor) that's at that location in the image, and the [1,i,j] entry corresponds to
     # the horizontal cut variable (i.e, the one attached vertically to the factor) that's at that location
-    grid_vars_group = vgroup.NDVariableArray(3, (2, M - 1, N - 1))
+    grid_vars = vgroup.NDVariableArray(shape=(2, M - 1, N - 1), num_states=3)
 
     # Make a group of additional variables for the edges of the grid
     extra_row_names: List[Tuple[Any, ...]] = [(0, row, N - 1) for row in range(M - 1)]
     extra_col_names: List[Tuple[Any, ...]] = [(1, M - 1, col) for col in range(N - 1)]
     additional_names = tuple(extra_row_names + extra_col_names)
-    additional_names_group = vgroup.VariableDict(3, additional_names)
-
-    # Combine these two VariableGroups into one CompositeVariableGroup
-    composite_grid_group = groups.CompositeVariableGroup(
-        {"grid_vars": grid_vars_group, "additional_vars": additional_names_group}
-    )
+    additional_vars = vgroup.VariableDict(additional_names, num_states=3)
 
     gt_has_cuts = gt_has_cuts.astype(np.int32)
 
@@ -249,17 +244,19 @@ def test_e2e_sanity_check():
                     size=evidence_vals_arr[1:].shape
                 )  # This adds logistic noise for every evidence entry
                 try:
-                    _ = composite_grid_group["grid_vars", i, row, col]
+                    _ = grid_vars[i, row, col]
                     grid_evidence_arr[i, row, col] = evidence_vals_arr
-                except ValueError:
+                except IndexError:
                     try:
-                        _ = composite_grid_group["additional_vars", i, row, col]
-                        additional_vars_evidence_dict[(i, row, col)] = evidence_vals_arr
-                    except ValueError:
+                        _ = additional_vars[i, row, col]
+                        additional_vars_evidence_dict[
+                            additional_vars[i, row, col]
+                        ] = evidence_vals_arr
+                    except IndexError:
                         pass
 
     # Create the factor graph
-    fg = graph.FactorGraph(variables=composite_grid_group)
+    fg = graph.FactorGraph(variables=[grid_vars, additional_vars])
 
     # Imperatively add EnumerationFactorGroups (each consisting of just one EnumerationFactor) to
     # the graph!
@@ -267,37 +264,37 @@ def test_e2e_sanity_check():
         for col in range(N - 1):
             if row != M - 2 and col != N - 2:
                 curr_names = [
-                    ("grid_vars", 0, row, col),
-                    ("grid_vars", 1, row, col),
-                    ("grid_vars", 0, row, col + 1),
-                    ("grid_vars", 1, row + 1, col),
+                    grid_vars[0, row, col],
+                    grid_vars[1, row, col],
+                    grid_vars[0, row, col + 1],
+                    grid_vars[1, row + 1, col],
                 ]
             elif row != M - 2:
                 curr_names = [
-                    ("grid_vars", 0, row, col),
-                    ("grid_vars", 1, row, col),
-                    ("additional_vars", 0, row, col + 1),
-                    ("grid_vars", 1, row + 1, col),
+                    grid_vars[0, row, col],
+                    grid_vars[1, row, col],
+                    additional_vars[0, row, col + 1],
+                    grid_vars[1, row + 1, col],
                 ]
 
             elif col != N - 2:
                 curr_names = [
-                    ("grid_vars", 0, row, col),
-                    ("grid_vars", 1, row, col),
-                    ("grid_vars", 0, row, col + 1),
-                    ("additional_vars", 1, row + 1, col),
+                    grid_vars[0, row, col],
+                    grid_vars[1, row, col],
+                    grid_vars[0, row, col + 1],
+                    additional_vars[1, row + 1, col],
                 ]
 
             else:
                 curr_names = [
-                    ("grid_vars", 0, row, col),
-                    ("grid_vars", 1, row, col),
-                    ("additional_vars", 0, row, col + 1),
-                    ("additional_vars", 1, row + 1, col),
+                    grid_vars[0, row, col],
+                    grid_vars[1, row, col],
+                    additional_vars[0, row, col + 1],
+                    additional_vars[1, row + 1, col],
                 ]
             if row % 2 == 0:
                 fg.add_factor(
-                    variable_names=curr_names,
+                    variables=curr_names,
                     factor_configs=valid_configs_non_supp,
                     log_potentials=np.zeros(
                         valid_configs_non_supp.shape[0], dtype=float
@@ -306,7 +303,7 @@ def test_e2e_sanity_check():
                 )
             else:
                 fg.add_factor(
-                    variable_names=curr_names,
+                    variables=curr_names,
                     factor_configs=valid_configs_non_supp,
                     log_potentials=np.zeros(
                         valid_configs_non_supp.shape[0], dtype=float
@@ -321,14 +318,14 @@ def test_e2e_sanity_check():
             if col != N - 1:
                 vert_suppression_names.append(
                     [
-                        ("grid_vars", 0, r, col)
+                        grid_vars[0, r, col]
                         for r in range(start_row, start_row + SUPPRESSION_DIAMETER)
                     ]
                 )
             else:
                 vert_suppression_names.append(
                     [
-                        ("additional_vars", 0, r, col)
+                        additional_vars[0, r, col]
                         for r in range(start_row, start_row + SUPPRESSION_DIAMETER)
                     ]
                 )
@@ -339,14 +336,14 @@ def test_e2e_sanity_check():
             if row != M - 1:
                 horz_suppression_names.append(
                     [
-                        ("grid_vars", 1, row, c)
+                        grid_vars[1, row, c]
                         for c in range(start_col, start_col + SUPPRESSION_DIAMETER)
                     ]
                 )
             else:
                 horz_suppression_names.append(
                     [
-                        ("additional_vars", 1, row, c)
+                        additional_vars[1, row, c]
                         for c in range(start_col, start_col + SUPPRESSION_DIAMETER)
                     ]
                 )
@@ -354,12 +351,12 @@ def test_e2e_sanity_check():
     # Add the suppression factors to the graph via kwargs
     fg.add_factor_group(
         factory=enumeration.EnumerationFactorGroup,
-        variable_names_for_factors=vert_suppression_names,
+        variables_for_factors=vert_suppression_names,
         factor_configs=valid_configs_supp,
     )
     fg.add_factor_group(
         factory=enumeration.EnumerationFactorGroup,
-        variable_names_for_factors=horz_suppression_names,
+        variables_for_factors=horz_suppression_names,
         factor_configs=valid_configs_supp,
         log_potentials=np.zeros(valid_configs_supp.shape[0], dtype=float),
     )
@@ -373,8 +370,8 @@ def test_e2e_sanity_check():
             for this_wiring in fg.fg_state.wiring.values()
         ]
     )
-    bp_state.evidence["grid_vars"] = grid_evidence_arr
-    bp_state.evidence["additional_vars"] = additional_vars_evidence_dict
+    bp_state.evidence[grid_vars] = grid_evidence_arr
+    bp_state.evidence[additional_vars] = additional_vars_evidence_dict
     bp = graph.BP(bp_state)
     bp_arrays = bp.run_bp(bp.init(), num_iters=100)
     # Test that the output messages are close to the true messages
@@ -388,15 +385,15 @@ def test_e2e_heretic():
     # Define some global constants
     im_size = (30, 30)
     # Instantiate all the Variables in the factor graph via VariableGroups
-    pixel_vars = vgroup.NDVariableArray(3, im_size)
+    pixel_vars = vgroup.NDVariableArray(shape=im_size, num_states=3)
     hidden_vars = vgroup.NDVariableArray(
-        17, (im_size[0] - 2, im_size[1] - 2)
+        shape=(im_size[0] - 2, im_size[1] - 2), num_states=17
     )  # Each hidden var is connected to a 3x3 patch of pixel vars
 
     bXn = np.zeros((30, 30, 3))
 
     # Create the factor graph
-    fg = graph.FactorGraph((pixel_vars, hidden_vars))
+    fg = graph.FactorGraph([pixel_vars, hidden_vars])
 
     def binary_connected_variables(
         num_hidden_rows, num_hidden_cols, kernel_row, kernel_col
@@ -406,8 +403,8 @@ def test_e2e_heretic():
             for h_col in range(num_hidden_cols):
                 ret_list.append(
                     [
-                        (1, h_row, h_col),
-                        (0, h_row + kernel_row, h_col + kernel_col),
+                        hidden_vars[h_row, h_col],
+                        pixel_vars[h_row + kernel_row, h_col + kernel_col],
                     ]
                 )
         return ret_list
@@ -417,22 +414,20 @@ def test_e2e_heretic():
         for k_col in range(3):
             fg.add_factor_group(
                 factory=enumeration.PairwiseFactorGroup,
-                variable_names_for_factors=binary_connected_variables(
-                    28, 28, k_row, k_col
-                ),
+                variables_for_factors=binary_connected_variables(28, 28, k_row, k_col),
                 log_potential_matrix=W_pot[:, :, k_row, k_col],
                 name=(k_row, k_col),
             )
 
     # Assign evidence to pixel vars
     bp_state = fg.bp_state
-    bp_state.evidence[0] = np.array(bXn)
-    bp_state.evidence[0, 0, 0] = np.array([0.0, 0.0, 0.0])
-    bp_state.evidence[0, 0, 0]
-    bp_state.evidence[1, 0, 0]
+    bp_state.evidence[pixel_vars] = np.array(bXn)
+    bp_state.evidence[pixel_vars[0, 0]] = np.array([0.0, 0.0, 0.0])
+    bp_state.evidence[pixel_vars[0, 0]]
+    bp_state.evidence[hidden_vars[0, 0]]
     assert isinstance(bp_state.evidence.value, np.ndarray)
     assert len(sum(fg.factors.values(), ())) == 7056
     bp = graph.BP(bp_state, temperature=1.0)
     bp_arrays = bp.run_bp(bp.init(), num_iters=1)
     marginals = graph.get_marginals(bp.get_beliefs(bp_arrays))
-    assert jnp.allclose(jnp.sum(marginals[0], axis=-1), 1.0)
+    assert jnp.allclose(jnp.sum(marginals[pixel_vars], axis=-1), 1.0)

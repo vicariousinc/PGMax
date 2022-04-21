@@ -58,23 +58,23 @@ def test_run_bp_with_ORFactors():
         variables_for_factors1 = []
         variables_for_factors2 = []
         for factor_idx in range(num_factors):
-            variable_names1 = [
+            variables1 = [
                 parents_variables1[idx]
                 for idx in range(
                     num_parents_cumsum[factor_idx],
                     num_parents_cumsum[factor_idx + 1],
                 )
             ] + [children_variables1[factor_idx]]
-            variables_for_factors1.append(variable_names1)
+            variables_for_factors1.append(variables1)
 
-            variable_names2 = [
+            variables2 = [
                 parents_variables2[idx]
                 for idx in range(
                     num_parents_cumsum[factor_idx],
                     num_parents_cumsum[factor_idx + 1],
                 )
             ] + [children_variables2[factor_idx]]
-            variables_for_factors2.append(variable_names2)
+            variables_for_factors2.append(variables2)
 
         # Option 1: Define EnumerationFactors equivalent to the ORFactors
         for factor_idx in range(num_factors):
@@ -94,7 +94,7 @@ def test_run_bp_with_ORFactors():
             if factor_idx < num_factors // 2:
                 # Add the first half of factors to FactorGraph1
                 fg1.add_factor(
-                    variable_names=variables_for_factors1[factor_idx],
+                    variables=variables_for_factors1[factor_idx],
                     factor_configs=valid_configs,
                     log_potentials=np.zeros(valid_configs.shape[0]),
                 )
@@ -102,14 +102,14 @@ def test_run_bp_with_ORFactors():
                 if idx != 0:
                     # Add the second half of factors to FactorGraph2
                     fg2.add_factor(
-                        variable_names=variables_for_factors2[factor_idx],
+                        variables=variables_for_factors2[factor_idx],
                         factor_configs=valid_configs,
                         log_potentials=np.zeros(valid_configs.shape[0]),
                     )
                 else:
                     # Add all the EnumerationFactors to FactorGraph1 for the first iter
                     fg1.add_factor(
-                        variable_names=variables_for_factors1[factor_idx],
+                        variables=variables_for_factors1[factor_idx],
                         factor_configs=valid_configs,
                         log_potentials=np.zeros(valid_configs.shape[0]),
                     )

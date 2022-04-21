@@ -100,72 +100,67 @@ def test_bp_state():
         )
 
 
-# def test_log_potentials():
-#     vg = vgroup.VariableDict(15, (0,))
-#     fg = graph.FactorGraph(vg)
-#     fg.add_factor(
-#         variables=[vg[0]],
-#         factor_configs=np.arange(10)[:, None],
-#         name="test",
-#     )
-#     with pytest.raises(
-#         ValueError,
-#         match=re.escape("Expected log potentials shape (10,) for factor group test."),
-#     ):
-#         fg.bp_state.log_potentials["test"] = jnp.zeros((1, 15))
+def test_log_potentials():
+    vg = vgroup.VariableDict(15, (0,))
+    fg = graph.FactorGraph(vg)
+    fg.add_factor(
+        variables=[vg[0]],
+        factor_configs=np.arange(10)[:, None],
+        name="test",
+    )
+    with pytest.raises(
+        ValueError,
+        match=re.escape("Expected log potentials shape (10,) for factor group test."),
+    ):
+        fg.bp_state.log_potentials["test"] = jnp.zeros((1, 15))
 
-#     with pytest.raises(
-#         ValueError,
-#         match=re.escape(f"Invalid name {frozenset([0])} for log potentials updates."),
-#     ):
-#         fg.bp_state.log_potentials[vg[0]] = np.zeros(10)
+    with pytest.raises(
+        ValueError,
+        match=re.escape("Invalid name (0, 15) for log potentials updates."),
+    ):
+        fg.bp_state.log_potentials[vg[0]] = np.zeros(10)
 
-#     with pytest.raises(
-#         ValueError, match=re.escape("Expected log potentials shape (10,). Got (15,)")
-#     ):
-#         graph.LogPotentials(fg_state=fg.fg_state, value=np.zeros(15))
+    with pytest.raises(
+        ValueError, match=re.escape("Expected log potentials shape (10,). Got (15,)")
+    ):
+        graph.LogPotentials(fg_state=fg.fg_state, value=np.zeros(15))
 
-#     log_potentials = graph.LogPotentials(fg_state=fg.fg_state, value=np.zeros(10))
-#     assert jnp.all(log_potentials["test"] == jnp.zeros(10))
-#     with pytest.raises(
-#         ValueError,
-#         match=re.escape(f"Invalid name {frozenset([1])} for log potentials updates."),
-#     ):
-#         fg.bp_state.log_potentials[[1]]
+    log_potentials = graph.LogPotentials(fg_state=fg.fg_state, value=np.zeros(10))
+    assert jnp.all(log_potentials["test"] == jnp.zeros(10))
 
 
-# def test_ftov_msgs():
-#     variable_group = vgroup.VariableDict(15, (0,))
-#     fg = graph.FactorGraph(variable_group)
-#     fg.add_factor(
-#         variable_names=[0],
-#         factor_configs=np.arange(10)[:, None],
-#         name="test",
-#     )
-#     with pytest.raises(
-#         ValueError,
-#         match=re.escape("Invalid names for setting messages"),
-#     ):
-#         fg.bp_state.ftov_msgs[[0], 0] = np.ones(10)
+def test_ftov_msgs():
+    vg = vgroup.VariableDict(15, (0,))
+    fg = graph.FactorGraph(vg)
+    fg.add_factor(
+        variables=[vg[0]],
+        factor_configs=np.arange(10)[:, None],
+        name="test",
+    )
+    with pytest.raises(
+        ValueError,
+        match=re.escape("Invalid names for setting messages"),
+    ):
+        fg.bp_state.ftov_msgs[0] = np.ones(10)
 
-#     with pytest.raises(
-#         ValueError,
-#         match=re.escape(
-#             "Given belief shape (10,) does not match expected shape (15,) for variable 0"
-#         ),
-#     ):
-#         fg.bp_state.ftov_msgs[0] = np.ones(10)
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Given belief shape (10,) does not match expected shape (15,) for variable (0, 15)."
+        ),
+    ):
+        fg.bp_state.ftov_msgs[vg[0]] = np.ones(10)
 
-#     with pytest.raises(
-#         ValueError, match=re.escape("Expected messages shape (15,). Got (10,)")
-#     ):
-#         graph.FToVMessages(fg_state=fg.fg_state, value=np.zeros(10))
+    with pytest.raises(
+        ValueError, match=re.escape("Expected messages shape (15,). Got (10,)")
+    ):
+        graph.FToVMessages(fg_state=fg.fg_state, value=np.zeros(10))
 
-#     ftov_msgs = graph.FToVMessages(fg_state=fg.fg_state, value=np.zeros(15))
-#     with pytest.raises(
-#         TypeError, match=re.escape("'FToVMessages' object is not subscriptable")
-#     ):
-#         ftov_msgs[(10,)]
+    ftov_msgs = graph.FToVMessages(fg_state=fg.fg_state, value=np.zeros(15))
+    with pytest.raises(
+        TypeError, match=re.escape("'FToVMessages' object is not subscriptable")
+    ):
+        ftov_msgs[(10,)]
 
 
 def test_evidence():
