@@ -148,7 +148,8 @@ class VariableDict(groups.VariableGroup):
         )
 
     def __getitem__(self, val):
-        # Numpy indexation will throw IndexError for us if out-of-bounds
+        if val not in self.variable_names:
+            raise ValueError(f"Variable {val} is not in VariableDict")
         return (val, self.num_states)
 
     def flatten(
@@ -170,7 +171,7 @@ class VariableDict(groups.VariableGroup):
                 (2) data is not of the correct shape
         """
         for name in data:
-            if name not in self.variable_names:
+            if name not in self.variables:
                 raise ValueError(
                     f"data is referring to a non-existent variable {name}."
                 )
@@ -181,9 +182,7 @@ class VariableDict(groups.VariableGroup):
                     f"{(self.num_states,)} or (1,). Got {data[name].shape}."
                 )
 
-        flat_data = jnp.concatenate(
-            [data[name].flatten() for name in self.variable_names]
-        )
+        flat_data = jnp.concatenate([data[name].flatten() for name in self.variables])
         return flat_data
 
     def unflatten(
