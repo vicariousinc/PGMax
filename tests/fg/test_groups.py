@@ -10,7 +10,7 @@ from pgmax.groups import variables as vgroup
 
 
 def test_variable_dict():
-    variable_dict = vgroup.VariableDict(15, tuple([0, 1, 2]))
+    variable_dict = vgroup.VariableDict(variable_names=tuple([0, 1, 2]), num_states=15)
     with pytest.raises(
         ValueError, match="data is referring to a non-existent variable 3"
     ):
@@ -19,10 +19,10 @@ def test_variable_dict():
     with pytest.raises(
         ValueError,
         match=re.escape(
-            "Variable 2 expects a data array of shape (15,) or (1,). Got (10,)"
+            "Variable (2, 15) expects a data array of shape (15,) or (1,). Got (10,)"
         ),
     ):
-        variable_dict.flatten({2: np.zeros(10)})
+        variable_dict.flatten({(2, 15): np.zeros(10)})
 
     with pytest.raises(
         ValueError, match="Can only unflatten 1D array. Got a 2D array."

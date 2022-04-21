@@ -28,12 +28,17 @@ class NDVariableArray(groups.VariableGroup):
     num_states: np.ndarray
 
     def __post_init__(self):
-        if isinstance(self.num_states, int):
+        if np.isscalar(self.num_states) and np.issubdtype(type(np.int64(10)), int):
             num_states = np.full(self.shape, fill_value=self.num_states)
             object.__setattr__(self, "num_states", num_states)
-        elif isinstance(self.num_states, np.ndarray):
+        elif isinstance(self.num_states, np.ndarray) and np.issubdtype(
+            self.num_states.dtype, int
+        ):
             if self.num_states.shape != self.shape:
                 raise ValueError("Should be same shape")
+        else:
+            raise ValueError("num_states entries should be of type np.int")
+
         random_hash = random.randint(0, 2**63)
         object.__setattr__(self, "random_hash", random_hash)
 

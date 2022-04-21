@@ -143,6 +143,7 @@ class FactorGroup:
     @cached_property
     def total_num_states(self) -> int:
         """TODO"""
+        # TODO: this could be returned by the wiring
         return sum(
             [
                 variable[1]

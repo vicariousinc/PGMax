@@ -13,7 +13,7 @@ from pgmax.groups import variables as vgroup
 
 
 def test_factor_graph():
-    vg = vgroup.VariableDict(15, (0,))
+    vg = vgroup.VariableDict(variable_names=(0,), num_states=15)
     fg = graph.FactorGraph(vg)
     fg.add_factor_by_type(
         factor_type=enumeration_factor.EnumerationFactor,
@@ -76,7 +76,7 @@ def test_factor_adding():
 
 
 def test_bp_state():
-    vg = vgroup.VariableDict(15, (0,))
+    vg = vgroup.VariableDict(variable_names=(0,), num_states=15)
     fg0 = graph.FactorGraph(vg)
     fg0.add_factor(
         variables=[vg[0]],
@@ -101,7 +101,7 @@ def test_bp_state():
 
 
 def test_log_potentials():
-    vg = vgroup.VariableDict(15, (0,))
+    vg = vgroup.VariableDict(variable_names=(0,), num_states=15)
     fg = graph.FactorGraph(vg)
     fg.add_factor(
         variables=[vg[0]],
@@ -130,7 +130,7 @@ def test_log_potentials():
 
 
 def test_ftov_msgs():
-    vg = vgroup.VariableDict(15, (0,))
+    vg = vgroup.VariableDict(variable_names=(0,), num_states=15)
     fg = graph.FactorGraph(vg)
     fg.add_factor(
         variables=[vg[0]],
@@ -164,7 +164,7 @@ def test_ftov_msgs():
 
 
 def test_evidence():
-    vg = vgroup.VariableDict(15, (0,))
+    vg = vgroup.VariableDict(variable_names=(0,), num_states=15)
     fg = graph.FactorGraph(vg)
     fg.add_factor(
         variables=[vg[0]],
@@ -181,7 +181,7 @@ def test_evidence():
 
 
 def test_bp():
-    vg = vgroup.VariableDict(15, (0,))
+    vg = vgroup.VariableDict(variable_names=(0,), num_states=15)
     fg = graph.FactorGraph(vg)
     fg.add_factor(
         variables=[vg[0]],

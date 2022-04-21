@@ -83,7 +83,6 @@ class FactorGraph:
         ] = collections.OrderedDict(
             [(factor_type, set()) for factor_type in FAC_TO_VAR_UPDATES]
         )
-        print("2", time.time() - start)
 
         # Used to add FactorGroups
         vars_num_states = [variable[1] for variable in self._variables]
@@ -92,13 +91,14 @@ class FactorGraph:
             0,
             0,
         )
+        print("1", time.time() - start)
         # See FactorGraphState docstrings for documentation on the following fields
         self._num_var_states = vars_num_states_cumsum[-1]
-        self._vars_to_starts: OrderedDict[
-            Tuple[int, int], int
-        ] = collections.OrderedDict(zip(self._variables, vars_num_states_cumsum[:-1]))
+        self._vars_to_starts: Dict[Tuple[int, int], int] = collections.OrderedDict(
+            zip(self._variables, vars_num_states_cumsum[:-1])
+        )
         self._named_factor_groups: Dict[Hashable, groups.FactorGroup] = {}
-        print("3", time.time() - start)
+        print("2", time.time() - start)
 
     def __hash__(self) -> int:
         all_factor_groups = tuple(
@@ -1062,6 +1062,7 @@ def BP(bp_state: BPState, temperature: float = 0.0) -> BeliefPropagation:
         Raises:
             ValueError: if flat_data is not of the right shape
         """
+
         if flat_beliefs.ndim != 1:
             raise ValueError(
                 f"Can only unflatten 1D array. Got a {flat_beliefs.ndim}D array."
@@ -1070,9 +1071,18 @@ def BP(bp_state: BPState, temperature: float = 0.0) -> BeliefPropagation:
         num_variables = 0
         num_variable_states = 0
         for variable_group in variable_groups:
-            if isinstance(variable_group, vgroup.NDVariableArray):
-                num_variables += variable_group.num_states.size
-                num_variable_states += variable_group.num_states.sum()
+            variables = variable_group.variables
+            num_variables += len(variables)
+            num_variable_states += sum([variable[1] for variable in variables])
+
+            # if isinstance(variable_group, vgroup.NDVariableArray):
+            #     num_variables += variable_group.num_states.size
+            #     num_variable_states += variable_group.num_states.sum()
+            # elif isinstance(variable_group, vgroup.VariableDict):
+            #     num_variables += len(variable_group.variables)
+            #     num_variable_states += (
+            #         len(variable_group.variables) * variable_group.variables[0].num_states
+            #     )
 
         if flat_beliefs.shape[0] == num_variables:
             use_num_states = False
@@ -1088,18 +1098,20 @@ def BP(bp_state: BPState, temperature: float = 0.0) -> BeliefPropagation:
         beliefs = {}
         start = 0
         for variable_group in variable_groups:
-            if use_num_states:
-                length = variable_group.num_states.sum()
+            variables = variable_group.variables
+            if not use_num_states:
+                length = len(variables)
+                # length = variable_group.num_states.sum()
             else:
-                length = variable_group.num_states.size
-
+                length = sum([variable[1] for variable in variables])
+                # length = variable_group.num_states.size
             beliefs[variable_group] = variable_group.unflatten(
                 flat_beliefs[start : start + length]
             )
             start += length
         return beliefs
 
-    @jax.jit
+    # @jax.jit
     def get_beliefs(bp_arrays: BPArrays) -> Dict[Hashable, Any]:
         """Function to calculate beliefs from a BPArrays
 

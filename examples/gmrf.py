@@ -61,31 +61,39 @@ fg = graph.FactorGraph(variables)
 # Add top-down factors
 fg.add_factor_group(
     factory=enumeration.PairwiseFactorGroup,
-    variable_names_for_factors=[
-        [(ii, jj), (ii + 1, jj)] for ii in range(M - 1) for jj in range(N)
+    variables_for_factors=[
+        [variables[ii, jj], variables[ii + 1, jj]]
+        for ii in range(M - 1)
+        for jj in range(N)
     ],
     name="top_down",
 )
 # Add left-right factors
 fg.add_factor_group(
     factory=enumeration.PairwiseFactorGroup,
-    variable_names_for_factors=[
-        [(ii, jj), (ii, jj + 1)] for ii in range(M) for jj in range(N - 1)
+    variables_for_factors=[
+        [variables[ii, jj], variables[ii, jj + 1]]
+        for ii in range(M)
+        for jj in range(N - 1)
     ],
     name="left_right",
 )
 # Add diagonal factors
 fg.add_factor_group(
     factory=enumeration.PairwiseFactorGroup,
-    variable_names_for_factors=[
-        [(ii, jj), (ii + 1, jj + 1)] for ii in range(M - 1) for jj in range(N - 1)
+    variables_for_factors=[
+        [variables[ii, jj], variables[ii + 1, jj + 1]]
+        for ii in range(M - 1)
+        for jj in range(N - 1)
     ],
     name="diagonal0",
 )
 fg.add_factor_group(
     factory=enumeration.PairwiseFactorGroup,
-    variable_names_for_factors=[
-        [(ii, jj), (ii - 1, jj + 1)] for ii in range(1, M) for jj in range(N - 1)
+    variables_for_factors=[
+        [variables[ii, jj], variables[ii - 1, jj + 1]]
+        for ii in range(1, M)
+        for jj in range(N - 1)
     ],
     name="diagonal1",
 )
@@ -106,7 +114,7 @@ for plot_idx, idx in tqdm(enumerate(indices), total=n_plots):
         bp.get_beliefs(
             bp.run_bp(
                 bp.init(
-                    evidence_updates={None: evidence},
+                    evidence_updates={variables: evidence},
                     log_potentials_updates=log_potentials,
                 ),
                 num_iters=15,
@@ -114,6 +122,7 @@ for plot_idx, idx in tqdm(enumerate(indices), total=n_plots):
             )
         )
     )
+    marginals = marginals[variables]
     pred_image = np.argmax(
         np.stack(
             [
@@ -153,7 +162,7 @@ def loss(noisy_image, target_image, log_potentials):
         bp.get_beliefs(
             bp.run_bp(
                 bp.init(
-                    evidence_updates={None: evidence},
+                    evidence_updates={variables: evidence},
                     log_potentials_updates=log_potentials,
                 ),
                 num_iters=15,
@@ -161,7 +170,7 @@ def loss(noisy_image, target_image, log_potentials):
             )
         )
     )
-    logp = jnp.mean(jnp.log(jnp.sum(target * marginals, axis=-1)))
+    logp = jnp.mean(jnp.log(jnp.sum(target * marginals[variables], axis=-1)))
     return -logp
 
 

@@ -6,7 +6,7 @@ import numpy as np
 from numpy.random import default_rng
 from scipy.ndimage import gaussian_filter
 
-from pgmax.fg import graph, groups, nodes
+from pgmax.fg import graph, nodes
 from pgmax.groups import enumeration
 from pgmax.groups import variables as vgroup
 
@@ -121,20 +121,6 @@ def test_e2e_sanity_check():
             ]
         )
     )
-    true_map_state_output = {
-        ("grid_vars", 0, 0, 0): 2,
-        ("grid_vars", 0, 0, 1): 0,
-        ("grid_vars", 0, 1, 0): 0,
-        ("grid_vars", 0, 1, 1): 2,
-        ("grid_vars", 1, 0, 0): 1,
-        ("grid_vars", 1, 0, 1): 0,
-        ("grid_vars", 1, 1, 0): 1,
-        ("grid_vars", 1, 1, 1): 0,
-        ("additional_vars", 0, 0, 2): 0,
-        ("additional_vars", 0, 1, 2): 2,
-        ("additional_vars", 1, 2, 0): 1,
-        ("additional_vars", 1, 2, 1): 0,
-    }
 
     # Create a synthetic depth image for testing purposes
     im_size = 3
@@ -222,6 +208,21 @@ def test_e2e_sanity_check():
     additional_names = tuple(extra_row_names + extra_col_names)
     additional_vars = vgroup.VariableDict(additional_names, num_states=3)
 
+    true_map_state_output = {
+        (grid_vars, (0, 0, 0)): 2,
+        (grid_vars, (0, 0, 1)): 0,
+        (grid_vars, (0, 1, 0)): 0,
+        (grid_vars, (0, 1, 1)): 2,
+        (grid_vars, (1, 0, 0)): 1,
+        (grid_vars, (1, 0, 1)): 0,
+        (grid_vars, (1, 1, 0)): 1,
+        (grid_vars, (1, 1, 1)): 0,
+        (additional_vars, (0, 0, 2)): 0,
+        (additional_vars, (0, 1, 2)): 2,
+        (additional_vars, (1, 2, 0)): 1,
+        (additional_vars, (1, 2, 1)): 0,
+    }
+
     gt_has_cuts = gt_has_cuts.astype(np.int32)
 
     # Now, we use this array along with the gt_has_cuts array computed earlier using the image in order to derive the evidence values
@@ -252,7 +253,7 @@ def test_e2e_sanity_check():
                         additional_vars_evidence_dict[
                             additional_vars[i, row, col]
                         ] = evidence_vals_arr
-                    except IndexError:
+                    except ValueError:
                         pass
 
     # Create the factor graph
@@ -378,7 +379,7 @@ def test_e2e_sanity_check():
     assert jnp.allclose(bp_arrays.ftov_msgs, true_final_msgs_output, atol=1e-06)
     decoded_map_states = graph.decode_map_states(bp.get_beliefs(bp_arrays))
     for name in true_map_state_output:
-        assert true_map_state_output[name] == decoded_map_states[name[0]][name[1:]]
+        assert true_map_state_output[name] == decoded_map_states[name[0]][name[1]]
 
 
 def test_e2e_heretic():

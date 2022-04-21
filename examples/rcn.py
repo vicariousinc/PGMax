@@ -211,11 +211,11 @@ M = (2 * hps + 1) * (
     2 * vps + 1
 )  # The number of pool choices for the different variables of the PGM.
 
-variables_all_models = {}
+variables_all_models = []
 for idx in range(frcs.shape[0]):
     frc = frcs[idx]
-    variables_all_models[idx] = vgroup.NDVariableArray(
-        num_states=M, shape=(frc.shape[0],)
+    variables_all_models.append(
+        vgroup.NDVariableArray(num_states=M, shape=(frc.shape[0],))
     )
 
 end = time.time()
@@ -280,7 +280,7 @@ for idx in range(edges.shape[0]):
     for e in edge:
         i1, i2, r = e
         fg.add_factor(
-            [(idx, i1), (idx, i2)],
+            [variables_all_models[idx][i1], variables_all_models[idx][i2]],
             valid_configs_list[r],
         )
 

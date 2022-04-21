@@ -107,13 +107,7 @@ _ = plot_images(W_gt[0], nr=1)
 #
 # See Section 5.6 of the [PMP paper](https://proceedings.neurips.cc/paper/2021/hash/07b1c04a30f798b5506c1ec5acfb9031-Abstract.html) for more details.
 
-import imp
-
 # %%
-from pgmax.fg import graph
-
-imp.reload(graph)
-
 # The dimensions of W used for the generation of X were (4, 5, 5) but we set them to (5, 6, 6)
 # to simulate a more realistic scenario in which we do not know their ground truth values
 n_feat, feat_height, feat_width = 5, 6, 6
@@ -183,7 +177,7 @@ for idx_img in tqdm(range(n_images)):
 
                             X_var = X[idx_img, idx_chan, idx_img_height, idx_img_width]
                             variables_for_ORFactors_dict[X_var].append(SW_var)
-print(time.time() - start)
+print("After loop", time.time() - start)
 
 # Add ANDFactorGroup, which is computationally efficient
 fg.add_factor_group(
