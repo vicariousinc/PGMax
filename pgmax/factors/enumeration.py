@@ -163,9 +163,8 @@ class EnumerationFactor(nodes.Factor):
         Internally calls _compile_var_states_numba and _compile_enumeration_wiring_numba for speed.
 
         Args:
-            variables_for_factors: A list of list of variables, where each innermost element is a
-                variable. Each list within the outer list is taken to contain the names of the
-                variables connected to a Factor.
+            variables_for_factors: A list of list of variables. Each list within the outer list contains the
+                variables connected to a Factor. The same variable can be connected to multiple Factors.
             factor_configs: Array of shape (num_val_configs, num_variables) containing an explicit enumeration
                 of all valid configurations.
             vars_to_starts: A dictionary that maps variables to their global starting indices

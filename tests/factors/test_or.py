@@ -25,7 +25,6 @@ def test_run_bp_with_ORFactors():
     Note: for the first seed, add all the EnumerationFactors to FG1 and all the ORFactors to FG2
     """
     for idx in range(10):
-        print("it", idx)
         np.random.seed(idx)
 
         # Parameters

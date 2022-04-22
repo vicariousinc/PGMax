@@ -41,8 +41,8 @@ class Factor:
     """A factor
 
     Args:
-        variables: List of variables in the factors. Each variable is represented
-            by a tuple containing the variable hash and number of states.
+        variables: List of variables connected by the Factor.
+            Each variable is represented by a tuple of the form (variable hash/name, number of states)
 
     Raises:
         NotImplementedError: If compile_wiring is not implemented
@@ -56,16 +56,6 @@ class Factor:
             raise NotImplementedError(
                 "Please implement compile_wiring in for your factor"
             )
-
-    # @utils.cached_property
-    # def edges_num_states(self) -> np.ndarray:
-    #     """Number of states for the variables connected to each edge
-
-    #     Returns:
-    #         Array of shape (num_edges,)
-    #         Number of states for the variables connected to each edge
-    #     """
-    #     return self.variables.values()
 
     @staticmethod
     def concatenate_wirings(wirings: Sequence) -> Wiring:

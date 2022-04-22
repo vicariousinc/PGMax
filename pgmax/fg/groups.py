@@ -45,12 +45,11 @@ class VariableGroup:
 
     @cached_property
     def variables(self) -> Tuple[Any, int]:
-        """Function that returns the list of variables. Each variable is represented
-        by a tuple of the variable name (which can be a hash or a string) and its
-        number of states.
+        """Function that returns the list of all variables in the VariableGroup.
+        Each variable is represented by a tuple of the form (variable name, number of states)
 
         Returns:
-           List of variables in the VariableGroup
+            List of variables in the VariableGroup
         """
         raise NotImplementedError(
             "Please subclass the VariableGroup class and override this method"
@@ -88,9 +87,8 @@ class FactorGroup:
     """Class to represent a group of Factors.
 
     Args:
-        variables_for_factors: A list of list of variables, where each innermost element is a
-            variable. Each list within the outer list is taken to contain the names of the
-            variables connected to a Factor.
+        variables_for_factors: A list of list of variables. Each list within the outer list contains the
+            variables connected to a Factor. The same variable can be connected to multiple Factors.
         factor_configs: Optional array containing an explicit enumeration of all valid configurations
         log_potentials: Array of log potentials.
 
@@ -142,8 +140,12 @@ class FactorGroup:
 
     @cached_property
     def total_num_states(self) -> int:
-        """TODO"""
-        # TODO: this could be returned by the wiring
+        """Function to return the total number of states for all the variables involved in all the Factors
+
+        Returns:
+            Total number of variable states in the FactorGroup
+        """
+        # TODO: this could be returned by the wiring to loop over variables_for_factors only once
         return sum(
             [
                 variable[1]
@@ -293,18 +295,3 @@ class SingleFactorGroup(FactorGroup):
         raise NotImplementedError(
             "SingleFactorGroup does not support vectorized factor operations."
         )
-
-
-# def get_ndvariable_names_for_factor_groups(
-#     arrays: List[Any]
-
-# ):
-#     "Util function"
-
-# import numba as nb
-# @nb.jit(parallel=False, cache=True, fastmath=True, nopython=True)
-# def run_numba(h, v, f):
-#     for h_idx in nb.prange(h.shape[0]):
-#         for v_idx in nb.prange(v.shape[0]):
-#             f[h_idx * v.shape[0] + v_idx, 0] = h[h_idx]
-#             f[h_idx * v.shape[0] + v_idx, 1] = v[v_idx]

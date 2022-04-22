@@ -35,7 +35,7 @@ def test_variable_dict():
                 jax.tree_util.tree_multimap(
                     lambda x, y: jnp.all(x == y),
                     variable_dict.unflatten(jnp.zeros(3)),
-                    {name: np.zeros(1) for name in range(3)},
+                    {(name, 15): np.zeros(1) for name in range(3)},
                 )
             )
         )

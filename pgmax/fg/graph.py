@@ -65,13 +65,6 @@ class FactorGraph:
         else:
             self._variable_groups = self.variables
 
-        self._variables = [
-            variable
-            for variable_group in self._variable_groups
-            for variable in variable_group.variables
-        ]
-        print("1", time.time() - start)
-
         # Useful objects to build the FactorGraph
         self._factor_types_to_groups: OrderedDict[
             Type, List[groups.FactorGroup]
@@ -84,19 +77,23 @@ class FactorGraph:
             [(factor_type, set()) for factor_type in FAC_TO_VAR_UPDATES]
         )
 
-        # Used to add FactorGroups
-        vars_num_states = [variable[1] for variable in self._variables]
-        vars_num_states_cumsum = np.insert(
-            np.array(vars_num_states).cumsum(),
-            0,
-            0,
-        )
-        print("1", time.time() - start)
         # See FactorGraphState docstrings for documentation on the following fields
-        self._num_var_states = vars_num_states_cumsum[-1]
-        self._vars_to_starts: Dict[Tuple[int, int], int] = collections.OrderedDict(
-            zip(self._variables, vars_num_states_cumsum[:-1])
-        )
+        self._vars_to_starts: OrderedDict[
+            Tuple[int, int], int
+        ] = collections.OrderedDict()
+        vars_num_states_cumsum = 0
+        for variable_group in self._variable_groups:
+            vg_num_states = variable_group.num_states.flatten()
+            vg_num_states_cumsum = np.insert(np.cumsum(vg_num_states), 0, 0)
+            self._vars_to_starts.update(
+                zip(
+                    variable_group.variables,
+                    vars_num_states_cumsum + vg_num_states_cumsum[:-1],
+                )
+            )
+            vars_num_states_cumsum += vg_num_states_cumsum[-1]
+
+        self._num_var_states = vars_num_states_cumsum
         self._named_factor_groups: Dict[Hashable, groups.FactorGroup] = {}
         print("2", time.time() - start)
 
@@ -112,7 +109,7 @@ class FactorGraph:
 
     def add_factor(
         self,
-        variables: List,
+        variables: List[Tuple],
         factor_configs: np.ndarray,
         log_potentials: Optional[np.ndarray] = None,
         name: Optional[str] = None,
@@ -120,8 +117,8 @@ class FactorGraph:
         """Function to add a single factor to the FactorGraph.
 
         Args:
-            variables: A list containing the connected variable names.
-                Variable names are tuples of the type (variable_group_name, variable_name_within_variable_group)
+            variables: A list containing the connected variables.
+                Each variable is represented by a tuple of the form (variable hash/name, number of states)
             factor_configs: Array of shape (num_val_configs, num_variables)
                 An array containing explicit enumeration of all valid configurations.
                 If the connected variables have n1, n2, ... states, 1 <= num_val_configs <= n1 * n2 * ...
@@ -146,8 +143,8 @@ class FactorGraph:
         """Function to add a single factor to the FactorGraph.
 
         Args:
-            variable_names: A list containing the connected variable names.
-                Variable names are tuples of the type (variable_group_name, variable_name_within_variable_group)
+            variables: A list containing the connected variables.
+                Each variable is represented by a tuple of the form (variable hash/name, number of states)
             factor_type: Type of factor to be added
             args: Args to be passed to the factor_type.
             kwargs: kwargs to be passed to the factor_type, and an optional "name" argument
@@ -1105,6 +1102,7 @@ def BP(bp_state: BPState, temperature: float = 0.0) -> BeliefPropagation:
             else:
                 length = sum([variable[1] for variable in variables])
                 # length = variable_group.num_states.size
+
             beliefs[variable_group] = variable_group.unflatten(
                 flat_beliefs[start : start + length]
             )

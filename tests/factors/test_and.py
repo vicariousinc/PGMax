@@ -15,7 +15,7 @@ def test_run_bp_with_ANDFactors():
     (2) the support of several factor types in a FactorGraph and during inference
 
     To do so, observe that an ANDFactor can be defined as an equivalent EnumerationFactor
-    (which list all the valid OR configurations) and define two equivalent FactorGraphs
+    (which list all the valid AND configurations) and define two equivalent FactorGraphs
     FG1: first half of factors are defined as EnumerationFactors, second half are defined as ANDFactors
     FG2: first half of factors are defined as ANDFactors, second half are defined as EnumerationFactors
 
@@ -25,7 +25,6 @@ def test_run_bp_with_ANDFactors():
     Note: for the first seed, add all the EnumerationFactors to FG1 and all the ANDFactors to FG2
     """
     for idx in range(10):
-        print("it", idx)
         np.random.seed(idx)
 
         # Parameters
@@ -54,7 +53,7 @@ def test_run_bp_with_ANDFactors():
         children_variables2 = vgroup.NDVariableArray(num_states=2, shape=(num_factors,))
         fg2 = graph.FactorGraph(variables=[parents_variables2, children_variables2])
 
-        # Variable names for factors
+        # Option 1: Define EnumerationFactors equivalent to the ANDFactors
         variables_for_factors1 = []
         variables_for_factors2 = []
         for factor_idx in range(num_factors):

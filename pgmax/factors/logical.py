@@ -148,9 +148,8 @@ class LogicalFactor(nodes.Factor):
         Internally calls _compile_var_states_numba and _compile_logical_wiring_numba for speed.
 
         Args:
-            variables_for_factors: A list of list of variables, where each innermost element is a
-                variable. Each list within the outer list is taken to contain the names of the
-                variables connected to a Factor.
+            variables_for_factors: A list of list of variables. Each list within the outer list contains the
+                variables connected to a Factor. The same variable can be connected to multiple Factors.
             vars_to_starts: A dictionary that maps variables to their global starting indices
                 For an n-state variable, a global start index of m means the global indices
                 of its n variable states are m, m + 1, ..., m + n - 1

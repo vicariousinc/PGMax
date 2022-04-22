@@ -52,7 +52,7 @@ class NDVariableArray(groups.VariableGroup):
         return hash(self) < hash(other)
 
     def __getitem__(self, val):
-        # Numpy indexation will throw IndexError for us if out-of-bounds
+        # Relies on numpy indexation to throw IndexError if val is out-of-bounds
         result = (self.variable_names[val], self.num_states[val])
         if isinstance(val, slice):
             return tuple(zip(result))
@@ -60,16 +60,22 @@ class NDVariableArray(groups.VariableGroup):
 
     @cached_property
     def variables(self) -> List[Tuple]:
+        """Function that returns the list of all variables in the VariableGroup.
+        Each variable is represented by a tuple of the form (variable hash, number of states)
+
+        Returns:
+            List of variables in the VariableGroup
+        """
         vars_names = self.variable_names.flatten()
         vars_num_states = self.num_states.flatten()
         return list(zip(vars_names, vars_num_states))
 
     @cached_property
     def variable_names(self) -> np.ndarray:
-        """Function that generates a dictionary mapping names to variables.
+        """Function that generates all the variables names, in the form of hashes
 
         Returns:
-            a dictionary mapping all possible names to different variables.
+            Array of variables names.
         """
         # Overwite default hash as it does not give enough spacing across consecutive objects
         indices = np.reshape(np.arange(np.product(self.shape)), self.shape)
@@ -123,7 +129,7 @@ class NDVariableArray(groups.VariableGroup):
         if flat_data.size == np.product(self.shape):
             data = flat_data.reshape(self.shape)
         elif flat_data.size == self.num_states.sum():
-            # TODO: what should we dot for different number of states
+            # TODO: what should we do for different number of states
             data = flat_data.reshape(self.shape + (self.num_states.max(),))
         else:
             raise ValueError(
@@ -144,21 +150,29 @@ class VariableDict(groups.VariableGroup):
     """
 
     variable_names: Tuple[Any, ...]
-    num_states: int
+    num_states: np.ndarray  # TODO: this should be an int converted to an array in __post_init__
+
+    def __post_init__(self):
+        num_states = np.full((len(self.variable_names),), fill_value=self.num_states)
+        object.__setattr__(self, "num_states", num_states)
 
     @cached_property
     def variables(self) -> List[Tuple]:
-        return list(
-            zip(self.variable_names, [self.num_states] * len(self.variable_names))
-        )
+        """Function that returns the list of all variables in the VariableGroup.
+        Each variable is represented by a tuple of the form (variable name, number of states)
+
+        Returns:
+            List of variables in the VariableGroup
+        """
+        return list(zip(self.variable_names, self.num_states))
 
     def __getitem__(self, val):
         if val not in self.variable_names:
             raise ValueError(f"Variable {val} is not in VariableDict")
-        return (val, self.num_states)
+        return (val, self.num_states[0])
 
     def flatten(
-        self, data: Mapping[Hashable, Union[np.ndarray, jnp.ndarray]]
+        self, data: Mapping[Tuple[int, int], Union[np.ndarray, jnp.ndarray]]
     ) -> jnp.ndarray:
         """Function that turns meaningful structured data into a flat data array for internal use.
 
@@ -181,10 +195,10 @@ class VariableDict(groups.VariableGroup):
                     f"data is referring to a non-existent variable {name}."
                 )
 
-            if data[name].shape != (self.num_states,) and data[name].shape != (1,):
+            if data[name].shape != (name[1],) and data[name].shape != (1,):
                 raise ValueError(
                     f"Variable {name} expects a data array of shape "
-                    f"{(self.num_states,)} or (1,). Got {data[name].shape}."
+                    f"{(name[1],)} or (1,). Got {data[name].shape}."
                 )
 
         flat_data = jnp.concatenate([data[name].flatten() for name in self.variables])
@@ -214,7 +228,7 @@ class VariableDict(groups.VariableGroup):
             )
 
         num_variables = len(self.variable_names)
-        num_variable_states = len(self.variable_names) * self.num_states
+        num_variable_states = self.num_states.sum()
         if flat_data.shape[0] == num_variables:
             use_num_states = False
         elif flat_data.shape[0] == num_variable_states:
@@ -228,10 +242,10 @@ class VariableDict(groups.VariableGroup):
 
         start = 0
         data = {}
-        for name in self.variable_names:
+        for name in self.variables:
             if use_num_states:
-                data[name] = flat_data[start : start + self.num_states]
-                start += self.num_states
+                data[name] = flat_data[start : start + name[1]]
+                start += name[1]
             else:
                 data[name] = flat_data[np.array([start])]
                 start += 1

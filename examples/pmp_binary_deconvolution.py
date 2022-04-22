@@ -224,7 +224,7 @@ print("Time", time.time() - start)
 
 # %%
 pW = 0.25
-pS = 1e-72
+pS = 1e-80
 pX = 1e-100
 
 # Sparsity inducing priors for W and S
@@ -242,7 +242,7 @@ uX[..., 0] = (2 * X_gt - 1) * logit(pX)
 # We draw a batch of samples from the posterior in parallel by transforming `run_bp`/`get_beliefs` with `jax.vmap`
 
 # %%
-np.random.seed(seed=40)
+np.random.seed(seed=42)
 n_samples = 4
 
 start = time.time()
@@ -271,3 +271,5 @@ map_states = graph.decode_map_states(beliefs)
 
 # %%
 _ = plot_images(map_states[W].reshape(-1, feat_height, feat_width), nr=n_samples)
+
+# %%
