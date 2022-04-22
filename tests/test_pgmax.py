@@ -6,6 +6,7 @@ import numpy as np
 from numpy.random import default_rng
 from scipy.ndimage import gaussian_filter
 
+from pgmax.factors.enumeration import EnumerationFactor
 from pgmax.fg import graph, nodes
 from pgmax.groups import enumeration
 from pgmax.groups import variables as vgroup
@@ -294,23 +295,23 @@ def test_e2e_sanity_check():
                     additional_vars[1, row + 1, col],
                 ]
             if row % 2 == 0:
-                fg.add_factor(
+                factor = EnumerationFactor(
                     variables=curr_names,
                     factor_configs=valid_configs_non_supp,
                     log_potentials=np.zeros(
                         valid_configs_non_supp.shape[0], dtype=float
                     ),
-                    name=(row, col),
                 )
+                fg.add_factor(factor, name=(row, col))
             else:
-                fg.add_factor(
+                factor = EnumerationFactor(
                     variables=curr_names,
                     factor_configs=valid_configs_non_supp,
                     log_potentials=np.zeros(
                         valid_configs_non_supp.shape[0], dtype=float
                     ),
-                    name=(row, col),
                 )
+                fg.add_factor(factor, name=(row, col))
 
     # Create an EnumerationFactorGroup for vertical suppression factors
     vert_suppression_names: List[List[Tuple[Any, ...]]] = []
@@ -350,17 +351,18 @@ def test_e2e_sanity_check():
                 )
 
     # Add the suppression factors to the graph via kwargs
-    fg.add_factor_group(
-        factory=enumeration.EnumerationFactorGroup,
+    factor_group = enumeration.EnumerationFactorGroup(
         variables_for_factors=vert_suppression_names,
         factor_configs=valid_configs_supp,
     )
-    fg.add_factor_group(
-        factory=enumeration.EnumerationFactorGroup,
+    fg.add_factor_group(factor_group)
+
+    factor_group = enumeration.EnumerationFactorGroup(
         variables_for_factors=horz_suppression_names,
         factor_configs=valid_configs_supp,
         log_potentials=np.zeros(valid_configs_supp.shape[0], dtype=float),
     )
+    fg.add_factor_group(factor_group)
 
     # Run BP
     # Set the evidence
@@ -413,12 +415,11 @@ def test_e2e_heretic():
     W_pot = np.zeros((17, 3, 3, 3), dtype=float)
     for k_row in range(3):
         for k_col in range(3):
-            fg.add_factor_group(
-                factory=enumeration.PairwiseFactorGroup,
+            factor_group = enumeration.PairwiseFactorGroup(
                 variables_for_factors=binary_connected_variables(28, 28, k_row, k_col),
                 log_potential_matrix=W_pot[:, :, k_row, k_col],
-                name=(k_row, k_col),
             )
+            fg.add_factor_group(factor_group, name=(k_row, k_col))
 
     # Assign evidence to pixel vars
     bp_state = fg.bp_state

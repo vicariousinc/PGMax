@@ -1,6 +1,5 @@
 """Defines an enumeration factor"""
 
-import functools
 from dataclasses import dataclass
 from typing import List, Mapping, Sequence, Tuple, Union
 
@@ -263,7 +262,7 @@ def _compile_enumeration_wiring_numba(
                 )
 
 
-@functools.partial(jax.jit, static_argnames=("num_val_configs", "temperature"))
+# @functools.partial(jax.jit, static_argnames=("num_val_configs", "temperature"))
 def pass_enum_fac_to_var_messages(
     vtof_msgs: jnp.ndarray,
     factor_configs_edge_states: jnp.ndarray,

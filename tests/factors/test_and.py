@@ -3,6 +3,7 @@ from itertools import product
 import jax
 import numpy as np
 
+from pgmax.factors.enumeration import EnumerationFactor
 from pgmax.fg import graph
 from pgmax.groups import logical
 from pgmax.groups import variables as vgroup
@@ -94,26 +95,29 @@ def test_run_bp_with_ANDFactors():
 
             if factor_idx < num_factors // 2:
                 # Add the first half of factors to FactorGraph1
-                fg1.add_factor(
+                enum_factor = EnumerationFactor(
                     variables=variables_for_factors1[factor_idx],
                     factor_configs=valid_configs,
                     log_potentials=np.zeros(valid_configs.shape[0]),
                 )
+                fg1.add_factor(enum_factor)
             else:
                 if idx != 0:
                     # Add the second half of factors to FactorGraph2
-                    fg2.add_factor(
+                    enum_factor = EnumerationFactor(
                         variables=variables_for_factors2[factor_idx],
                         factor_configs=valid_configs,
                         log_potentials=np.zeros(valid_configs.shape[0]),
                     )
+                    fg2.add_factor(enum_factor)
                 else:
                     # Add all the EnumerationFactors to FactorGraph1 for the first iter
-                    fg1.add_factor(
+                    enum_factor = EnumerationFactor(
                         variables=variables_for_factors1[factor_idx],
                         factor_configs=valid_configs,
                         log_potentials=np.zeros(valid_configs.shape[0]),
                     )
+                    fg1.add_factor(enum_factor)
 
         # Option 2: Define the ANDFactors
         num_parents_cumsum = np.insert(np.cumsum(num_parents), 0, 0)
@@ -136,14 +140,11 @@ def test_run_bp_with_ANDFactors():
                         variables_for_factors2[factor_idx]
                     )
         if idx != 0:
-            fg1.add_factor_group(
-                factory=logical.ANDFactorGroup,
-                variables_for_factors=variables_for_ANDFactors_fg1,
-            )
-        fg2.add_factor_group(
-            factory=logical.ANDFactorGroup,
-            variables_for_factors=variables_for_ANDFactors_fg2,
-        )
+            factor_group = logical.ANDFactorGroup(variables_for_ANDFactors_fg1)
+            fg1.add_factor_group(factor_group)
+
+        factor_group = logical.ANDFactorGroup(variables_for_ANDFactors_fg2)
+        fg2.add_factor_group(factor_group)
 
         # Run inference
         bp1 = graph.BP(fg1.bp_state, temperature=temperature)

@@ -39,12 +39,11 @@ for ii in range(50):
         variables_for_factors.append([variables[ii, jj], variables[kk, jj]])
         variables_for_factors.append([variables[ii, jj], variables[kk, ll]])
 
-fg.add_factor_group(
-    factory=enumeration.PairwiseFactorGroup,
+factor_group = enumeration.PairwiseFactorGroup(
     variables_for_factors=variables_for_factors,
     log_potential_matrix=0.8 * np.array([[1.0, -1.0], [-1.0, 1.0]]),
-    name="factors",
 )
+fg.add_factor_group(factor_group, name="factors")
 
 # %% [markdown]
 # ### Run inference and visualize results

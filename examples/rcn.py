@@ -38,6 +38,7 @@ from scipy.ndimage import maximum_filter
 from scipy.signal import fftconvolve
 from sklearn.datasets import fetch_openml
 
+from pgmax.factors.enumeration import EnumerationFactor
 from pgmax.fg import graph
 from pgmax.groups import variables as vgroup
 
@@ -279,10 +280,12 @@ for idx in range(edges.shape[0]):
 
     for e in edge:
         i1, i2, r = e
-        fg.add_factor(
-            [variables_all_models[idx][i1], variables_all_models[idx][i2]],
-            valid_configs_list[r],
+        factor = EnumerationFactor(
+            variables=[variables_all_models[idx][i1], variables_all_models[idx][i2]],
+            factor_configs=valid_configs_list[r],
+            log_potentials=np.zeros(valid_configs_list[r].shape[0]),
         )
+        fg.add_factor(factor)
 
 end = time.time()
 print(f"Creating factors took {end-start:.3f} seconds.")

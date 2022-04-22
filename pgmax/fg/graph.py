@@ -104,95 +104,31 @@ class FactorGraph:
         )
         return hash(all_factor_groups)
 
-    def add_factor(
-        self,
-        variables: List[Tuple],
-        factor_configs: np.ndarray,
-        log_potentials: Optional[np.ndarray] = None,
-        name: Optional[str] = None,
-    ) -> None:
-        """Function to add a single factor to the FactorGraph.
+    def add_factor(self, factor: nodes.Factor, name: Optional[str] = None) -> None:
+        """Function to add a single Factor to the FactorGraph.
 
         Args:
-            variables: A list containing the connected variables.
-                Each variable is represented by a tuple of the form (variable hash/name, number of states)
-            factor_configs: Array of shape (num_val_configs, num_variables)
-                An array containing explicit enumeration of all valid configurations.
-                If the connected variables have n1, n2, ... states, 1 <= num_val_configs <= n1 * n2 * ...
-                factor_configs[config_idx, variable_idx] represents the state of variable_names[variable_idx]
-                in the configuration factor_configs[config_idx].
-            log_potentials: Optional array of shape (num_val_configs,).
-                If specified, log_potentials[config_idx] contains the log of the potential value for
-                the valid configuration factor_configs[config_idx].
-                If None, it is assumed the log potential is uniform 0 and such an array is automatically
-                initialized.
+            factor: The factor to be added to the factor graph.
+            name: Optional name of the FactorGroup.
         """
-        factor_group = EnumerationFactorGroup(
-            variables_for_factors=[variables],
-            factor_configs=factor_configs,
-            log_potentials=log_potentials,
-        )
-        self._register_factor_group(factor_group, name)
-
-    def add_factor_by_type(
-        self, variables: List[int], factor_type: type, *args, **kwargs
-    ) -> None:
-        """Function to add a single factor to the FactorGraph.
-
-        Args:
-            variables: A list containing the connected variables.
-                Each variable is represented by a tuple of the form (variable hash/name, number of states)
-            factor_type: Type of factor to be added
-            args: Args to be passed to the factor_type.
-            kwargs: kwargs to be passed to the factor_type, and an optional "name" argument
-                for specifying the name of a named factor group.
-
-        Example:
-            To add an ORFactor to a FactorGraph fg, run::
-
-                fg.add_factor_by_type(
-                    variables=variables_for_OR_factor,
-                    factor_type=logical.ORFactor
-                )
-        """
-        if factor_type not in FAC_TO_VAR_UPDATES:
-            raise ValueError(
-                f"Type {factor_type} is not one of the supported factor types {FAC_TO_VAR_UPDATES.keys()}"
-            )
-
-        name = kwargs.pop("name", None)
-        factor = factor_type(variables, *args, **kwargs)
         factor_group = groups.SingleFactorGroup(
-            variables_for_factors=[variables],
+            variables_for_factors=[factor.variables],
             factor=factor,
         )
-        self._register_factor_group(factor_group, name)
+        self.add_factor_group(factor_group, name)
 
-    def add_factor_group(self, factory: Callable, *args, **kwargs) -> None:
-        """Add a factor group to the factor graph
-
-        Args:
-            factory: Factory function that takes args and kwargs as input and outputs a factor group.
-            args: Args to be passed to the factory function.
-            kwargs: kwargs to be passed to the factory function, and an optional "name" argument
-                for specifying the name of a named factor group.
-        """
-        name = kwargs.pop("name", None)
-        factor_group = factory(*args, **kwargs)
-        self._register_factor_group(factor_group, name)
-
-    def _register_factor_group(
+    def add_factor_group(
         self, factor_group: groups.FactorGroup, name: Optional[str] = None
     ) -> None:
-        """Register a factor group to the factor graph, by updating the factor graph state.
+        """Add a FactorGroup to the FactorGraph, by updating the FactorGraphState.
 
         Args:
-            factor_group: The factor group to be registered to the factor graph.
-            name: Optional name of the factor group.
+            factor_group: The FactorGroup to be added to the FactorGraph.
+            name: Optional name of the FactorGroup.
 
         Raises:
-            ValueError: If the factor group with the same name or a factor involving the same variables
-                already exists in the factor graph.
+            ValueError: If the factor group with the same name or a Factor involving the same variables
+                already exists in the FactorGraph.
         """
         if name in self._named_factor_groups:
             raise ValueError(
@@ -988,7 +924,7 @@ def BP(bp_state: BPState, temperature: float = 0.0) -> BeliefPropagation:
             ftov_msgs, edges_num_states, max_msg_size
         )
 
-        @jax.checkpoint
+        # @jax.checkpoint
         def update(msgs: jnp.ndarray, _) -> Tuple[jnp.ndarray, None]:
             # Compute new variable to factor messages by message passing
             vtof_msgs = infer.pass_var_to_fac_messages(

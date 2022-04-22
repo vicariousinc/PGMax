@@ -59,44 +59,44 @@ fg = graph.FactorGraph(variables)
 
 # %%
 # Add top-down factors
-fg.add_factor_group(
-    factory=enumeration.PairwiseFactorGroup,
+factor_group = enumeration.PairwiseFactorGroup(
     variables_for_factors=[
         [variables[ii, jj], variables[ii + 1, jj]]
         for ii in range(M - 1)
         for jj in range(N)
     ],
-    name="top_down",
 )
+fg.add_factor_group(factor_group, name="top_down")
+
 # Add left-right factors
-fg.add_factor_group(
-    factory=enumeration.PairwiseFactorGroup,
+factor_group = enumeration.PairwiseFactorGroup(
     variables_for_factors=[
         [variables[ii, jj], variables[ii, jj + 1]]
         for ii in range(M)
         for jj in range(N - 1)
     ],
-    name="left_right",
 )
+fg.add_factor_group(factor_group, name="left_right")
+
 # Add diagonal factors
-fg.add_factor_group(
-    factory=enumeration.PairwiseFactorGroup,
+factor_group = enumeration.PairwiseFactorGroup(
     variables_for_factors=[
         [variables[ii, jj], variables[ii + 1, jj + 1]]
         for ii in range(M - 1)
         for jj in range(N - 1)
     ],
-    name="diagonal0",
 )
-fg.add_factor_group(
-    factory=enumeration.PairwiseFactorGroup,
+fg.add_factor_group(factor_group, name="diagonal0")
+
+
+factor_group = enumeration.PairwiseFactorGroup(
     variables_for_factors=[
         [variables[ii, jj], variables[ii - 1, jj + 1]]
         for ii in range(1, M)
         for jj in range(N - 1)
     ],
-    name="diagonal1",
 )
+fg.add_factor_group(factor_group, name="diagonal1")
 
 # %%
 bp = graph.BP(fg.bp_state, temperature=1.0)
@@ -227,3 +227,12 @@ with tqdm(total=n_epochs * n_batches) as pbar:
             )
             pbar.update()
             pbar.set_postfix(loss=value)
+
+
+batch_indices = indices[idx * batch_size : (idx + 1) * batch_size]
+batch_noisy_images, batch_target_images = (
+    noisy_images_train[:10],
+    target_images_train[:10],
+)
+step = 0
+value, opt_state = update(step, batch_noisy_images, batch_target_images, opt_state)

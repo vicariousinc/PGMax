@@ -26,6 +26,7 @@ import jax
 import matplotlib.pyplot as plt
 import numpy as np
 
+from pgmax.factors import enumeration as enumeration_factor
 from pgmax.fg import graph
 from pgmax.groups import enumeration
 from pgmax.groups import variables as vgroup
@@ -64,25 +65,25 @@ print("Time", time.time() - start)
 start = time.time()
 
 # Add unary factors
-fg.add_factor_group(
-    factory=enumeration.EnumerationFactorGroup,
+hidden_unaries = enumeration.EnumerationFactorGroup(
     variables_for_factors=[[hidden_variables[ii]] for ii in range(bh.shape[0])],
     factor_configs=np.arange(2)[:, None],
     log_potentials=np.stack([np.zeros_like(bh), bh], axis=1),
 )
+fg.add_factor_group(hidden_unaries)
 
-fg.add_factor_group(
-    factory=enumeration.EnumerationFactorGroup,
+visible_unaries = enumeration.EnumerationFactorGroup(
     variables_for_factors=[[visible_variables[jj]] for jj in range(bv.shape[0])],
     factor_configs=np.arange(2)[:, None],
     log_potentials=np.stack([np.zeros_like(bv), bv], axis=1),
 )
+fg.add_factor_group(visible_unaries)
+
 # Add pairwise factors
 log_potential_matrix = np.zeros(W.shape + (2, 2)).reshape((-1, 2, 2))
 log_potential_matrix[:, 1, 1] = W.ravel()
 
-fg.add_factor_group(
-    factory=enumeration.PairwiseFactorGroup,
+pairwise_factors = enumeration.PairwiseFactorGroup(
     variables_for_factors=[
         [hidden_variables[ii], visible_variables[jj]]
         for ii in range(bh.shape[0])
@@ -90,6 +91,7 @@ fg.add_factor_group(
     ],
     log_potential_matrix=log_potential_matrix,
 )
+fg.add_factor_group(pairwise_factors)
 
 # # %snakeviz fg.add_factor_group(factory=enumeration.PairwiseFactorGroup, variables_for_factors=v, log_potential_matrix=log_potential_matrix,)
 print("Time", time.time() - start)
@@ -109,28 +111,31 @@ print("Time", time.time() - start)
 #
 # # Add unary factors
 # for ii in range(bh.shape[0]):
-#     fg.add_factor(
+#     factor = enumeration_factor.EnumerationFactor(
 #         variables=[hidden_variables[ii]],
 #         factor_configs=np.arange(2)[:, None],
 #         log_potentials=np.array([0, bh[ii]]),
 #     )
+#     fg.add_factor(factor)
 #
 # for jj in range(bv.shape[0]):
-#     fg.add_factor(
+#     factor = enumeration_factor.EnumerationFactor(
 #         variables=[visible_variables[jj]],
 #         factor_configs=np.arange(2)[:, None],
 #         log_potentials=np.array([0, bv[jj]]),
 #     )
+#     fg.add_factor(factor)
 #
 # # Add pairwise factors
 # factor_configs = np.array(list(itertools.product(np.arange(2), repeat=2)))
 # for ii in tqdm(range(bh.shape[0])):
 #     for jj in range(bv.shape[0]):
-#         fg.add_factor(
+#         factor = enumeration_factor.EnumerationFactor(
 #             variables=[hidden_variables[ii], visible_variables[jj]],
 #             factor_configs=factor_configs,
 #             log_potentials=np.array([0, 0, 0, W[ii, jj]]),
 #         )
+#         fg.add_factor(factor)
 # ~~~
 #
 # Once we have added the factors, we can run max-product LBP and get MAP decoding by
@@ -194,8 +199,8 @@ ax.axis("off")
 # ~~~python
 # bp_arrays = run_bp(
 #     evidence_updates={
-#         "hidden": np.random.gumbel(size=(bh.shape[0], 2)),
-#         "visible": np.random.gumbel(size=(bv.shape[0], 2)),
+#         hidden_variables: np.random.gumbel(size=(bh.shape[0], 2)),
+#         visible_variables: np.random.gumbel(size=(bv.shape[0], 2)),
 #     },
 #     damping=0.5,
 # )

@@ -22,6 +22,10 @@ class LogicalFactorGroup(groups.FactorGroup):
 
     edge_states_offset: int = field(init=False)
 
+    def __post_init__(self):
+        super().__post_init__()
+        object.__setattr__(self, "factor_configs", None)
+
     def _get_variables_to_factors(
         self,
     ) -> OrderedDict[FrozenSet, logical.LogicalFactor]:

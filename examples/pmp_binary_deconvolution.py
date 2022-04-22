@@ -180,10 +180,8 @@ for idx_img in tqdm(range(n_images)):
 print("After loop", time.time() - start)
 
 # Add ANDFactorGroup, which is computationally efficient
-fg.add_factor_group(
-    factory=logical.ANDFactorGroup,
-    variables_for_factors=variables_for_ANDFactors,
-)
+AND_factor_group = logical.ANDFactorGroup(variables_for_ANDFactors)
+fg.add_factor_group(AND_factor_group)
 print(time.time() - start)
 
 # Define the ORFactors
@@ -193,10 +191,8 @@ variables_for_ORFactors = [
 ]
 
 # Add ORFactorGroup, which is computationally efficient
-fg.add_factor_group(
-    factory=logical.ORFactorGroup,
-    variables_for_factors=variables_for_ORFactors,
-)
+OR_factor_group = logical.ORFactorGroup(variables_for_ORFactors)
+fg.add_factor_group(OR_factor_group)
 print("Time", time.time() - start)
 
 for factor_type, factor_groups in fg.factor_groups.items():
@@ -224,7 +220,7 @@ print("Time", time.time() - start)
 
 # %%
 pW = 0.25
-pS = 1e-80
+pS = 1e-70
 pX = 1e-100
 
 # Sparsity inducing priors for W and S
@@ -271,5 +267,3 @@ map_states = graph.decode_map_states(beliefs)
 
 # %%
 _ = plot_images(map_states[W].reshape(-1, feat_height, feat_width), nr=n_samples)
-
-# %%

@@ -123,7 +123,7 @@ class FactorGroup:
 
     def __post_init__(self):
         if len(self.variables_for_factors) == 0:
-            raise ValueError("Do not add a factor group with no factors.")
+            raise ValueError("Cannot create a FactorGroup with no Factor.")
 
     def __getitem__(self, variables: Sequence[Tuple[int, int]]) -> Any:
         """Function to query individual factors in the factor group
@@ -276,6 +276,10 @@ class SingleFactorGroup(FactorGroup):
         for key in compile_wiring_arguments:
             if not hasattr(self, key):
                 object.__setattr__(self, key, getattr(self.factor, key))
+
+        object.__setattr__(
+            self, "log_potentials", getattr(self.factor, "log_potentials")
+        )
 
     def _get_variables_to_factors(
         self,
