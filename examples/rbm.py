@@ -110,14 +110,14 @@ print("Time", time.time() - start)
 # # Add unary factors
 # for ii in range(bh.shape[0]):
 #     fg.add_factor(
-#         variable_names=[("hidden", ii)],
+#         variables=[hidden_variables[ii]],
 #         factor_configs=np.arange(2)[:, None],
 #         log_potentials=np.array([0, bh[ii]]),
 #     )
 #
 # for jj in range(bv.shape[0]):
 #     fg.add_factor(
-#         variable_names=[("visible", jj)],
+#         variables=[visible_variables[jj]],
 #         factor_configs=np.arange(2)[:, None],
 #         log_potentials=np.array([0, bv[jj]]),
 #     )
@@ -127,7 +127,7 @@ print("Time", time.time() - start)
 # for ii in tqdm(range(bh.shape[0])):
 #     for jj in range(bv.shape[0]):
 #         fg.add_factor(
-#             variable_names=[("hidden", ii), ("visible", jj)],
+#             variables=[hidden_variables[ii], visible_variables[jj]],
 #             factor_configs=factor_configs,
 #             log_potentials=np.array([0, 0, 0, W[ii, jj]]),
 #         )

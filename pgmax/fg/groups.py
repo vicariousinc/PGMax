@@ -1,7 +1,9 @@
 """A module containing the base classes for variable and factor groups in a Factor Graph."""
 
 import inspect
+import random
 from dataclasses import dataclass, field
+from functools import total_ordering
 from typing import (
     Any,
     FrozenSet,
@@ -21,6 +23,7 @@ import pgmax.fg.nodes as nodes
 from pgmax.utils import cached_property
 
 
+@total_ordering
 @dataclass(frozen=True, eq=False)
 class VariableGroup:
     """Class to represent a group of variables.
@@ -30,14 +33,28 @@ class VariableGroup:
     a sequence of variable names) of the VariableGroup.
     """
 
+    def __post_init__(self):
+        random_hash = random.randint(0, 2**63)
+        object.__setattr__(self, "random_hash", random_hash)
+
+    def __hash__(self):
+        return self.random_hash
+
+    def __eq__(self, other):
+        return hash(self) == hash(other)
+
+    def __lt__(self, other):
+        return hash(self) < hash(other)
+
     def __getitem__(self, val):
-        """Given a variable name, retrieve the associated Variable.
+        """Given a variable name, index, or a group of variable indices, retrieve the associated variable(s).
+        Each variable is returned via a tuple of the form (variable hash/name, number of states)
 
         Args:
-            val: a single name corresponding to a single variable, or a list of such names
+            val: a variable index, slice, or name
 
         Returns:
-            A single variable if the name is not a list. A list of variables if name is a list
+            A single variable or a list of variables
         """
         raise NotImplementedError(
             "Please subclass the VariableGroup class and override this method"
@@ -46,7 +63,7 @@ class VariableGroup:
     @cached_property
     def variables(self) -> Tuple[Any, int]:
         """Function that returns the list of all variables in the VariableGroup.
-        Each variable is represented by a tuple of the form (variable name, number of states)
+        Each variable is represented by a tuple of the form (variable hash/name, number of states)
 
         Returns:
             List of variables in the VariableGroup
@@ -108,7 +125,7 @@ class FactorGroup:
         if len(self.variables_for_factors) == 0:
             raise ValueError("Do not add a factor group with no factors.")
 
-    def __getitem__(self, variables: Sequence[int]) -> Any:
+    def __getitem__(self, variables: Sequence[Tuple[int, int]]) -> Any:
         """Function to query individual factors in the factor group
 
         Args:

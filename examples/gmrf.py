@@ -121,8 +121,8 @@ for plot_idx, idx in tqdm(enumerate(indices), total=n_plots):
                 damping=0.0,
             )
         )
-    )
-    marginals = marginals[variables]
+    )[variables]
+
     pred_image = np.argmax(
         np.stack(
             [

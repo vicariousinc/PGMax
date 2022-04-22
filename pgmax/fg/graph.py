@@ -35,7 +35,6 @@ from jax.scipy.special import logsumexp
 from pgmax.bp import infer
 from pgmax.factors import FAC_TO_VAR_UPDATES
 from pgmax.fg import groups, nodes
-from pgmax.groups import variables as vgroup
 from pgmax.groups.enumeration import EnumerationFactorGroup
 from pgmax.utils import cached_property
 
@@ -60,10 +59,8 @@ class FactorGraph:
         import time
 
         start = time.time()
-        if isinstance(self.variables, (vgroup.NDVariableArray, vgroup.VariableDict)):
-            self._variable_groups = [self.variables]
-        else:
-            self._variable_groups = self.variables
+        if isinstance(self.variables, groups.VariableGroup):
+            self.variables = [self.variables]
 
         # Useful objects to build the FactorGraph
         self._factor_types_to_groups: OrderedDict[
@@ -82,7 +79,7 @@ class FactorGraph:
             Tuple[int, int], int
         ] = collections.OrderedDict()
         vars_num_states_cumsum = 0
-        for variable_group in self._variable_groups:
+        for variable_group in self.variables:
             vg_num_states = variable_group.num_states.flatten()
             vg_num_states_cumsum = np.insert(np.cumsum(vg_num_states), 0, 0)
             self._vars_to_starts.update(
@@ -355,9 +352,10 @@ class FactorGraph:
         log_potentials = np.concatenate(
             [self.log_potentials[factor_type] for factor_type in self.log_potentials]
         )
+        assert isinstance(self.variables, list)
 
         return FactorGraphState(
-            variable_groups=self._variable_groups,
+            variable_groups=self.variables,
             vars_to_starts=self._vars_to_starts,
             num_var_states=self._num_var_states,
             total_factor_num_states=self._total_factor_num_states,
@@ -391,7 +389,7 @@ class FactorGraphState:
     """FactorGraphState.
 
     Args:
-        variable_group: A variable group containing all the variables in the FactorGraph.
+        variable_groups: All the variable groups in the FactorGraph.
         vars_to_starts: Maps variables to their starting indices in the flat evidence array.
             flat_evidence[vars_to_starts[variable]: vars_to_starts[variable] + variable.num_var_states]
             contains evidence to the variable.
@@ -1109,7 +1107,7 @@ def BP(bp_state: BPState, temperature: float = 0.0) -> BeliefPropagation:
             start += length
         return beliefs
 
-    # @jax.jit
+    @jax.jit
     def get_beliefs(bp_arrays: BPArrays) -> Dict[Hashable, Any]:
         """Function to calculate beliefs from a BPArrays
 
@@ -1143,7 +1141,8 @@ def BP(bp_state: BPState, temperature: float = 0.0) -> BeliefPropagation:
     return bp
 
 
-def decode_map_states(beliefs: Dict[Hashable, Any]) -> Dict[Hashable, Any]:
+@jax.jit
+def decode_map_states(beliefs: Dict[Hashable, Any]) -> Any:
     """Function to decode MAP states given the calculated beliefs.
 
     Args:
@@ -1152,18 +1151,11 @@ def decode_map_states(beliefs: Dict[Hashable, Any]) -> Dict[Hashable, Any]:
     Returns:
         An array or a PyTree container containing the MAP states for different variables.
     """
-
-    @jax.jit
-    def _decode_map_states(beliefs) -> Any:
-        return jax.tree_util.tree_map(lambda x: jnp.argmax(x, axis=-1), beliefs)
-
-    map_states = {}
-    for variable_group, vgroup_beliefs in beliefs.items():
-        map_states[variable_group] = _decode_map_states(vgroup_beliefs)
-    return map_states
+    return jax.tree_util.tree_map(lambda x: jnp.argmax(x, axis=-1), beliefs)
 
 
-def get_marginals(beliefs: Dict[Hashable, Any]) -> Dict[Hashable, Any]:
+@jax.jit
+def get_marginals(beliefs: Dict[Hashable, Any]) -> Any:
     """Function to get marginal probabilities given the calculated beliefs.
 
     Args:
@@ -1172,15 +1164,6 @@ def get_marginals(beliefs: Dict[Hashable, Any]) -> Dict[Hashable, Any]:
     Returns:
         An array or a PyTree container containing the marginal probabilities different variables.
     """
-
-    @jax.jit
-    def _get_marginals(beliefs) -> Any:
-        return jax.tree_util.tree_map(
-            lambda x: jnp.exp(x - logsumexp(x, axis=-1, keepdims=True)),
-            beliefs,
-        )
-
-    marginals = {}
-    for variable_group, vgroup_beliefs in beliefs.items():
-        marginals[variable_group] = _get_marginals(vgroup_beliefs)
-    return marginals
+    return jax.tree_util.tree_map(
+        lambda x: jnp.exp(x - logsumexp(x, axis=-1, keepdims=True)), beliefs
+    )
