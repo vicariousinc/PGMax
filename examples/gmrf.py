@@ -88,7 +88,6 @@ factor_group = enumeration.PairwiseFactorGroup(
 )
 fg.add_factor_group(factor_group, name="diagonal0")
 
-
 factor_group = enumeration.PairwiseFactorGroup(
     variables_for_factors=[
         [variables[ii, jj], variables[ii - 1, jj + 1]]

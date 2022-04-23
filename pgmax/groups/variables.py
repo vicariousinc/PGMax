@@ -168,6 +168,15 @@ class VariableDict(groups.VariableGroup):
         return list(zip(self.variable_names, self.num_states))
 
     def __getitem__(self, val):
+        """Given a variable name retrieve the associated variable, returned via a tuple of the form
+        (variable name, number of states)
+
+        Args:
+            val: a variable index or slice
+
+        Returns:
+            The queried variable
+        """
         if val not in self.variable_names:
             raise ValueError(f"Variable {val} is not in VariableDict")
         return (val, self.num_states[0])

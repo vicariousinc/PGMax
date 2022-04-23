@@ -27,10 +27,10 @@ from pgmax.utils import cached_property
 @dataclass(frozen=True, eq=False)
 class VariableGroup:
     """Class to represent a group of variables.
+    Each variable is represented via a tuple of the form (variable hash/name, number of states)
 
-    All variables in the group are assumed to have the same size. Additionally, the
-    variables are indexed by a variable name, and can be retrieved by direct indexing (even indexing
-    a sequence of variable names) of the VariableGroup.
+    Attributes:
+        random_hash: Hash of the VariableGroup
     """
 
     def __post_init__(self):

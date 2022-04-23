@@ -108,7 +108,7 @@ class FactorGraph:
 
         Args:
             factor: The factor to be added to the factor graph.
-            name: Optional name of the FactorGroup.
+            name: Optional name of the SingleFactorGroup created.
         """
         factor_group = groups.SingleFactorGroup(
             variables_for_factors=[factor.variables],
@@ -350,14 +350,12 @@ class FactorGraphState:
     wiring: OrderedDict[type, nodes.Wiring]
 
     def __post_init__(self):
-        for this_field in self.__dataclass_fields__:
-            if isinstance(getattr(self, this_field), np.ndarray):
-                getattr(self, this_field).flags.writeable = False
+        for field in self.__dataclass_fields__:
+            if isinstance(getattr(self, field), np.ndarray):
+                getattr(self, field).flags.writeable = False
 
-            if isinstance(getattr(self, this_field), Mapping):
-                object.__setattr__(
-                    self, this_field, MappingProxyType(getattr(self, this_field))
-                )
+            if isinstance(getattr(self, field), Mapping):
+                object.__setattr__(self, field, MappingProxyType(getattr(self, field)))
 
 
 @dataclass(frozen=True, eq=False)
@@ -756,9 +754,9 @@ class BPArrays:
     evidence: Union[np.ndarray, jnp.ndarray]
 
     def __post_init__(self):
-        for this_field in self.__dataclass_fields__:
-            if isinstance(getattr(self, this_field), np.ndarray):
-                getattr(self, this_field).flags.writeable = False
+        for field in self.__dataclass_fields__:
+            if isinstance(getattr(self, field), np.ndarray):
+                getattr(self, field).flags.writeable = False
 
     def tree_flatten(self):
         return jax.tree_util.tree_flatten(asdict(self))
@@ -981,16 +979,16 @@ def BP(bp_state: BPState, temperature: float = 0.0) -> BeliefPropagation:
         )
 
     def unflatten_beliefs(flat_beliefs, variable_groups) -> Dict[Hashable, Any]:
-        """Function that recovers meaningful structured data from internal flat data array
+        """Function that returns unflattened beliefs from the flat beliefs
 
         Args:
-            variable_groups: TODO
-
-        Returns:
-            Meaningful structured data, with structure matching that of self.variable_group_container.
+            flat_beliefs: Flattened array of beliefs
+            variable_groups: All the variable groups in the FactorGraph.
 
         Raises:
-            ValueError: if flat_data is not of the right shape
+            ValueError: If
+                (1) flat_beliefs is not one dimensional
+                (2) flat_beliefs is not of the right shape
         """
 
         if flat_beliefs.ndim != 1:
@@ -998,6 +996,7 @@ def BP(bp_state: BPState, temperature: float = 0.0) -> BeliefPropagation:
                 f"Can only unflatten 1D array. Got a {flat_beliefs.ndim}D array."
             )
 
+        # TODO: make sure this is not too slow
         num_variables = 0
         num_variable_states = 0
         for variable_group in variable_groups:
@@ -1020,7 +1019,7 @@ def BP(bp_state: BPState, temperature: float = 0.0) -> BeliefPropagation:
             use_num_states = True
         else:
             raise ValueError(
-                f"flat_data should be either of shape (num_variables(={num_variables}),), "
+                f"flat_beliefs should be either of shape (num_variables(={num_variables}),), "
                 f"or (num_variable_states(={num_variable_states}),). "
                 f"Got {flat_beliefs.shape}"
             )
