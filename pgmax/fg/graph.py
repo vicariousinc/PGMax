@@ -35,7 +35,6 @@ from jax.scipy.special import logsumexp
 from pgmax.bp import infer
 from pgmax.factors import FAC_TO_VAR_UPDATES
 from pgmax.fg import groups, nodes
-from pgmax.groups.enumeration import EnumerationFactorGroup
 from pgmax.utils import cached_property
 
 

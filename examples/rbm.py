@@ -26,7 +26,6 @@ import jax
 import matplotlib.pyplot as plt
 import numpy as np
 
-from pgmax.factors import enumeration as enumeration_factor
 from pgmax.fg import graph
 from pgmax.groups import enumeration
 from pgmax.groups import variables as vgroup
