@@ -1,6 +1,7 @@
 import re
 from dataclasses import replace
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -12,6 +13,16 @@ from pgmax.groups import variables as vgroup
 
 
 def test_factor_graph():
+    vg = vgroup.NDVariableArray(num_states=2, shape=(10, 10))
+    with pytest.raises(ValueError, match="Two objects have the same name"):
+        fg = graph.FactorGraph(variables=[vg, vg])
+
+    vg = vgroup.NDVariableArray(num_states=2, shape=(10, 10))
+    vg2 = vgroup.NDVariableArray(num_states=2, shape=(10, 10))
+    object.__setattr__(vg2, "random_hash", vg.__hash__() + 10)
+    with pytest.raises(ValueError, match="Two NDVariableArrays have overlapping names"):
+        fg = graph.FactorGraph(variables=[vg, vg2])
+
     # TODO: remove factor graph name
 
     vg = vgroup.VariableDict(variable_names=(0,), num_states=15)
@@ -147,10 +158,10 @@ def test_ftov_msgs():
 
 
 def test_evidence():
-    vg = vgroup.VariableDict(variable_names=(0,), num_states=15)
+    vg = vgroup.VariableDict(variable_names=("a",), num_states=15)
     fg = graph.FactorGraph(vg)
     factor_group = enumeration.EnumerationFactorGroup(
-        variables_for_factors=[[vg[0]]],
+        variables_for_factors=[[vg["a"]]],
         factor_configs=np.arange(10)[:, None],
     )
     fg.add_factor_group(factor_group, name="test")
@@ -162,6 +173,19 @@ def test_evidence():
 
     evidence = graph.Evidence(fg_state=fg.fg_state, value=np.zeros(15))
     assert jnp.all(evidence.value == jnp.zeros(15))
+
+    vg2 = vgroup.VariableDict(variable_names=("b",), num_states=15)
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Got evidence for a variable or a variable group not in the FactorGraph!"
+        ),
+    ):
+        graph.update_evidence(
+            jax.device_put(evidence.value),
+            {vg2["b"]: jax.device_put(np.zeros(15))},
+            fg.fg_state,
+        )
 
 
 def test_bp():

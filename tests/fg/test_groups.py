@@ -50,6 +50,21 @@ def test_variable_dict():
 
 
 def test_nd_variable_array():
+    num_states = np.full((2, 3), fill_value=2)
+    with pytest.raises(
+        ValueError, match=re.escape("Expected num_states shape (2, 2). Got (2, 3).")
+    ):
+        vgroup.NDVariableArray(shape=(2, 2), num_states=num_states)
+
+    num_states = np.full((2, 3), fill_value=2, dtype=np.float32)
+    with pytest.raises(
+        ValueError, match=re.escape("num_states entries should be of type np.int")
+    ):
+        vgroup.NDVariableArray(shape=(2, 2), num_states=num_states)
+
+    variable_group = vgroup.NDVariableArray(shape=(5, 5), num_states=2)
+    assert len(variable_group[:3, :3]) == 9
+
     variable_group = vgroup.NDVariableArray(shape=(2, 2), num_states=3)
     with pytest.raises(
         ValueError,

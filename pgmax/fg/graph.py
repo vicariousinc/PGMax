@@ -35,6 +35,7 @@ from jax.scipy.special import logsumexp
 from pgmax.bp import infer
 from pgmax.factors import FAC_TO_VAR_UPDATES
 from pgmax.fg import groups, nodes
+from pgmax.groups import variables
 from pgmax.utils import cached_property
 
 
@@ -60,6 +61,25 @@ class FactorGraph:
         start = time.time()
         if isinstance(self.variables, groups.VariableGroup):
             self.variables = [self.variables]
+
+        # Check ids are unique
+        vg_names = []
+        vg_array_names = []
+        for variable_group in self.variables:
+            vg_name = variable_group.__hash__()
+            if vg_name in vg_names:
+                raise ValueError("Two objects have the same name")
+            vg_names.append(vg_name)
+            if isinstance(variable_group, variables.NDVariableArray):
+                start_name, end_name = (
+                    vg_name,
+                    variable_group.variable_names.flatten()[-1],
+                )
+                for var_array_name in vg_array_names:
+                    start_name2, end_name2 = var_array_name
+                    if max(start_name, start_name2) <= min(end_name, end_name2):
+                        raise ValueError("Two NDVariableArrays have overlapping names")
+                vg_array_names.append((start_name, end_name))
 
         # Useful objects to build the FactorGraph
         self._factor_types_to_groups: OrderedDict[
@@ -91,7 +111,7 @@ class FactorGraph:
 
         self._num_var_states = vars_num_states_cumsum
         self._named_factor_groups: Dict[Hashable, groups.FactorGroup] = {}
-        print("2", time.time() - start)
+        print("Init", time.time() - start)
 
     def __hash__(self) -> int:
         all_factor_groups = tuple(
@@ -469,9 +489,6 @@ class LogPotentials:
             The queried log potentials.
         """
         value = cast(np.ndarray, self.value)
-        if not isinstance(name, Hashable):
-            name = frozenset(name)
-
         if name in self.fg_state.named_factor_groups:
             factor_group = self.fg_state.named_factor_groups[name]
             start = self.fg_state.factor_group_to_potentials_starts[factor_group]
@@ -496,9 +513,6 @@ class LogPotentials:
             data: Array containing the log potentials for the named factor group
                 or the factor.
         """
-        if not isinstance(name, Hashable):
-            name = frozenset(name)
-
         object.__setattr__(
             self,
             "value",
@@ -996,7 +1010,6 @@ def BP(bp_state: BPState, temperature: float = 0.0) -> BeliefPropagation:
                 f"Can only unflatten 1D array. Got a {flat_beliefs.ndim}D array."
             )
 
-        # TODO: make sure this is not too slow
         num_variables = 0
         num_variable_states = 0
         for variable_group in variable_groups:
@@ -1004,25 +1017,10 @@ def BP(bp_state: BPState, temperature: float = 0.0) -> BeliefPropagation:
             num_variables += len(variables)
             num_variable_states += sum([variable[1] for variable in variables])
 
-            # if isinstance(variable_group, vgroup.NDVariableArray):
-            #     num_variables += variable_group.num_states.size
-            #     num_variable_states += variable_group.num_states.sum()
-            # elif isinstance(variable_group, vgroup.VariableDict):
-            #     num_variables += len(variable_group.variables)
-            #     num_variable_states += (
-            #         len(variable_group.variables) * variable_group.variables[0].num_states
-            #     )
-
         if flat_beliefs.shape[0] == num_variables:
             use_num_states = False
         elif flat_beliefs.shape[0] == num_variable_states:
             use_num_states = True
-        else:
-            raise ValueError(
-                f"flat_beliefs should be either of shape (num_variables(={num_variables}),), "
-                f"or (num_variable_states(={num_variable_states}),). "
-                f"Got {flat_beliefs.shape}"
-            )
 
         beliefs = {}
         start = 0
@@ -1030,10 +1028,8 @@ def BP(bp_state: BPState, temperature: float = 0.0) -> BeliefPropagation:
             variables = variable_group.variables
             if not use_num_states:
                 length = len(variables)
-                # length = variable_group.num_states.sum()
             else:
                 length = sum([variable[1] for variable in variables])
-                # length = variable_group.num_states.size
 
             beliefs[variable_group] = variable_group.unflatten(
                 flat_beliefs[start : start + length]

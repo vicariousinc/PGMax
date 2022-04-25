@@ -16,31 +16,34 @@ class NDVariableArray(groups.VariableGroup):
     """Subclass of VariableGroup for n-dimensional grids of variables.
 
     Args:
-        num_states: The size of the variables in this variable group
-        shape: a tuple specifying the size of each dimension of the grid (similar to
+        shape: Tuple specifying the size of each dimension of the grid (similar to
             the notion of a NumPy ndarray shape)
+        num_states: An integer or an array specifying the number of states of the
+            variables in this VariableGroup
     """
 
     shape: Tuple[int, ...]
-    num_states: np.ndarray
+    num_states: Union[int, np.ndarray]
 
     def __post_init__(self):
         super().__post_init__()
 
-        if np.isscalar(self.num_states) and np.issubdtype(type(np.int64(10)), int):
+        if np.isscalar(self.num_states):
             num_states = np.full(self.shape, fill_value=self.num_states)
             object.__setattr__(self, "num_states", num_states)
         elif isinstance(self.num_states, np.ndarray) and np.issubdtype(
             self.num_states.dtype, int
         ):
             if self.num_states.shape != self.shape:
-                raise ValueError("Should be same shape")
+                raise ValueError(
+                    f"Expected num_states shape {self.shape}. Got {self.num_states.shape}."
+                )
         else:
             raise ValueError("num_states entries should be of type np.int")
 
     def __getitem__(
-        self, val: Union[int, tuple, slice]
-    ) -> Union[Tuple[int, int], List[Tuple[int]]]:
+        self, val: Union[int, slice, Tuple]
+    ) -> Union[Tuple[int, int], List[Tuple]]:
         """Given an index or a slice, retrieve the associated variable(s).
         Each variable is returned via a tuple of the form (variable hash, number of states)
 
@@ -52,10 +55,13 @@ class NDVariableArray(groups.VariableGroup):
         Returns:
             A single variable or a list of variables
         """
-        result = (self.variable_names[val], self.num_states[val])
-        if isinstance(val, slice):
-            return list(zip(result))
-        return result
+        assert isinstance(self.num_states, np.ndarray)
+        if np.isscalar(self.variable_names[val]):
+            return (self.variable_names[val], self.num_states[val])
+        else:
+            vars_names = self.variable_names[val].flatten()
+            vars_num_states = self.num_states[val].flatten()
+            return list(zip(vars_names, vars_num_states))
 
     @cached_property
     def variables(self) -> List[Tuple]:
@@ -65,6 +71,7 @@ class NDVariableArray(groups.VariableGroup):
         Returns:
             List of variables in the VariableGroup
         """
+        assert isinstance(self.num_states, np.ndarray)
         vars_names = self.variable_names.flatten()
         vars_num_states = self.num_states.flatten()
         return list(zip(vars_names, vars_num_states))
@@ -76,7 +83,6 @@ class NDVariableArray(groups.VariableGroup):
         Returns:
             Array of variables names.
         """
-        # Overwite default hash as it does not give enough spacing across consecutive objects
         indices = np.reshape(np.arange(np.product(self.shape)), self.shape)
         return self.__hash__() + indices
 
@@ -93,6 +99,8 @@ class NDVariableArray(groups.VariableGroup):
         Raises:
             ValueError: If the data is not of the correct shape.
         """
+        assert isinstance(self.num_states, np.ndarray)
+
         # TODO: what should we do for different number of states -> look at mask_array
         if data.shape != self.shape and data.shape != self.shape + (
             self.num_states.max(),
@@ -120,6 +128,8 @@ class NDVariableArray(groups.VariableGroup):
                 (1) flat_data is not a 1D array
                 (2) flat_data is not of the right shape
         """
+        assert isinstance(self.num_states, np.ndarray)
+
         if flat_data.ndim != 1:
             raise ValueError(
                 f"Can only unflatten 1D array. Got a {flat_data.ndim}D array."

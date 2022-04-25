@@ -34,6 +34,8 @@ class VariableGroup:
     """
 
     def __post_init__(self):
+        # Overwite default hash to have larger differences
+        random.seed(id(self))
         random_hash = random.randint(0, 2**63)
         object.__setattr__(self, "random_hash", random_hash)
 
