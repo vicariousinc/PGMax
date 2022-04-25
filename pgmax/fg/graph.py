@@ -935,7 +935,7 @@ def BP(bp_state: BPState, temperature: float = 0.0) -> BeliefPropagation:
             ftov_msgs, edges_num_states, max_msg_size
         )
 
-        # @jax.checkpoint
+        @jax.checkpoint
         def update(msgs: jnp.ndarray, _) -> Tuple[jnp.ndarray, None]:
             # Compute new variable to factor messages by message passing
             vtof_msgs = infer.pass_var_to_fac_messages(
@@ -961,8 +961,7 @@ def BP(bp_state: BPState, temperature: float = 0.0) -> BeliefPropagation:
             # update the factor to variable messages
             delta_msgs = ftov_msgs - msgs
             msgs = msgs + (1 - damping) * delta_msgs
-            # Normalize and clip these damped, updated messages before
-            # returning them.
+            # Normalize and clip these damped, updated messages before returning them.
             msgs = infer.normalize_and_clip_msgs(msgs, edges_num_states, max_msg_size)
             return msgs, None
 
