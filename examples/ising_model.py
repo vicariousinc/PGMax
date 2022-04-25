@@ -43,7 +43,7 @@ factor_group = enumeration.PairwiseFactorGroup(
     variables_for_factors=variables_for_factors,
     log_potential_matrix=0.8 * np.array([[1.0, -1.0], [-1.0, 1.0]]),
 )
-fg.add_factor_group(factor_group, name="factors")
+fg.add_factor_group(factor_group)
 
 # %% [markdown]
 # ### Run inference and visualize results
@@ -88,7 +88,7 @@ batch_loss(None, {variables: jax.device_put(np.random.gumbel(size=(10, 50, 50, 2
 
 # %%
 grads = log_potentials_grads(
-    {"factors": jnp.eye(2)},
+    {factor_group: jnp.eye(2)},
     {variables: jax.device_put(np.random.gumbel(size=(50, 50, 2)))},
 )
 

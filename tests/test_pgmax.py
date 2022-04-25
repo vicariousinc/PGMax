@@ -265,14 +265,14 @@ def test_e2e_sanity_check():
     for row in range(M - 1):
         for col in range(N - 1):
             if row != M - 2 and col != N - 2:
-                curr_names = [
+                curr_vars = [
                     grid_vars[0, row, col],
                     grid_vars[1, row, col],
                     grid_vars[0, row, col + 1],
                     grid_vars[1, row + 1, col],
                 ]
             elif row != M - 2:
-                curr_names = [
+                curr_vars = [
                     grid_vars[0, row, col],
                     grid_vars[1, row, col],
                     additional_vars[0, row, col + 1],
@@ -280,7 +280,7 @@ def test_e2e_sanity_check():
                 ]
 
             elif col != N - 2:
-                curr_names = [
+                curr_vars = [
                     grid_vars[0, row, col],
                     grid_vars[1, row, col],
                     grid_vars[0, row, col + 1],
@@ -288,7 +288,7 @@ def test_e2e_sanity_check():
                 ]
 
             else:
-                curr_names = [
+                curr_vars = [
                     grid_vars[0, row, col],
                     grid_vars[1, row, col],
                     additional_vars[0, row, col + 1],
@@ -296,54 +296,54 @@ def test_e2e_sanity_check():
                 ]
             if row % 2 == 0:
                 factor = EnumerationFactor(
-                    variables=curr_names,
+                    variables=curr_vars,
                     factor_configs=valid_configs_non_supp,
                     log_potentials=np.zeros(
                         valid_configs_non_supp.shape[0], dtype=float
                     ),
                 )
-                fg.add_factor(factor, name=(row, col))
+                fg.add_factor(factor)
             else:
                 factor = EnumerationFactor(
-                    variables=curr_names,
+                    variables=curr_vars,
                     factor_configs=valid_configs_non_supp,
                     log_potentials=np.zeros(
                         valid_configs_non_supp.shape[0], dtype=float
                     ),
                 )
-                fg.add_factor(factor, name=(row, col))
+                fg.add_factor(factor)
 
     # Create an EnumerationFactorGroup for vertical suppression factors
-    vert_suppression_names: List[List[Tuple[Any, ...]]] = []
+    vert_suppression_vars: List[List[Tuple[Any, ...]]] = []
     for col in range(N):
         for start_row in range(M - SUPPRESSION_DIAMETER):
             if col != N - 1:
-                vert_suppression_names.append(
+                vert_suppression_vars.append(
                     [
                         grid_vars[0, r, col]
                         for r in range(start_row, start_row + SUPPRESSION_DIAMETER)
                     ]
                 )
             else:
-                vert_suppression_names.append(
+                vert_suppression_vars.append(
                     [
                         additional_vars[0, r, col]
                         for r in range(start_row, start_row + SUPPRESSION_DIAMETER)
                     ]
                 )
 
-    horz_suppression_names: List[List[Tuple[Any, ...]]] = []
+    horz_suppression_vars: List[List[Tuple[Any, ...]]] = []
     for row in range(M):
         for start_col in range(N - SUPPRESSION_DIAMETER):
             if row != M - 1:
-                horz_suppression_names.append(
+                horz_suppression_vars.append(
                     [
                         grid_vars[1, row, c]
                         for c in range(start_col, start_col + SUPPRESSION_DIAMETER)
                     ]
                 )
             else:
-                horz_suppression_names.append(
+                horz_suppression_vars.append(
                     [
                         additional_vars[1, row, c]
                         for c in range(start_col, start_col + SUPPRESSION_DIAMETER)
@@ -352,13 +352,13 @@ def test_e2e_sanity_check():
 
     # Add the suppression factors to the graph via kwargs
     factor_group = enumeration.EnumerationFactorGroup(
-        variables_for_factors=vert_suppression_names,
+        variables_for_factors=vert_suppression_vars,
         factor_configs=valid_configs_supp,
     )
     fg.add_factor_group(factor_group)
 
     factor_group = enumeration.EnumerationFactorGroup(
-        variables_for_factors=horz_suppression_names,
+        variables_for_factors=horz_suppression_vars,
         factor_configs=valid_configs_supp,
         log_potentials=np.zeros(valid_configs_supp.shape[0], dtype=float),
     )
@@ -419,7 +419,7 @@ def test_e2e_heretic():
                 variables_for_factors=binary_connected_variables(28, 28, k_row, k_col),
                 log_potential_matrix=W_pot[:, :, k_row, k_col],
             )
-            fg.add_factor_group(factor_group, name=(k_row, k_col))
+            fg.add_factor_group(factor_group)
 
     # Assign evidence to pixel vars
     bp_state = fg.bp_state

@@ -38,8 +38,8 @@ target_images = data["images_test"]
 
 # %%
 # Load saved log potentials
-log_potentials = dict(**np.load("example_data/gmrf_log_potentials.npz"))
-n_clones = log_potentials.pop("n_clones")
+grmf_log_potentials = dict(**np.load("example_data/gmrf_log_potentials.npz"))
+n_clones = grmf_log_potentials.pop("n_clones")
 p_contour = jax.device_put(np.repeat(data["p_contour"], n_clones))
 prototype_targets = jax.device_put(
     np.array(
@@ -59,48 +59,55 @@ fg = graph.FactorGraph(variables)
 
 # %%
 # Add top-down factors
-factor_group = enumeration.PairwiseFactorGroup(
+top_down = enumeration.PairwiseFactorGroup(
     variables_for_factors=[
         [variables[ii, jj], variables[ii + 1, jj]]
         for ii in range(M - 1)
         for jj in range(N)
     ],
 )
-fg.add_factor_group(factor_group, name="top_down")
+fg.add_factor_group(top_down)
 
 # Add left-right factors
-factor_group = enumeration.PairwiseFactorGroup(
+left_right = enumeration.PairwiseFactorGroup(
     variables_for_factors=[
         [variables[ii, jj], variables[ii, jj + 1]]
         for ii in range(M)
         for jj in range(N - 1)
     ],
 )
-fg.add_factor_group(factor_group, name="left_right")
+fg.add_factor_group(left_right)
 
 # Add diagonal factors
-factor_group = enumeration.PairwiseFactorGroup(
+diagonal0 = enumeration.PairwiseFactorGroup(
     variables_for_factors=[
         [variables[ii, jj], variables[ii + 1, jj + 1]]
         for ii in range(M - 1)
         for jj in range(N - 1)
     ],
 )
-fg.add_factor_group(factor_group, name="diagonal0")
+fg.add_factor_group(diagonal0)
 
-factor_group = enumeration.PairwiseFactorGroup(
+diagonal1 = enumeration.PairwiseFactorGroup(
     variables_for_factors=[
         [variables[ii, jj], variables[ii - 1, jj + 1]]
         for ii in range(1, M)
         for jj in range(N - 1)
     ],
 )
-fg.add_factor_group(factor_group, name="diagonal1")
+fg.add_factor_group(diagonal1)
 
 # %%
 bp = graph.BP(fg.bp_state, temperature=1.0)
 
 # %%
+log_potentials = {
+    top_down: grmf_log_potentials["top_down"],
+    left_right: grmf_log_potentials["left_right"],
+    diagonal0: grmf_log_potentials["diagonal0"],
+    diagonal1: grmf_log_potentials["diagonal1"],
+}
+
 n_plots = 5
 indices = np.random.permutation(noisy_images.shape[0])[:n_plots]
 fig, ax = plt.subplots(n_plots, 3, figsize=(30, 10 * n_plots))
@@ -199,10 +206,10 @@ def update(step, batch_noisy_images, batch_target_images, opt_state):
 # %%
 opt_state = init_fun(
     {
-        "top_down": np.random.randn(num_states, num_states),
-        "left_right": np.random.randn(num_states, num_states),
-        "diagonal0": np.random.randn(num_states, num_states),
-        "diagonal1": np.random.randn(num_states, num_states),
+        top_down: np.random.randn(num_states, num_states),
+        left_right: np.random.randn(num_states, num_states),
+        diagonal0: np.random.randn(num_states, num_states),
+        diagonal1: np.random.randn(num_states, num_states),
     }
 )
 
@@ -226,7 +233,6 @@ with tqdm(total=n_epochs * n_batches) as pbar:
             )
             pbar.update()
             pbar.set_postfix(loss=value)
-
 
 batch_indices = indices[idx * batch_size : (idx + 1) * batch_size]
 batch_noisy_images, batch_target_images = (

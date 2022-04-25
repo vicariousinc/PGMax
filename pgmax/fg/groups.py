@@ -101,6 +101,7 @@ class VariableGroup:
         )
 
 
+@total_ordering
 @dataclass(frozen=True, eq=False)
 class FactorGroup:
     """Class to represent a group of Factors.
@@ -126,6 +127,15 @@ class FactorGroup:
     def __post_init__(self):
         if len(self.variables_for_factors) == 0:
             raise ValueError("Cannot create a FactorGroup with no Factor.")
+
+    def __hash__(self):
+        return id(self)
+
+    def __eq__(self, other):
+        return hash(self) == hash(other)
+
+    def __lt__(self, other):
+        return hash(self) < hash(other)
 
     def __getitem__(self, variables: Sequence[Tuple[int, int]]) -> Any:
         """Function to query individual factors in the factor group

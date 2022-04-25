@@ -13,17 +13,14 @@ from pgmax.groups import variables as vgroup
 
 
 def test_factor_graph():
-    vg = vgroup.NDVariableArray(num_states=2, shape=(10, 10))
+    vg1 = vgroup.NDVariableArray(num_states=2, shape=(10, 10))
     with pytest.raises(ValueError, match="Two objects have the same name"):
-        fg = graph.FactorGraph(variables=[vg, vg])
+        fg = graph.FactorGraph(variables=[vg1, vg1])
 
-    vg = vgroup.NDVariableArray(num_states=2, shape=(10, 10))
     vg2 = vgroup.NDVariableArray(num_states=2, shape=(10, 10))
-    object.__setattr__(vg2, "random_hash", vg.__hash__() + 10)
+    object.__setattr__(vg2, "random_hash", vg1.__hash__() + 10)
     with pytest.raises(ValueError, match="Two NDVariableArrays have overlapping names"):
-        fg = graph.FactorGraph(variables=[vg, vg2])
-
-    # TODO: remove factor graph name
+        fg = graph.FactorGraph(variables=[vg1, vg2])
 
     vg = vgroup.VariableDict(variable_names=(0,), num_states=15)
     fg = graph.FactorGraph(vg)
@@ -32,13 +29,7 @@ def test_factor_graph():
         factor_configs=np.arange(15)[:, None],
         log_potentials=np.zeros(15),
     )
-    fg.add_factor(factor, name="test")
-
-    with pytest.raises(
-        ValueError,
-        match="A factor group with the name test already exists. Please choose a different name",
-    ):
-        fg.add_factor(factor, name="test")
+    fg.add_factor(factor)
 
     with pytest.raises(
         ValueError,
@@ -76,10 +67,10 @@ def test_bp_state():
         factor_configs=np.arange(15)[:, None],
         log_potentials=np.zeros(15),
     )
-    fg0.add_factor(factor, name="test")
+    fg0.add_factor(factor)
 
     fg1 = graph.FactorGraph(vg)
-    fg1.add_factor(factor, name="test")
+    fg1.add_factor(factor)
 
     with pytest.raises(
         ValueError,
@@ -99,23 +90,27 @@ def test_log_potentials():
         variables_for_factors=[[vg[0]]],
         factor_configs=np.arange(10)[:, None],
     )
-    fg.add_factor_group(factor_group, name="test")
+    fg.add_factor_group(factor_group)
 
     with pytest.raises(
         ValueError,
-        match=re.escape("Expected log potentials shape (10,) for factor group test."),
+        match=re.escape("Expected log potentials shape (10,) for factor group."),
     ):
-        fg.bp_state.log_potentials["test"] = jnp.zeros((1, 15))
+        fg.bp_state.log_potentials[factor_group] = jnp.zeros((1, 15))
 
     with pytest.raises(
         ValueError,
-        match=re.escape("Invalid name new_test for log potentials updates."),
+        match=re.escape("Invalid FactorGroup for log potentials updates."),
     ):
-        fg.bp_state.log_potentials["new_test"] = jnp.zeros((1, 15))
+        factor_group2 = enumeration.EnumerationFactorGroup(
+            variables_for_factors=[[vg[0]]],
+            factor_configs=np.arange(10)[:, None],
+        )
+        fg.bp_state.log_potentials[factor_group2] = jnp.zeros((1, 15))
 
     with pytest.raises(
         ValueError,
-        match=re.escape("Invalid name (0, 15) for log potentials updates."),
+        match=re.escape("Invalid FactorGroup for log potentials updates."),
     ):
         fg.bp_state.log_potentials[vg[0]] = np.zeros(10)
 
@@ -125,7 +120,7 @@ def test_log_potentials():
         graph.LogPotentials(fg_state=fg.fg_state, value=np.zeros(15))
 
     log_potentials = graph.LogPotentials(fg_state=fg.fg_state, value=np.zeros(10))
-    assert jnp.all(log_potentials["test"] == jnp.zeros(10))
+    assert jnp.all(log_potentials[factor_group] == jnp.zeros(10))
 
 
 def test_ftov_msgs():
@@ -135,7 +130,7 @@ def test_ftov_msgs():
         variables_for_factors=[[vg[0]]],
         factor_configs=np.arange(10)[:, None],
     )
-    fg.add_factor_group(factor_group, name="test")
+    fg.add_factor_group(factor_group)
 
     with pytest.raises(
         ValueError,
@@ -170,7 +165,7 @@ def test_evidence():
         variables_for_factors=[[vg["a"]]],
         factor_configs=np.arange(10)[:, None],
     )
-    fg.add_factor_group(factor_group, name="test")
+    fg.add_factor_group(factor_group)
 
     with pytest.raises(
         ValueError, match=re.escape("Expected evidence shape (15,). Got (10,).")
@@ -201,7 +196,7 @@ def test_bp():
         variables_for_factors=[[vg[0]]],
         factor_configs=np.arange(10)[:, None],
     )
-    fg.add_factor_group(factor_group, name="test")
+    fg.add_factor_group(factor_group)
 
     bp = graph.BP(fg.bp_state, temperature=0)
     bp_arrays = bp.update()

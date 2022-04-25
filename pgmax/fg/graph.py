@@ -62,7 +62,7 @@ class FactorGraph:
         if isinstance(self.variables, groups.VariableGroup):
             self.variables = [self.variables]
 
-        # Check ids are unique
+        # Check variable groups are unique
         vg_names = []
         vg_array_names = []
         for variable_group in self.variables:
@@ -108,52 +108,34 @@ class FactorGraph:
                 )
             )
             vars_num_states_cumsum += vg_num_states_cumsum[-1]
-
         self._num_var_states = vars_num_states_cumsum
-        self._named_factor_groups: Dict[Hashable, groups.FactorGroup] = {}
         print("Init", time.time() - start)
 
     def __hash__(self) -> int:
-        all_factor_groups = tuple(
-            [
-                factor_group
-                for factor_groups_per_type in self._factor_types_to_groups.values()
-                for factor_group in factor_groups_per_type
-            ]
-        )
-        return hash(all_factor_groups)
+        return hash(self.factor_groups)
 
-    def add_factor(self, factor: nodes.Factor, name: Optional[str] = None) -> None:
+    def add_factor(self, factor: nodes.Factor) -> None:
         """Function to add a single Factor to the FactorGraph.
 
         Args:
             factor: The factor to be added to the factor graph.
-            name: Optional name of the SingleFactorGroup created.
         """
         factor_group = groups.SingleFactorGroup(
             variables_for_factors=[factor.variables],
             factor=factor,
         )
-        self.add_factor_group(factor_group, name)
+        self.add_factor_group(factor_group)
 
-    def add_factor_group(
-        self, factor_group: groups.FactorGroup, name: Optional[str] = None
-    ) -> None:
+    def add_factor_group(self, factor_group: groups.FactorGroup) -> None:
         """Add a FactorGroup to the FactorGraph, by updating the FactorGraphState.
 
         Args:
             factor_group: The FactorGroup to be added to the FactorGraph.
-            name: Optional name of the FactorGroup.
 
         Raises:
             ValueError: If the factor group with the same name or a Factor involving the same variables
                 already exists in the FactorGraph.
         """
-        if name in self._named_factor_groups:
-            raise ValueError(
-                f"A factor group with the name {name} already exists. Please choose a different name!"
-            )
-
         factor_type = factor_group.factor_type
         for var_names_for_factor in factor_group.variables_for_factors:
             var_names = frozenset(var_names_for_factor)
@@ -164,9 +146,6 @@ class FactorGraph:
             self._factor_types_to_variables_for_factors[factor_type].add(var_names)
 
         self._factor_types_to_groups[factor_type].append(factor_group)
-
-        if name is not None:
-            self._named_factor_groups[name] = factor_group
 
     @functools.lru_cache(None)
     def compute_offsets(self) -> None:
@@ -284,20 +263,28 @@ class FactorGraph:
                     tuple(
                         [
                             factor
-                            for factor_group in self.factor_groups[factor_type]
+                            for factor_group in self._factor_types_to_groups[
+                                factor_type
+                            ]
                             for factor in factor_group.factors
                         ]
                     ),
                 )
-                for factor_type in self.factor_groups
+                for factor_type in self._factor_types_to_groups
             ]
         )
         return factors
 
     @property
-    def factor_groups(self) -> OrderedDict[Type, List[groups.FactorGroup]]:
+    def factor_groups(self) -> Tuple[groups.FactorGroup, ...]:
         """Tuple of factor groups in the factor graph"""
-        return self._factor_types_to_groups
+        return tuple(
+            [
+                factor_group
+                for factor_groups_per_type in self._factor_types_to_groups.values()
+                for factor_group in factor_groups_per_type
+            ]
+        )
 
     @cached_property
     def fg_state(self) -> FactorGraphState:
@@ -314,7 +301,7 @@ class FactorGraph:
             vars_to_starts=self._vars_to_starts,
             num_var_states=self._num_var_states,
             total_factor_num_states=self._total_factor_num_states,
-            named_factor_groups=copy.copy(self._named_factor_groups),
+            factor_groups=self.factor_groups,
             factor_type_to_msgs_range=copy.copy(self._factor_type_to_msgs_range),
             factor_type_to_potentials_range=copy.copy(
                 self._factor_type_to_potentials_range
@@ -350,7 +337,7 @@ class FactorGraphState:
             contains evidence to the variable.
         num_var_states: Total number of variable states.
         total_factor_num_states: Size of the flat ftov messages array.
-        named_factor_groups: Maps the names of named factor groups to the corresponding factor groups.
+        factor_groups: Factor groups in the FactorGraph
         factor_type_to_msgs_range: Maps factors types to their start and end indices in the flat ftov messages.
         factor_type_to_potentials_range: Maps factor types to their start and end indices in the flat log potentials.
         factor_group_to_potentials_starts: Maps factor groups to their starting indices in the flat log potentials.
@@ -362,7 +349,7 @@ class FactorGraphState:
     vars_to_starts: Mapping[Tuple[int, int], int]
     num_var_states: int
     total_factor_num_states: int
-    named_factor_groups: Mapping[Hashable, groups.FactorGroup]
+    factor_groups: Tuple[groups.FactorGroup, ...]
     factor_type_to_msgs_range: OrderedDict[type, Tuple[int, int]]
     factor_type_to_potentials_range: OrderedDict[type, Tuple[int, int]]
     factor_group_to_potentials_starts: OrderedDict[groups.FactorGroup, int]
@@ -430,15 +417,13 @@ def update_log_potentials(
         (1) Provided log_potentials shape does not match the expected log_potentials shape.
         (2) Provided name is not valid for log_potentials updates.
     """
-    for name, data in updates.items():
-        if name in fg_state.named_factor_groups:
-            factor_group = fg_state.named_factor_groups[name]
-
+    for factor_group, data in updates.items():
+        if factor_group in fg_state.factor_groups:
             flat_data = factor_group.flatten(data)
             if flat_data.shape != factor_group.factor_group_log_potentials.shape:
                 raise ValueError(
                     f"Expected log potentials shape {factor_group.factor_group_log_potentials.shape} "
-                    f"for factor group {name}. Got incompatible data shape {data.shape}."
+                    f"for factor group. Got incompatible data shape {data.shape}."
                 )
 
             start = fg_state.factor_group_to_potentials_starts[factor_group]
@@ -446,7 +431,7 @@ def update_log_potentials(
                 flat_data
             )
         else:
-            raise ValueError(f"Invalid name {name} for log potentials updates.")
+            raise ValueError("Invalid FactorGroup for log potentials updates.")
 
     return log_potentials
 
@@ -478,38 +463,34 @@ class LogPotentials:
 
             object.__setattr__(self, "value", self.value)
 
-    def __getitem__(self, name: Any) -> np.ndarray:
-        """Function to query log potentials for a named factor group or a factor.
+    def __getitem__(self, factor_group: groups.FactorGroup) -> np.ndarray:
+        """Function to query log potentials for a FactorGroup.
 
         Args:
-            name: Name of a named factor group, or a frozenset containing the set
-                of connected variables for the queried factor.
+            factor_group: Queried FactorGroup
 
         Returns:
             The queried log potentials.
         """
         value = cast(np.ndarray, self.value)
-        if name in self.fg_state.named_factor_groups:
-            factor_group = self.fg_state.named_factor_groups[name]
+        if factor_group in self.fg_state.factor_groups:
             start = self.fg_state.factor_group_to_potentials_starts[factor_group]
             log_potentials = value[
                 start : start + factor_group.factor_group_log_potentials.shape[0]
             ]
         else:
-            raise ValueError(f"Invalid name {name} for log potentials updates.")
-
+            raise ValueError("Invalid FactorGroup for log potentials updates.")
         return log_potentials
 
     def __setitem__(
         self,
-        name: Any,
+        factor_group: Any,
         data: Union[np.ndarray, jnp.ndarray],
     ):
         """Set the log potentials for a named factor group or a factor.
 
         Args:
-            name: Name of a named factor group, or a frozenset containing the set
-                of connected variables for the queried factor.
+            factor_group: FactorGroup
             data: Array containing the log potentials for the named factor group
                 or the factor.
         """
@@ -519,7 +500,7 @@ class LogPotentials:
             np.asarray(
                 update_log_potentials(
                     jax.device_put(self.value),
-                    {name: jax.device_put(data)},
+                    {factor_group: jax.device_put(data)},
                     self.fg_state,
                 )
             ),
