@@ -94,6 +94,9 @@ def test_nd_variable_array():
 
 def test_enumeration_factor_group():
     vg = vgroup.NDVariableArray(shape=(2, 2), num_states=3)
+    vg_bis = vgroup.NDVariableArray(shape=(2, 2), num_states=3)
+    vg < vg_bis
+
     with pytest.raises(
         ValueError,
         match=re.escape("Expected log potentials shape: (1,) or (2, 1). Got (3, 2)"),
