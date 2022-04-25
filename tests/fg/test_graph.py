@@ -109,6 +109,12 @@ def test_log_potentials():
 
     with pytest.raises(
         ValueError,
+        match=re.escape("Invalid name new_test for log potentials updates."),
+    ):
+        fg.bp_state.log_potentials["new_test"] = jnp.zeros((1, 15))
+
+    with pytest.raises(
+        ValueError,
         match=re.escape("Invalid name (0, 15) for log potentials updates."),
     ):
         fg.bp_state.log_potentials[vg[0]] = np.zeros(10)

@@ -997,38 +997,12 @@ def BP(bp_state: BPState, temperature: float = 0.0) -> BeliefPropagation:
         Args:
             flat_beliefs: Flattened array of beliefs
             variable_groups: All the variable groups in the FactorGraph.
-
-        Raises:
-            ValueError: If
-                (1) flat_beliefs is not one dimensional
-                (2) flat_beliefs is not of the right shape
         """
-
-        if flat_beliefs.ndim != 1:
-            raise ValueError(
-                f"Can only unflatten 1D array. Got a {flat_beliefs.ndim}D array."
-            )
-
-        num_variables = 0
-        num_variable_states = 0
-        for variable_group in variable_groups:
-            variables = variable_group.variables
-            num_variables += len(variables)
-            num_variable_states += sum([variable[1] for variable in variables])
-
-        if flat_beliefs.shape[0] == num_variables:
-            use_num_states = False
-        elif flat_beliefs.shape[0] == num_variable_states:
-            use_num_states = True
-
         beliefs = {}
         start = 0
         for variable_group in variable_groups:
             variables = variable_group.variables
-            if not use_num_states:
-                length = len(variables)
-            else:
-                length = sum([variable[1] for variable in variables])
+            length = sum([variable[1] for variable in variables])
 
             beliefs[variable_group] = variable_group.unflatten(
                 flat_beliefs[start : start + length]
