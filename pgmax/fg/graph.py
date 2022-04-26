@@ -35,7 +35,6 @@ from jax.scipy.special import logsumexp
 from pgmax.bp import infer
 from pgmax.factors import FAC_TO_VAR_UPDATES
 from pgmax.fg import groups, nodes
-from pgmax.groups import variables
 from pgmax.utils import cached_property
 
 
@@ -53,33 +52,14 @@ class FactorGraph:
             this input, and the individual VariableGroups will need to be accessed by indexing.
     """
 
-    variables: Union[groups.VariableGroup, Sequence[groups.VariableGroup]]
+    variable_groups: Union[groups.VariableGroup, Sequence[groups.VariableGroup]]
 
     def __post_init__(self):
         import time
 
         start = time.time()
-        if isinstance(self.variables, groups.VariableGroup):
-            self.variables = [self.variables]
-
-        # Check variable groups are unique
-        vg_names = []
-        vg_array_names = []
-        for variable_group in self.variables:
-            vg_name = variable_group.__hash__()
-            if vg_name in vg_names:
-                raise ValueError("Two objects have the same name")
-            vg_names.append(vg_name)
-            if isinstance(variable_group, variables.NDVariableArray):
-                start_name, end_name = (
-                    vg_name,
-                    variable_group.variable_names.flatten()[-1],
-                )
-                for var_array_name in vg_array_names:
-                    start_name2, end_name2 = var_array_name
-                    if max(start_name, start_name2) <= min(end_name, end_name2):
-                        raise ValueError("Two NDVariableArrays have overlapping names")
-                vg_array_names.append((start_name, end_name))
+        if isinstance(self.variable_groups, groups.VariableGroup):
+            self.variable_groups = [self.variable_groups]
 
         # Useful objects to build the FactorGraph
         self._factor_types_to_groups: OrderedDict[
@@ -98,7 +78,7 @@ class FactorGraph:
             Tuple[int, int], int
         ] = collections.OrderedDict()
         vars_num_states_cumsum = 0
-        for variable_group in self.variables:
+        for variable_group in self.variable_groups:
             vg_num_states = variable_group.num_states.flatten()
             vg_num_states_cumsum = np.insert(np.cumsum(vg_num_states), 0, 0)
             self._vars_to_starts.update(
@@ -114,28 +94,35 @@ class FactorGraph:
     def __hash__(self) -> int:
         return hash(self.factor_groups)
 
-    def add_factor(self, factor: nodes.Factor) -> None:
-        """Function to add a single Factor to the FactorGraph.
-
-        Args:
-            factor: The factor to be added to the factor graph.
-        """
-        factor_group = groups.SingleFactorGroup(
-            variables_for_factors=[factor.variables],
-            factor=factor,
-        )
-        self.add_factor_group(factor_group)
-
-    def add_factor_group(self, factor_group: groups.FactorGroup) -> None:
-        """Add a FactorGroup to the FactorGraph, by updating the FactorGraphState.
+    def add_factors(
+        self,
+        factor_group: Optional[groups.FactorGroup] = None,
+        factor: Optional[nodes.Factor] = None,
+    ) -> None:
+        """Add a FactorGroup or a single Factor to the FactorGraph, by updating the FactorGraphState.
 
         Args:
             factor_group: The FactorGroup to be added to the FactorGraph.
+            factor: The Factor to be added to the factor graph.
 
         Raises:
-            ValueError: If the factor group with the same name or a Factor involving the same variables
-                already exists in the FactorGraph.
+            ValueError: If
+                (1) Both a Factor and a FactorGroup are added
+                (2) The FactorGroup involving the same variables already exists in the FactorGraph.
         """
+        if factor is None and factor_group is None:
+            raise ValueError("A Factor or a FactorGroup is required")
+
+        if factor is not None and factor_group is not None:
+            raise ValueError("Cannot simultaneously add a Factor and a FactorGroup")
+
+        if factor is not None:
+            factor_group = groups.SingleFactorGroup(
+                variables_for_factors=[factor.variables],
+                factor=factor,
+            )
+        assert factor_group is not None
+
         factor_type = factor_group.factor_type
         for var_names_for_factor in factor_group.variables_for_factors:
             var_names = frozenset(var_names_for_factor)
@@ -294,10 +281,10 @@ class FactorGraph:
         log_potentials = np.concatenate(
             [self.log_potentials[factor_type] for factor_type in self.log_potentials]
         )
-        assert isinstance(self.variables, list)
+        assert isinstance(self.variable_groups, list)
 
         return FactorGraphState(
-            variable_groups=self.variables,
+            variable_groups=self.variable_groups,
             vars_to_starts=self._vars_to_starts,
             num_var_states=self._num_var_states,
             total_factor_num_states=self._total_factor_num_states,
@@ -606,7 +593,7 @@ class FToVMessages:
     @typing.overload
     def __setitem__(
         self,
-        names: Tuple[int, int],
+        variable: Tuple[int, int],
         data: Union[np.ndarray, jnp.ndarray],
     ) -> None:
         """Spreading beliefs at a variable to all connected factors
@@ -618,14 +605,14 @@ class FToVMessages:
                 variable.
         """
 
-    def __setitem__(self, names, data) -> None:
+    def __setitem__(self, variable, data) -> None:
         object.__setattr__(
             self,
             "value",
             np.asarray(
                 update_ftov_msgs(
                     jax.device_put(self.value),
-                    {names: jax.device_put(data)},
+                    {variable: jax.device_put(data)},
                     self.fg_state,
                 )
             ),
@@ -1002,18 +989,12 @@ def BP(bp_state: BPState, temperature: float = 0.0) -> BeliefPropagation:
             beliefs: Beliefs returned by belief propagation.
         """
 
-        def compute_flat_beliefs(bp_arrays, var_states_for_edges):
-            flat_beliefs = (
-                jax.device_put(bp_arrays.evidence)
-                .at[jax.device_put(var_states_for_edges)]
-                .add(bp_arrays.ftov_msgs)
-            )
-            return flat_beliefs
-
-        return unflatten_beliefs(
-            compute_flat_beliefs(bp_arrays, var_states_for_edges),
-            bp_state.fg_state.variable_groups,
+        flat_beliefs = (
+            jax.device_put(bp_arrays.evidence)
+            .at[jax.device_put(var_states_for_edges)]
+            .add(bp_arrays.ftov_msgs)
         )
+        return unflatten_beliefs(flat_beliefs, bp_state.fg_state.variable_groups)
 
     bp = BeliefPropagation(
         init=functools.partial(update, None),

@@ -5,7 +5,8 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from pgmax.groups import enumeration
+from pgmax.fg import groups
+from pgmax.groups import enumeration, logical
 from pgmax.groups import variables as vgroup
 
 
@@ -19,10 +20,10 @@ def test_variable_dict():
     with pytest.raises(
         ValueError,
         match=re.escape(
-            "Variable (2, 15) expects a data array of shape (15,) or (1,). Got (10,)"
+            f"Variable (({variable_dict.__hash__()}, 2), 15) expects a data array of shape (15,) or (1,). Got (10,)"
         ),
     ):
-        variable_dict.flatten({(2, 15): np.zeros(10)})
+        variable_dict.flatten({((variable_dict.__hash__(), 2), 15): np.zeros(10)})
 
     with pytest.raises(
         ValueError, match="Can only unflatten 1D array. Got a 2D array."
@@ -35,7 +36,10 @@ def test_variable_dict():
                 jax.tree_util.tree_multimap(
                     lambda x, y: jnp.all(x == y),
                     variable_dict.unflatten(jnp.zeros(3)),
-                    {(name, 15): np.zeros(1) for name in range(3)},
+                    {
+                        ((variable_dict.__hash__(), name), 15): np.zeros(1)
+                        for name in range(3)
+                    },
                 )
             )
         )
@@ -90,6 +94,25 @@ def test_nd_variable_array():
 
     assert jnp.all(variable_group.unflatten(np.zeros(4)) == jnp.zeros((2, 2)))
     assert jnp.all(variable_group.unflatten(np.zeros(12)) == jnp.zeros((2, 2, 3)))
+
+
+def test_single_factor():
+    with pytest.raises(ValueError, match="Cannot create a FactorGroup with no Factor."):
+        logical.ORFactorGroup(variables_for_factors=[])
+
+    A = vgroup.NDVariableArray(num_states=2, shape=(10,))
+    B = vgroup.NDVariableArray(num_states=2, shape=(10,))
+
+    variables0 = (A[0], B[0])
+    variables1 = (A[1], B[1])
+    ORFactor = logical.ORFactorGroup(variables_for_factors=[variables0])
+    with pytest.raises(
+        ValueError, match="SingleFactorGroup should only contain one factor. Got 2"
+    ):
+        groups.SingleFactorGroup(
+            variables_for_factors=[variables0, variables1],
+            factor=ORFactor,
+        )
 
 
 def test_enumeration_factor_group():

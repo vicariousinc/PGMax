@@ -7,56 +7,52 @@ import numpy as np
 import pytest
 
 from pgmax.factors import enumeration as enumeration_factor
-from pgmax.fg import graph, groups
-from pgmax.groups import enumeration, logical
+from pgmax.fg import graph
+from pgmax.groups import enumeration
 from pgmax.groups import variables as vgroup
 
 
 def test_factor_graph():
-    vg1 = vgroup.NDVariableArray(num_states=2, shape=(10, 10))
-    with pytest.raises(ValueError, match="Two objects have the same name"):
-        fg = graph.FactorGraph(variables=[vg1, vg1])
-
-    vg2 = vgroup.NDVariableArray(num_states=2, shape=(10, 10))
-    object.__setattr__(vg2, "random_hash", vg1.__hash__() + 10)
-    with pytest.raises(ValueError, match="Two NDVariableArrays have overlapping names"):
-        fg = graph.FactorGraph(variables=[vg1, vg2])
-
     vg = vgroup.VariableDict(variable_names=(0,), num_states=15)
     fg = graph.FactorGraph(vg)
+
+    with pytest.raises(
+        ValueError,
+        match="A Factor or a FactorGroup is required",
+    ):
+        fg.add_factors(factor_group=None, factor=None)
+
     factor = enumeration_factor.EnumerationFactor(
         variables=[vg[0]],
         factor_configs=np.arange(15)[:, None],
         log_potentials=np.zeros(15),
     )
-    fg.add_factor(factor)
 
+    factor_group = enumeration.EnumerationFactorGroup(
+        variables_for_factors=[[vg[0]]],
+        factor_configs=np.arange(15)[:, None],
+        log_potentials=np.zeros(15),
+    )
+    with pytest.raises(
+        ValueError,
+        match="Cannot simultaneously add a Factor and a FactorGroup",
+    ):
+        fg.add_factors(factor_group=factor_group, factor=factor)
+
+    fg.add_factors(factor=factor)
+
+    factor_group = enumeration.EnumerationFactorGroup(
+        variables_for_factors=[[vg[0]]],
+        factor_configs=np.arange(15)[:, None],
+        log_potentials=np.zeros(15),
+    )
     with pytest.raises(
         ValueError,
         match=re.escape(
-            f"A Factor of type {enumeration_factor.EnumerationFactor} involving variables {frozenset([(0, 15)])} already exists."
+            f"A Factor of type {enumeration_factor.EnumerationFactor} involving variables {frozenset([((vg.__hash__(), 0), 15)])} already exists."
         ),
     ):
-        fg.add_factor(factor)
-
-
-def test_single_factor():
-    with pytest.raises(ValueError, match="Cannot create a FactorGroup with no Factor."):
-        logical.ORFactorGroup(variables_for_factors=[])
-
-    A = vgroup.NDVariableArray(num_states=2, shape=(10,))
-    B = vgroup.NDVariableArray(num_states=2, shape=(10,))
-
-    variables0 = (A[0], B[0])
-    variables1 = (A[1], B[1])
-    ORFactor = logical.ORFactorGroup(variables_for_factors=[variables0])
-    with pytest.raises(
-        ValueError, match="SingleFactorGroup should only contain one factor. Got 2"
-    ):
-        groups.SingleFactorGroup(
-            variables_for_factors=[variables0, variables1],
-            factor=ORFactor,
-        )
+        fg.add_factors(factor_group)
 
 
 def test_bp_state():
@@ -67,10 +63,10 @@ def test_bp_state():
         factor_configs=np.arange(15)[:, None],
         log_potentials=np.zeros(15),
     )
-    fg0.add_factor(factor)
+    fg0.add_factors(factor=factor)
 
     fg1 = graph.FactorGraph(vg)
-    fg1.add_factor(factor)
+    fg1.add_factors(factor=factor)
 
     with pytest.raises(
         ValueError,
@@ -90,7 +86,7 @@ def test_log_potentials():
         variables_for_factors=[[vg[0]]],
         factor_configs=np.arange(10)[:, None],
     )
-    fg.add_factor_group(factor_group)
+    fg.add_factors(factor_group)
 
     with pytest.raises(
         ValueError,
@@ -130,7 +126,7 @@ def test_ftov_msgs():
         variables_for_factors=[[vg[0]]],
         factor_configs=np.arange(10)[:, None],
     )
-    fg.add_factor_group(factor_group)
+    fg.add_factors(factor_group)
 
     with pytest.raises(
         ValueError,
@@ -141,7 +137,7 @@ def test_ftov_msgs():
     with pytest.raises(
         ValueError,
         match=re.escape(
-            "Given belief shape (10,) does not match expected shape (15,) for variable (0, 15)."
+            f"Given belief shape (10,) does not match expected shape (15,) for variable (({vg.__hash__()}, 0), 15)."
         ),
     ):
         fg.bp_state.ftov_msgs[vg[0]] = np.ones(10)
@@ -159,13 +155,13 @@ def test_ftov_msgs():
 
 
 def test_evidence():
-    vg = vgroup.VariableDict(variable_names=("a",), num_states=15)
+    vg = vgroup.VariableDict(variable_names=(0,), num_states=15)
     fg = graph.FactorGraph(vg)
     factor_group = enumeration.EnumerationFactorGroup(
-        variables_for_factors=[[vg["a"]]],
+        variables_for_factors=[[vg[0]]],
         factor_configs=np.arange(10)[:, None],
     )
-    fg.add_factor_group(factor_group)
+    fg.add_factors(factor_group)
 
     with pytest.raises(
         ValueError, match=re.escape("Expected evidence shape (15,). Got (10,).")
@@ -175,7 +171,7 @@ def test_evidence():
     evidence = graph.Evidence(fg_state=fg.fg_state, value=np.zeros(15))
     assert jnp.all(evidence.value == jnp.zeros(15))
 
-    vg2 = vgroup.VariableDict(variable_names=("b",), num_states=15)
+    vg2 = vgroup.VariableDict(variable_names=(0,), num_states=15)
     with pytest.raises(
         ValueError,
         match=re.escape(
@@ -184,7 +180,7 @@ def test_evidence():
     ):
         graph.update_evidence(
             jax.device_put(evidence.value),
-            {vg2["b"]: jax.device_put(np.zeros(15))},
+            {vg2[0]: jax.device_put(np.zeros(15))},
             fg.fg_state,
         )
 
@@ -196,7 +192,7 @@ def test_bp():
         variables_for_factors=[[vg[0]]],
         factor_configs=np.arange(10)[:, None],
     )
-    fg.add_factor_group(factor_group)
+    fg.add_factors(factor_group)
 
     bp = graph.BP(fg.bp_state, temperature=0)
     bp_arrays = bp.update()

@@ -29,7 +29,7 @@ from pgmax.groups import variables as vgroup
 
 # %%
 variables = vgroup.NDVariableArray(num_states=2, shape=(50, 50))
-fg = graph.FactorGraph(variables=variables)
+fg = graph.FactorGraph(variable_groups=variables)
 
 variables_for_factors = []
 for ii in range(50):
@@ -43,7 +43,7 @@ factor_group = enumeration.PairwiseFactorGroup(
     variables_for_factors=variables_for_factors,
     log_potential_matrix=0.8 * np.array([[1.0, -1.0], [-1.0, 1.0]]),
 )
-fg.add_factor_group(factor_group)
+fg.add_factors(factor_group)
 
 # %% [markdown]
 # ### Run inference and visualize results

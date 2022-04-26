@@ -272,7 +272,7 @@ valid_configs_list = [valid_configs(r, hps, vps) for r in range(max_perturb_radi
 
 # %%
 start = time.time()
-fg = graph.FactorGraph(variables=variables_all_models)
+fg = graph.FactorGraph(variables_all_models)
 
 # Adding rcn model edges to the pgmax factor graph.
 for idx in range(edges.shape[0]):
@@ -285,7 +285,7 @@ for idx in range(edges.shape[0]):
             factor_configs=valid_configs_list[r],
             log_potentials=np.zeros(valid_configs_list[r].shape[0]),
         )
-        fg.add_factor(factor)
+        fg.add_factors(factor=factor)
 
 end = time.time()
 print(f"Creating factors took {end-start:.3f} seconds.")

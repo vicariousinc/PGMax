@@ -26,10 +26,13 @@ class NDVariableArray(groups.VariableGroup):
     num_states: Union[int, np.ndarray]
 
     def __post_init__(self):
-        super().__post_init__()
+        if np.prod(self.shape) > groups.MAX_SIZE:
+            raise ValueError(
+                f"Currently only support NDVariableArray of size smaller than {groups.MAX_SIZE}. Got {np.prod(self.shape)}"
+            )
 
         if np.isscalar(self.num_states):
-            num_states = np.full(self.shape, fill_value=self.num_states)
+            num_states = np.full(self.shape, fill_value=self.num_states, dtype=np.int32)
             object.__setattr__(self, "num_states", num_states)
         elif isinstance(self.num_states, np.ndarray) and np.issubdtype(
             self.num_states.dtype, int
@@ -43,7 +46,7 @@ class NDVariableArray(groups.VariableGroup):
 
     def __getitem__(
         self, val: Union[int, slice, Tuple]
-    ) -> Union[Tuple[int, int], List[Tuple]]:
+    ) -> Union[Tuple[int, int], List[Tuple[int, int]]]:
         """Given an index or a slice, retrieve the associated variable(s).
         Each variable is returned via a tuple of the form (variable hash, number of states)
 
@@ -159,13 +162,18 @@ class VariableDict(groups.VariableGroup):
     """
 
     variable_names: Tuple[Any, ...]
-    num_states: np.ndarray  # TODO: this should be an int converted to an array in __post_init__
+    num_states: int
 
     def __post_init__(self):
-        super().__post_init__()
-
-        num_states = np.full((len(self.variable_names),), fill_value=self.num_states)
+        num_states = np.full(
+            (len(self.variable_names),), fill_value=self.num_states, dtype=np.int32
+        )
         object.__setattr__(self, "num_states", num_states)
+
+        hash_and_names = tuple(
+            (self.__hash__(), var_name) for var_name in self.variable_names
+        )
+        object.__setattr__(self, "variable_names", hash_and_names)
 
     @cached_property
     def variables(self) -> List[Tuple]:
@@ -175,9 +183,12 @@ class VariableDict(groups.VariableGroup):
         Returns:
             List of variables in the VariableGroup
         """
-        return list(zip(self.variable_names, self.num_states))
+        assert isinstance(self.num_states, np.ndarray)
+        vars_names = list(self.variable_names)
+        vars_num_states = self.num_states.flatten()
+        return list(zip(vars_names, vars_num_states))
 
-    def __getitem__(self, val):
+    def __getitem__(self, val: Any) -> Tuple[Any, int]:
         """Given a variable name retrieve the associated variable, returned via a tuple of the form
         (variable name, number of states)
 
@@ -187,9 +198,11 @@ class VariableDict(groups.VariableGroup):
         Returns:
             The queried variable
         """
-        if val not in self.variable_names:
+        assert isinstance(self.num_states, np.ndarray)
+
+        if (self.__hash__(), val) not in self.variable_names:
             raise ValueError(f"Variable {val} is not in VariableDict")
-        return (val, self.num_states[0])
+        return ((self.__hash__(), val), self.num_states[0])
 
     def flatten(
         self, data: Mapping[Tuple[int, int], Union[np.ndarray, jnp.ndarray]]
@@ -209,6 +222,8 @@ class VariableDict(groups.VariableGroup):
                 (1) data is referring to a non-existing variable
                 (2) data is not of the correct shape
         """
+        assert isinstance(self.num_states, np.ndarray)
+
         for variable in data:
             if variable not in self.variables:
                 raise ValueError(
@@ -244,6 +259,8 @@ class VariableDict(groups.VariableGroup):
                 (1) flat_data is not a 1D array
                 (2) flat_data is not of the right shape
         """
+        assert isinstance(self.num_states, np.ndarray)
+
         if flat_data.ndim != 1:
             raise ValueError(
                 f"Can only unflatten 1D array. Got a {flat_data.ndim}D array."

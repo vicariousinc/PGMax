@@ -2,7 +2,7 @@
 
 import functools
 from dataclasses import dataclass, field
-from typing import List, Mapping, Optional, Sequence, Union
+from typing import List, Mapping, Optional, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -141,7 +141,7 @@ class LogicalFactor(nodes.Factor):
     @staticmethod
     def compile_wiring(
         variables_for_factors: Sequence[List],
-        vars_to_starts: Mapping[int, int],
+        vars_to_starts: Mapping[Tuple[int, int], int],
         edge_states_offset: int,
     ) -> LogicalWiring:
         """Compile a LogicalWiring for a LogicalFactor or a FactorGroup with LogicalFactors.

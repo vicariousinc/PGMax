@@ -1,7 +1,6 @@
 """A module containing the base classes for variable and factor groups in a Factor Graph."""
 
 import inspect
-import random
 from dataclasses import dataclass, field
 from functools import total_ordering
 from typing import (
@@ -22,25 +21,18 @@ import numpy as np
 import pgmax.fg.nodes as nodes
 from pgmax.utils import cached_property
 
+MAX_SIZE = 1e16
+
 
 @total_ordering
 @dataclass(frozen=True, eq=False)
 class VariableGroup:
     """Class to represent a group of variables.
     Each variable is represented via a tuple of the form (variable hash/name, number of states)
-
-    Attributes:
-        random_hash: Hash of the VariableGroup
     """
 
-    def __post_init__(self):
-        # Overwite default hash to have larger differences
-        random.seed(id(self))
-        random_hash = random.randint(0, 2**63)
-        object.__setattr__(self, "random_hash", random_hash)
-
     def __hash__(self):
-        return self.random_hash
+        return id(self) * int(MAX_SIZE)
 
     def __eq__(self, other):
         return hash(self) == hash(other)
@@ -63,7 +55,7 @@ class VariableGroup:
         )
 
     @cached_property
-    def variables(self) -> Tuple[Any, int]:
+    def variables(self) -> List[Tuple]:
         """Function that returns the list of all variables in the VariableGroup.
         Each variable is represented by a tuple of the form (variable hash/name, number of states)
 

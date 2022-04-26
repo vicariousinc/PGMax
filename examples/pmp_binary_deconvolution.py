@@ -138,12 +138,12 @@ X = vgroup.NDVariableArray(num_states=2, shape=X_gt.shape)
 print("Time", time.time() - start)
 
 # %% [markdown]
-# For computation efficiency, we add large FactorGroups via `fg.add_factor_group` instead of adding individual Factors
+# For computation efficiency, we add large FactorGroups via `fg.add_factors` instead of adding individual Factors
 
 # %%
 start = time.time()
 # Factor graph
-fg = graph.FactorGraph(variables=[S, W, SW, X])
+fg = graph.FactorGraph(variable_groups=[S, W, SW, X])
 print(time.time() - start)
 
 # Define the ANDFactors
@@ -181,7 +181,7 @@ print("After loop", time.time() - start)
 
 # Add ANDFactorGroup, which is computationally efficient
 AND_factor_group = logical.ANDFactorGroup(variables_for_ANDFactors)
-fg.add_factor_group(AND_factor_group)
+fg.add_factors(AND_factor_group)
 print(time.time() - start)
 
 # Define the ORFactors
@@ -192,7 +192,7 @@ variables_for_ORFactors = [
 
 # Add ORFactorGroup, which is computationally efficient
 OR_factor_group = logical.ORFactorGroup(variables_for_ORFactors)
-fg.add_factor_group(OR_factor_group)
+fg.add_factors(OR_factor_group)
 print("Time", time.time() - start)
 
 for factor_type, factor_groups in fg._factor_types_to_groups.items():

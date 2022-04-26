@@ -45,14 +45,18 @@ def test_run_bp_with_ANDFactors():
             num_states=2, shape=(num_parents.sum(),)
         )
         children_variables1 = vgroup.NDVariableArray(num_states=2, shape=(num_factors,))
-        fg1 = graph.FactorGraph(variables=[parents_variables1, children_variables1])
+        fg1 = graph.FactorGraph(
+            variable_groups=[parents_variables1, children_variables1]
+        )
 
         # Graph 2
         parents_variables2 = vgroup.NDVariableArray(
             num_states=2, shape=(num_parents.sum(),)
         )
         children_variables2 = vgroup.NDVariableArray(num_states=2, shape=(num_factors,))
-        fg2 = graph.FactorGraph(variables=[parents_variables2, children_variables2])
+        fg2 = graph.FactorGraph(
+            variable_groups=[parents_variables2, children_variables2]
+        )
 
         # Option 1: Define EnumerationFactors equivalent to the ANDFactors
         variables_for_factors1 = []
@@ -100,7 +104,7 @@ def test_run_bp_with_ANDFactors():
                     factor_configs=valid_configs,
                     log_potentials=np.zeros(valid_configs.shape[0]),
                 )
-                fg1.add_factor(enum_factor)
+                fg1.add_factors(factor=enum_factor)
             else:
                 if idx != 0:
                     # Add the second half of factors to FactorGraph2
@@ -109,7 +113,7 @@ def test_run_bp_with_ANDFactors():
                         factor_configs=valid_configs,
                         log_potentials=np.zeros(valid_configs.shape[0]),
                     )
-                    fg2.add_factor(enum_factor)
+                    fg2.add_factors(factor=enum_factor)
                 else:
                     # Add all the EnumerationFactors to FactorGraph1 for the first iter
                     enum_factor = EnumerationFactor(
@@ -117,7 +121,7 @@ def test_run_bp_with_ANDFactors():
                         factor_configs=valid_configs,
                         log_potentials=np.zeros(valid_configs.shape[0]),
                     )
-                    fg1.add_factor(enum_factor)
+                    fg1.add_factors(factor=enum_factor)
 
         # Option 2: Define the ANDFactors
         num_parents_cumsum = np.insert(np.cumsum(num_parents), 0, 0)
@@ -141,10 +145,10 @@ def test_run_bp_with_ANDFactors():
                     )
         if idx != 0:
             factor_group = logical.ANDFactorGroup(variables_for_ANDFactors_fg1)
-            fg1.add_factor_group(factor_group)
+            fg1.add_factors(factor_group)
 
         factor_group = logical.ANDFactorGroup(variables_for_ANDFactors_fg2)
-        fg2.add_factor_group(factor_group)
+        fg2.add_factors(factor_group)
 
         # Run inference
         bp1 = graph.BP(fg1.bp_state, temperature=temperature)

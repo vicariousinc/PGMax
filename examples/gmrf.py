@@ -66,7 +66,7 @@ top_down = enumeration.PairwiseFactorGroup(
         for jj in range(N)
     ],
 )
-fg.add_factor_group(top_down)
+fg.add_factors(top_down)
 
 # Add left-right factors
 left_right = enumeration.PairwiseFactorGroup(
@@ -76,7 +76,7 @@ left_right = enumeration.PairwiseFactorGroup(
         for jj in range(N - 1)
     ],
 )
-fg.add_factor_group(left_right)
+fg.add_factors(left_right)
 
 # Add diagonal factors
 diagonal0 = enumeration.PairwiseFactorGroup(
@@ -86,7 +86,7 @@ diagonal0 = enumeration.PairwiseFactorGroup(
         for jj in range(N - 1)
     ],
 )
-fg.add_factor_group(diagonal0)
+fg.add_factors(diagonal0)
 
 diagonal1 = enumeration.PairwiseFactorGroup(
     variables_for_factors=[
@@ -95,7 +95,7 @@ diagonal1 = enumeration.PairwiseFactorGroup(
         for jj in range(N - 1)
     ],
 )
-fg.add_factor_group(diagonal1)
+fg.add_factors(diagonal1)
 
 # %%
 bp = graph.BP(fg.bp_state, temperature=1.0)

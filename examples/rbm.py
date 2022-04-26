@@ -52,7 +52,7 @@ start = time.time()
 # Initialize factor graph
 hidden_variables = vgroup.NDVariableArray(num_states=2, shape=bh.shape)
 visible_variables = vgroup.NDVariableArray(num_states=2, shape=bv.shape)
-fg = graph.FactorGraph(variables=[hidden_variables, visible_variables])
+fg = graph.FactorGraph(variable_groups=[hidden_variables, visible_variables])
 print("Time", time.time() - start)
 
 # %% [markdown]
@@ -69,14 +69,14 @@ hidden_unaries = enumeration.EnumerationFactorGroup(
     factor_configs=np.arange(2)[:, None],
     log_potentials=np.stack([np.zeros_like(bh), bh], axis=1),
 )
-fg.add_factor_group(hidden_unaries)
+fg.add_factors(hidden_unaries)
 
 visible_unaries = enumeration.EnumerationFactorGroup(
     variables_for_factors=[[visible_variables[jj]] for jj in range(bv.shape[0])],
     factor_configs=np.arange(2)[:, None],
     log_potentials=np.stack([np.zeros_like(bv), bv], axis=1),
 )
-fg.add_factor_group(visible_unaries)
+fg.add_factors(visible_unaries)
 
 # Add pairwise factors
 log_potential_matrix = np.zeros(W.shape + (2, 2)).reshape((-1, 2, 2))
@@ -90,9 +90,9 @@ pairwise_factors = enumeration.PairwiseFactorGroup(
     ],
     log_potential_matrix=log_potential_matrix,
 )
-fg.add_factor_group(pairwise_factors)
+fg.add_factors(pairwise_factors)
 
-# # %snakeviz fg.add_factor_group(factory=enumeration.PairwiseFactorGroup, variables_for_factors=v, log_potential_matrix=log_potential_matrix,)
+# # %snakeviz fg.add_factors(factory=enumeration.PairwiseFactorGroup, variables_for_factors=v, log_potential_matrix=log_potential_matrix,)
 print("Time", time.time() - start)
 
 
@@ -115,7 +115,7 @@ print("Time", time.time() - start)
 #         factor_configs=np.arange(2)[:, None],
 #         log_potentials=np.array([0, bh[ii]]),
 #     )
-#     fg.add_factor(factor)
+#     fg.add_factors(factor=factor)
 #
 # for jj in range(bv.shape[0]):
 #     factor = enumeration_factor.EnumerationFactor(
@@ -123,7 +123,7 @@ print("Time", time.time() - start)
 #         factor_configs=np.arange(2)[:, None],
 #         log_potentials=np.array([0, bv[jj]]),
 #     )
-#     fg.add_factor(factor)
+#     fg.add_factors(factor=factor)
 #
 # # Add pairwise factors
 # factor_configs = np.array(list(itertools.product(np.arange(2), repeat=2)))
@@ -134,7 +134,7 @@ print("Time", time.time() - start)
 #             factor_configs=factor_configs,
 #             log_potentials=np.array([0, 0, 0, W[ii, jj]]),
 #         )
-#         fg.add_factor(factor)
+#         fg.add_factors(factor=factor)
 # ~~~
 #
 # Once we have added the factors, we can run max-product LBP and get MAP decoding by

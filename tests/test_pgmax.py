@@ -258,7 +258,7 @@ def test_e2e_sanity_check():
                         pass
 
     # Create the factor graph
-    fg = graph.FactorGraph(variables=[grid_vars, additional_vars])
+    fg = graph.FactorGraph(variable_groups=[grid_vars, additional_vars])
 
     # Imperatively add EnumerationFactorGroups (each consisting of just one EnumerationFactor) to
     # the graph!
@@ -302,7 +302,7 @@ def test_e2e_sanity_check():
                         valid_configs_non_supp.shape[0], dtype=float
                     ),
                 )
-                fg.add_factor(factor)
+                fg.add_factors(factor=factor)
             else:
                 factor = EnumerationFactor(
                     variables=curr_vars,
@@ -311,7 +311,7 @@ def test_e2e_sanity_check():
                         valid_configs_non_supp.shape[0], dtype=float
                     ),
                 )
-                fg.add_factor(factor)
+                fg.add_factors(factor=factor)
 
     # Create an EnumerationFactorGroup for vertical suppression factors
     vert_suppression_vars: List[List[Tuple[Any, ...]]] = []
@@ -355,14 +355,14 @@ def test_e2e_sanity_check():
         variables_for_factors=vert_suppression_vars,
         factor_configs=valid_configs_supp,
     )
-    fg.add_factor_group(factor_group)
+    fg.add_factors(factor_group)
 
     factor_group = enumeration.EnumerationFactorGroup(
         variables_for_factors=horz_suppression_vars,
         factor_configs=valid_configs_supp,
         log_potentials=np.zeros(valid_configs_supp.shape[0], dtype=float),
     )
-    fg.add_factor_group(factor_group)
+    fg.add_factors(factor_group)
 
     # Run BP
     # Set the evidence
@@ -419,7 +419,7 @@ def test_e2e_heretic():
                 variables_for_factors=binary_connected_variables(28, 28, k_row, k_col),
                 log_potential_matrix=W_pot[:, :, k_row, k_col],
             )
-            fg.add_factor_group(factor_group)
+            fg.add_factors(factor_group)
 
     # Assign evidence to pixel vars
     bp_state = fg.bp_state
