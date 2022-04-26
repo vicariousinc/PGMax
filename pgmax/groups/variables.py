@@ -143,7 +143,9 @@ class NDVariableArray(groups.VariableGroup):
         if flat_data.size == np.product(self.shape):
             data = flat_data.reshape(self.shape)
         elif flat_data.size == self.num_states.sum():
-            data = jnp.zeros(self.shape + (self.num_states.max(),))
+            data = jnp.full(
+                shape=self.shape + (self.num_states.max(),), fill_value=jnp.nan
+            )
             data = data.at[np.arange(data.shape[-1]) < self.num_states[..., None]].set(
                 flat_data
             )

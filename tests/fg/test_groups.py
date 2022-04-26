@@ -111,7 +111,13 @@ def test_nd_variable_array():
         variable_group.unflatten(np.zeros((12,)))
 
     assert jnp.all(variable_group.unflatten(np.zeros(4)) == jnp.zeros((2, 2)))
-    assert jnp.all(variable_group.unflatten(np.zeros(10)) == jnp.zeros((2, 2, 4)))
+    unflattened = jnp.full((2, 2, 4), fill_value=jnp.nan)
+    unflattened = unflattened.at[0, 0, 0].set(0)
+    unflattened = unflattened.at[0, 1, :1].set(0)
+    unflattened = unflattened.at[1, 0, :2].set(0)
+    unflattened = unflattened.at[1, 1].set(0)
+    mask = ~jnp.isnan(unflattened)
+    assert jnp.all(variable_group.unflatten(np.zeros(10))[mask] == unflattened[mask])
 
 
 def test_single_factor():
