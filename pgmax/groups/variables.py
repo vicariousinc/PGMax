@@ -106,19 +106,19 @@ class NDVariableArray(groups.VariableGroup):
         """
         assert isinstance(self.num_states, np.ndarray)
 
-        # TODO: what should we do for different number of states -> look at mask_array
-        if data.shape != self.shape and data.shape != self.shape + (
-            self.num_states.max(),
-        ):
+        if data.shape == self.shape:
+            return jax.device_put(data).flatten()
+        elif data.shape == self.shape + (self.num_states.max(),):
+            return jax.device_put(
+                data[np.arange(data.shape[-1]) < self.num_states[..., None]]
+            )
+        else:
             raise ValueError(
                 f"data should be of shape {self.shape} or {self.shape + (self.num_states.max(),)}. "
                 f"Got {data.shape}."
             )
-        return jax.device_put(data).flatten()
 
-    def unflatten(
-        self, flat_data: Union[np.ndarray, jnp.ndarray]
-    ) -> Union[np.ndarray, jnp.ndarray]:
+    def unflatten(self, flat_data: Union[np.ndarray, jnp.ndarray]) -> jnp.ndarray:
         """Function that recovers meaningful structured data from internal flat data array
 
         Args:
@@ -143,8 +143,10 @@ class NDVariableArray(groups.VariableGroup):
         if flat_data.size == np.product(self.shape):
             data = flat_data.reshape(self.shape)
         elif flat_data.size == self.num_states.sum():
-            # TODO: what should we do for different number of states
-            data = flat_data.reshape(self.shape + (self.num_states.max(),))
+            data = jnp.zeros(self.shape + (self.num_states.max(),))
+            data = data.at[np.arange(data.shape[-1]) < self.num_states[..., None]].set(
+                flat_data
+            )
         else:
             raise ValueError(
                 f"flat_data should be compatible with shape {self.shape} or {self.shape + (self.num_states.max(),)}. "

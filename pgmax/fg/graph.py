@@ -460,7 +460,7 @@ class LogPotentials:
                 start : start + factor_group.factor_group_log_potentials.shape[0]
             ]
         else:
-            raise ValueError("Invalid FactorGroup for log potentials updates.")
+            raise ValueError("Invalid FactorGroup queried to access log potentials.")
         return log_potentials
 
     def __setitem__(

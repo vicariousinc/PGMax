@@ -81,18 +81,22 @@ def test_nd_variable_array():
     variable_group0 = vgroup.NDVariableArray(shape=(5, 5), num_states=2)
     assert len(variable_group0[:3, :3]) == 9
 
-    variable_group = vgroup.NDVariableArray(shape=(2, 2), num_states=3)
+    variable_group = vgroup.NDVariableArray(
+        shape=(2, 2), num_states=np.array([[1, 2], [3, 4]])
+    )
     variable_group0 < variable_group
 
     with pytest.raises(
         ValueError,
-        match=re.escape("data should be of shape (2, 2) or (2, 2, 3). Got (3, 3)."),
+        match=re.escape("data should be of shape (2, 2) or (2, 2, 4). Got (3, 3)."),
     ):
         variable_group.flatten(np.zeros((3, 3)))
 
     assert jnp.all(
         variable_group.flatten(np.array([[1, 2], [3, 4]])) == jnp.array([1, 2, 3, 4])
     )
+    assert jnp.all(variable_group.flatten(np.zeros((2, 2, 4))) == jnp.zeros((10,)))
+
     with pytest.raises(
         ValueError, match="Can only unflatten 1D array. Got a 2D array."
     ):
@@ -101,13 +105,13 @@ def test_nd_variable_array():
     with pytest.raises(
         ValueError,
         match=re.escape(
-            "flat_data should be compatible with shape (2, 2) or (2, 2, 3). Got (10,)."
+            "flat_data should be compatible with shape (2, 2) or (2, 2, 4). Got (12,)."
         ),
     ):
-        variable_group.unflatten(np.zeros((10,)))
+        variable_group.unflatten(np.zeros((12,)))
 
     assert jnp.all(variable_group.unflatten(np.zeros(4)) == jnp.zeros((2, 2)))
-    assert jnp.all(variable_group.unflatten(np.zeros(12)) == jnp.zeros((2, 2, 3)))
+    assert jnp.all(variable_group.unflatten(np.zeros(10)) == jnp.zeros((2, 2, 4)))
 
 
 def test_single_factor():
@@ -119,21 +123,20 @@ def test_single_factor():
 
     variables0 = (A[0], B[0])
     variables1 = (A[1], B[1])
-    ORFactor = logical.ORFactorGroup(variables_for_factors=[variables0])
+    ORFactor0 = logical.ORFactorGroup(variables_for_factors=[variables0])
     with pytest.raises(
         ValueError, match="SingleFactorGroup should only contain one factor. Got 2"
     ):
         groups.SingleFactorGroup(
             variables_for_factors=[variables0, variables1],
-            factor=ORFactor,
+            factor=ORFactor0,
         )
+    ORFactor1 = logical.ORFactorGroup(variables_for_factors=[variables1])
+    ORFactor0 < ORFactor1
 
 
 def test_enumeration_factor_group():
     vg = vgroup.NDVariableArray(shape=(2, 2), num_states=3)
-    vg_bis = vgroup.NDVariableArray(shape=(2, 2), num_states=3)
-    vg < vg_bis
-
     with pytest.raises(
         ValueError,
         match=re.escape("Expected log potentials shape: (1,) or (2, 1). Got (3, 2)"),

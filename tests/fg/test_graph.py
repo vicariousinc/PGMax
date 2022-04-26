@@ -106,9 +106,9 @@ def test_log_potentials():
 
     with pytest.raises(
         ValueError,
-        match=re.escape("Invalid FactorGroup for log potentials updates."),
+        match=re.escape("Invalid FactorGroup queried to access log potentials."),
     ):
-        fg.bp_state.log_potentials[vg[0]] = np.zeros(10)
+        fg.bp_state.log_potentials[vg[0]]
 
     with pytest.raises(
         ValueError, match=re.escape("Expected log potentials shape (10,). Got (15,)")
