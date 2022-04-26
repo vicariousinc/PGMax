@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from functools import total_ordering
 from typing import (
     Any,
+    Collection,
     FrozenSet,
     List,
     Mapping,
@@ -21,7 +22,7 @@ import numpy as np
 import pgmax.fg.nodes as nodes
 from pgmax.utils import cached_property
 
-MAX_SIZE = 1e16
+MAX_SIZE = 1e10
 
 
 @total_ordering
@@ -40,7 +41,7 @@ class VariableGroup:
     def __lt__(self, other):
         return hash(self) < hash(other)
 
-    def __getitem__(self, val):
+    def __getitem__(self, val: Any) -> Union[Tuple[Any, int], List[Tuple[Any, int]]]:
         """Given a variable name, index, or a group of variable indices, retrieve the associated variable(s).
         Each variable is returned via a tuple of the form (variable hash/name, number of states)
 
@@ -129,7 +130,7 @@ class FactorGroup:
     def __lt__(self, other):
         return hash(self) < hash(other)
 
-    def __getitem__(self, variables: Sequence[Tuple[int, int]]) -> Any:
+    def __getitem__(self, variables: Union[Sequence, Collection]) -> Any:
         """Function to query individual factors in the factor group
 
         Args:
@@ -228,7 +229,7 @@ class FactorGroup:
             "Please subclass the FactorGroup class and override this method"
         )
 
-    def compile_wiring(self, vars_to_starts: Mapping[Tuple[int, int], int]) -> Any:
+    def compile_wiring(self, vars_to_starts: Mapping[Tuple[Any, int], int]) -> Any:
         """Compile an efficient wiring for the FactorGroup.
 
         Args:

@@ -233,11 +233,3 @@ with tqdm(total=n_epochs * n_batches) as pbar:
             )
             pbar.update()
             pbar.set_postfix(loss=value)
-
-batch_indices = indices[idx * batch_size : (idx + 1) * batch_size]
-batch_noisy_images, batch_target_images = (
-    noisy_images_train[:10],
-    target_images_train[:10],
-)
-step = 0
-value, opt_state = update(step, batch_noisy_images, batch_target_images, opt_state)

@@ -218,10 +218,10 @@ def test_e2e_sanity_check():
         (grid_vars, (1, 0, 1)): 0,
         (grid_vars, (1, 1, 0)): 1,
         (grid_vars, (1, 1, 1)): 0,
-        (additional_vars, ((0, 0, 2), 3)): 0,
-        (additional_vars, ((0, 1, 2), 3)): 2,
-        (additional_vars, ((1, 2, 0), 3)): 1,
-        (additional_vars, ((1, 2, 1), 3)): 0,
+        (additional_vars, ((additional_vars.__hash__(), (0, 0, 2)), 3)): 0,
+        (additional_vars, ((additional_vars.__hash__(), (0, 1, 2)), 3)): 2,
+        (additional_vars, ((additional_vars.__hash__(), (1, 2, 0)), 3)): 1,
+        (additional_vars, ((additional_vars.__hash__(), (1, 2, 1)), 3)): 0,
     }
 
     gt_has_cuts = gt_has_cuts.astype(np.int32)

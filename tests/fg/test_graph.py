@@ -130,7 +130,7 @@ def test_ftov_msgs():
 
     with pytest.raises(
         ValueError,
-        match=re.escape("Invalid names for setting messages"),
+        match=re.escape("Provided variable is not in the FactorGraph"),
     ):
         fg.bp_state.ftov_msgs[0] = np.ones(10)
 
@@ -175,7 +175,7 @@ def test_evidence():
     with pytest.raises(
         ValueError,
         match=re.escape(
-            "Got evidence for a variable or a variable group not in the FactorGraph!"
+            "Got evidence for a variable or a VariableGroup not in the FactorGraph!"
         ),
     ):
         graph.update_evidence(

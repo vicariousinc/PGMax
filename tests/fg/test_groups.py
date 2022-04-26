@@ -54,6 +54,15 @@ def test_variable_dict():
 
 
 def test_nd_variable_array():
+    max_size = int(groups.MAX_SIZE)
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            f"Currently only support NDVariableArray of size smaller than {max_size}. Got {max_size + 1}"
+        ),
+    ):
+        vgroup.NDVariableArray(shape=(max_size + 1,), num_states=2)
+
     num_states = np.full((2, 3), fill_value=2)
     with pytest.raises(
         ValueError, match=re.escape("Expected num_states shape (2, 2). Got (2, 3).")
@@ -62,14 +71,19 @@ def test_nd_variable_array():
 
     num_states = np.full((2, 3), fill_value=2, dtype=np.float32)
     with pytest.raises(
-        ValueError, match=re.escape("num_states entries should be of type np.int")
+        ValueError,
+        match=re.escape(
+            "num_states should be an integer or a NumPy array of dtype int"
+        ),
     ):
         vgroup.NDVariableArray(shape=(2, 2), num_states=num_states)
 
-    variable_group = vgroup.NDVariableArray(shape=(5, 5), num_states=2)
-    assert len(variable_group[:3, :3]) == 9
+    variable_group0 = vgroup.NDVariableArray(shape=(5, 5), num_states=2)
+    assert len(variable_group0[:3, :3]) == 9
 
     variable_group = vgroup.NDVariableArray(shape=(2, 2), num_states=3)
+    variable_group0 < variable_group
+
     with pytest.raises(
         ValueError,
         match=re.escape("data should be of shape (2, 2) or (2, 2, 3). Got (3, 3)."),

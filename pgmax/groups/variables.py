@@ -26,9 +26,9 @@ class NDVariableArray(groups.VariableGroup):
     num_states: Union[int, np.ndarray]
 
     def __post_init__(self):
-        if np.prod(self.shape) > groups.MAX_SIZE:
+        if np.prod(self.shape) > int(groups.MAX_SIZE):
             raise ValueError(
-                f"Currently only support NDVariableArray of size smaller than {groups.MAX_SIZE}. Got {np.prod(self.shape)}"
+                f"Currently only support NDVariableArray of size smaller than {int(groups.MAX_SIZE)}. Got {np.prod(self.shape)}"
             )
 
         if np.isscalar(self.num_states):
@@ -42,7 +42,9 @@ class NDVariableArray(groups.VariableGroup):
                     f"Expected num_states shape {self.shape}. Got {self.num_states.shape}."
                 )
         else:
-            raise ValueError("num_states entries should be of type np.int")
+            raise ValueError(
+                "num_states should be an integer or a NumPy array of dtype int"
+            )
 
     def __getitem__(
         self, val: Union[int, slice, Tuple]
@@ -94,7 +96,7 @@ class NDVariableArray(groups.VariableGroup):
 
         Args:
             data: Meaningful structured data. Should be an array of shape self.shape (for e.g. MAP decodings)
-                or self.shape + (self.num_states,) (for e.g. evidence, beliefs).
+                or self.shape + (self.num_states.max(),) (for e.g. evidence, beliefs).
 
         Returns:
             A flat jnp.array for internal use
@@ -158,7 +160,8 @@ class VariableDict(groups.VariableGroup):
 
     Args:
         num_states: The size of the variables in this variable group
-        variable_names: A tuple of all names of the variables in this variable group
+        variable_names: A tuple of all names of the variables in this variable group.
+            Note that we overwrite variable_names to add the hash of the VariableDict
     """
 
     variable_names: Tuple[Any, ...]
@@ -176,7 +179,7 @@ class VariableDict(groups.VariableGroup):
         object.__setattr__(self, "variable_names", hash_and_names)
 
     @cached_property
-    def variables(self) -> List[Tuple]:
+    def variables(self) -> List[Tuple[Tuple[Any, int], int]]:
         """Function that returns the list of all variables in the VariableGroup.
         Each variable is represented by a tuple of the form (variable name, number of states)
 
@@ -188,24 +191,23 @@ class VariableDict(groups.VariableGroup):
         vars_num_states = self.num_states.flatten()
         return list(zip(vars_names, vars_num_states))
 
-    def __getitem__(self, val: Any) -> Tuple[Any, int]:
+    def __getitem__(self, val: Any) -> Tuple[Tuple[Any, int], int]:
         """Given a variable name retrieve the associated variable, returned via a tuple of the form
         (variable name, number of states)
 
         Args:
-            val: a variable index or slice
+            val: a variable name
 
         Returns:
             The queried variable
         """
         assert isinstance(self.num_states, np.ndarray)
-
         if (self.__hash__(), val) not in self.variable_names:
             raise ValueError(f"Variable {val} is not in VariableDict")
         return ((self.__hash__(), val), self.num_states[0])
 
     def flatten(
-        self, data: Mapping[Tuple[int, int], Union[np.ndarray, jnp.ndarray]]
+        self, data: Mapping[Tuple[Tuple[int, int], int], Union[np.ndarray, jnp.ndarray]]
     ) -> jnp.ndarray:
         """Function that turns meaningful structured data into a flat data array for internal use.
 

@@ -6,7 +6,6 @@ import collections
 import copy
 import functools
 import inspect
-import typing
 from dataclasses import asdict, dataclass
 from types import MappingProxyType
 from typing import (
@@ -44,12 +43,7 @@ class FactorGraph:
     Factors in a graph are clustered in factor groups, which are grouped according to their factor types.
 
     Args:
-        variables: A single VariableGroup or a container containing variable groups.
-            If not a single VariableGroup, supported containers include mapping and sequence.
-            For a mapping, the keys of the mapping are used to index the variable groups.
-            For a sequence, the indices of the sequence are used to index the variable groups.
-            Note that if not a single VariableGroup, a CompositeVariableGroup will be created from
-            this input, and the individual VariableGroups will need to be accessed by indexing.
+        variable_groups: A single VariableGroup or a list of VariableGroups.
     """
 
     variable_groups: Union[groups.VariableGroup, Sequence[groups.VariableGroup]]
@@ -103,7 +97,7 @@ class FactorGraph:
 
         Args:
             factor_group: The FactorGroup to be added to the FactorGraph.
-            factor: The Factor to be added to the factor graph.
+            factor: The Factor to be added to the FactorGraph.
 
         Raises:
             ValueError: If
@@ -318,13 +312,13 @@ class FactorGraphState:
     """FactorGraphState.
 
     Args:
-        variable_groups: All the variable groups in the FactorGraph.
+        variable_groups: VariableGroups in the FactorGraph.
         vars_to_starts: Maps variables to their starting indices in the flat evidence array.
             flat_evidence[vars_to_starts[variable]: vars_to_starts[variable] + variable.num_var_states]
             contains evidence to the variable.
         num_var_states: Total number of variable states.
         total_factor_num_states: Size of the flat ftov messages array.
-        factor_groups: Factor groups in the FactorGraph
+        factor_groups: FactorGroups in the FactorGraph
         factor_type_to_msgs_range: Maps factors types to their start and end indices in the flat ftov messages.
         factor_type_to_potentials_range: Maps factor types to their start and end indices in the flat log potentials.
         factor_group_to_potentials_starts: Maps factor groups to their starting indices in the flat log potentials.
@@ -333,7 +327,7 @@ class FactorGraphState:
     """
 
     variable_groups: Sequence[groups.VariableGroup]
-    vars_to_starts: Mapping[Tuple[int, int], int]
+    vars_to_starts: Mapping[Tuple[Any, int], int]
     num_var_states: int
     total_factor_num_states: int
     factor_groups: Tuple[groups.FactorGroup, ...]
@@ -474,12 +468,11 @@ class LogPotentials:
         factor_group: Any,
         data: Union[np.ndarray, jnp.ndarray],
     ):
-        """Set the log potentials for a named factor group or a factor.
+        """Set the log potentials for a FactorGroup
 
         Args:
             factor_group: FactorGroup
-            data: Array containing the log potentials for the named factor group
-                or the factor.
+            data: Array containing the log potentials for the FactorGroup
         """
         object.__setattr__(
             self,
@@ -510,7 +503,7 @@ def update_ftov_msgs(
 
     Raises: ValueError if:
         (1) provided ftov_msgs shape does not match the expected ftov_msgs shape.
-        (2) provided name is not valid for ftov_msgs updates.
+        (2) provided variable is not in the FactorGraph.
     """
     for variable, data in updates.items():
         if variable in fg_state.vars_to_starts:
@@ -535,14 +528,7 @@ def update_ftov_msgs(
                     data / starts.shape[0]
                 )
         else:
-            raise ValueError(
-                "Invalid names for setting messages. "
-                "Supported names include a tuple of length 2 with factor "
-                "and variable names for directly setting factor to variable "
-                "messages, or a valid variable name for spreading expected "
-                "beliefs at a variable"
-            )
-
+            raise ValueError("Provided variable is not in the FactorGraph")
     return ftov_msgs
 
 
@@ -574,38 +560,19 @@ class FToVMessages:
 
             object.__setattr__(self, "value", self.value)
 
-    @typing.overload
     def __setitem__(
         self,
-        names: Tuple[Any, Any],
+        variable: Tuple[Any, int],
         data: Union[np.ndarray, jnp.ndarray],
     ) -> None:
-        """Setting messages from a factor to a variable
-
-        Args:
-            names: A tuple of length 2
-                names[0] is the name of the factor
-                names[1] is the name of the variable
-            data: An array containing messages from factor names[0]
-                to variable names[1]
-        """
-
-    @typing.overload
-    def __setitem__(
-        self,
-        variable: Tuple[int, int],
-        data: Union[np.ndarray, jnp.ndarray],
-    ) -> None:
-        """Spreading beliefs at a variable to all connected factors
+        """Spreading beliefs at a variable to all connected Factors
 
         Args:
             variable: A tuple representing a variable
             data: An array containing the beliefs to be spread uniformly
-                across all factor to variable messages involving this
-                variable.
+                across all factors to variable messages involving this variable.
         """
 
-    def __setitem__(self, variable, data) -> None:
         object.__setattr__(
             self,
             "value",
@@ -647,7 +614,7 @@ def update_evidence(
             evidence = evidence.at[start_index : start_index + name[1]].set(data)
         else:
             raise ValueError(
-                "Got evidence for a variable or a variable group not in the FactorGraph!"
+                "Got evidence for a variable or a VariableGroup not in the FactorGraph!"
             )
     return evidence
 
@@ -678,7 +645,7 @@ class Evidence:
 
             object.__setattr__(self, "value", self.value)
 
-    def __getitem__(self, variable: Tuple[int, int]) -> np.ndarray:
+    def __getitem__(self, variable: Tuple[Any, int]) -> np.ndarray:
         """Function to query evidence for a variable
 
         Args:
@@ -969,8 +936,9 @@ def BP(bp_state: BPState, temperature: float = 0.0) -> BeliefPropagation:
         beliefs = {}
         start = 0
         for variable_group in variable_groups:
-            variables = variable_group.variables
-            length = sum([variable[1] for variable in variables])
+            num_states = variable_group.num_states
+            assert isinstance(num_states, np.ndarray)
+            length = num_states.sum()
 
             beliefs[variable_group] = variable_group.unflatten(
                 flat_beliefs[start : start + length]

@@ -4,6 +4,8 @@ import collections
 from dataclasses import dataclass, field
 from typing import FrozenSet, OrderedDict, Type
 
+import numpy as np
+
 from pgmax.factors import logical
 from pgmax.fg import groups
 
@@ -20,11 +22,8 @@ class LogicalFactorGroup(groups.FactorGroup):
             For ORFactors the edge_states_offset is 1, for ANDFactors the edge_states_offset is -1.
     """
 
+    factor_configs: np.ndarray = field(init=False, default=None)
     edge_states_offset: int = field(init=False)
-
-    def __post_init__(self):
-        super().__post_init__()
-        object.__setattr__(self, "factor_configs", None)
 
     def _get_variables_to_factors(
         self,
