@@ -242,16 +242,6 @@ class ANDFactor(LogicalFactor):
 
 
 @nb.jit(parallel=False, cache=True, fastmath=True, nopython=True)
-def _compile_utils_numba(var_states, factor_edges_num_states, variables_for_factors):
-    idx = 0
-    for variables_for_factor in variables_for_factors:
-        for variable in variables_for_factor:
-            var_states[idx] = variable
-            factor_edges_num_states[idx] = variable[1]
-            idx += 1
-
-
-@nb.jit(parallel=False, cache=True, fastmath=True, nopython=True)
 def _compile_logical_wiring_numba(
     parents_edge_states: np.ndarray,
     children_edge_states: np.ndarray,

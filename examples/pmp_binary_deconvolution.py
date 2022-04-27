@@ -211,7 +211,6 @@ for factor_type, factor_groups in fg._factor_types_to_groups.items():
 # in the same manner does not change X, so this naturally results in multiple equivalent modes.
 
 # %%
-# %load_ext snakeviz
 start = time.time()
 bp = graph.BP(fg.bp_state, temperature=0.0)
 print("Time", time.time() - start)

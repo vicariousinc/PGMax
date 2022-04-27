@@ -82,16 +82,17 @@ fg.add_factors(visible_unaries)
 log_potential_matrix = np.zeros(W.shape + (2, 2)).reshape((-1, 2, 2))
 log_potential_matrix[:, 1, 1] = W.ravel()
 
+variables_for_factors = [
+    [hidden_variables[ii], visible_variables[jj]]
+    for ii in range(bh.shape[0])
+    for jj in range(bv.shape[0])
+]
+print("Time", time.time() - start)
 pairwise_factors = enumeration.PairwiseFactorGroup(
-    variables_for_factors=[
-        [hidden_variables[ii], visible_variables[jj]]
-        for ii in range(bh.shape[0])
-        for jj in range(bv.shape[0])
-    ],
+    variables_for_factors=variables_for_factors,
     log_potential_matrix=log_potential_matrix,
 )
 print("Time", time.time() - start)
-# #%snakeviz pairwise_factors = enumeration.PairwiseFactorGroup(variables_for_factors=[ [hidden_variables[ii], visible_variables[jj]] for ii in range(bh.shape[0]) for jj in range(bv.shape[0])],log_potential_matrix=log_potential_matrix,)
 
 fg.add_factors(pairwise_factors)
 print("Time", time.time() - start)
