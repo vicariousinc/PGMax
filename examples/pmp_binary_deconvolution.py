@@ -138,7 +138,7 @@ X = vgroup.NDVariableArray(num_states=2, shape=X_gt.shape)
 print("Time", time.time() - start)
 
 # %% [markdown]
-# For computation efficiency, we add large FactorGroups via `fg.add_factors` instead of adding individual Factors
+# For computation efficiency, we construct large FactorGroups instead of individual Factors
 
 # %%
 start = time.time()

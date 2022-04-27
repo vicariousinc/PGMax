@@ -10,8 +10,6 @@ import numpy as np
 from pgmax.fg import groups
 from pgmax.utils import cached_property
 
-MAX_SIZE = 1e9
-
 
 @dataclass(frozen=True, eq=False)
 class NDVariableArray(groups.VariableGroup):
@@ -28,9 +26,12 @@ class NDVariableArray(groups.VariableGroup):
     num_states: Union[int, np.ndarray]
 
     def __post_init__(self):
-        if np.prod(self.shape) > MAX_SIZE:
+        super().__post_init__()
+
+        max_size = int(groups.MAX_SIZE)
+        if np.prod(self.shape) > max_size:
             raise ValueError(
-                f"Currently only support NDVariableArray of size smaller than {int(MAX_SIZE)}. Got {np.prod(self.shape)}"
+                f"Currently only support NDVariableArray of size smaller than {max_size}. Got {np.prod(self.shape)}"
             )
 
         if np.isscalar(self.num_states):
@@ -47,12 +48,6 @@ class NDVariableArray(groups.VariableGroup):
             raise ValueError(
                 "num_states should be an integer or a NumPy array of dtype int"
             )
-
-        # Only compute the hash once, which is guaranteed to be an int64
-        this_id = id(self) % 2**32
-        this_hash = this_id * int(MAX_SIZE)
-        assert this_hash < 2**63
-        object.__setattr__(self, "this_hash", this_hash)
 
     def __getitem__(
         self, val: Union[int, slice, Tuple]
@@ -175,27 +170,34 @@ class VariableDict(groups.VariableGroup):
     """A variable dictionary that contains a set of variables of the same size
 
     Args:
-        num_states: The size of the variables in this variable group
-        variable_names: A tuple of all names of the variables in this variable group.
+        num_states: The size of the variables in this VariableGroup
+        variable_names: A tuple of all names of the variables in this VariableGroup.
             Note that we overwrite variable_names to add the hash of the VariableDict
     """
 
     variable_names: Tuple[Any, ...]
-    num_states: int
+    num_states: Union[int, np.ndarray]
 
     def __post_init__(self):
-        num_states = np.full(
-            (len(self.variable_names),), fill_value=self.num_states, dtype=np.int32
-        )
-        object.__setattr__(self, "num_states", num_states)
-
-        # Only compute the hash once
-        object.__setattr__(self, "this_hash", id(self))
+        super().__post_init__()
 
         hash_and_names = tuple(
             (self.__hash__(), var_name) for var_name in self.variable_names
         )
         object.__setattr__(self, "variable_names", hash_and_names)
+
+        if np.isscalar(self.num_states):
+            num_states = np.full(
+                len(self.variable_names), fill_value=self.num_states, dtype=np.int64
+            )
+            object.__setattr__(self, "num_states", num_states)
+        elif isinstance(self.num_states, np.ndarray) and np.issubdtype(
+            self.num_states.dtype, int
+        ):
+            if self.num_states.shape != len(self.variable_names):
+                raise ValueError(
+                    f"Expected num_states shape {len(self.variable_names)}. Got {self.num_states.shape}."
+                )
 
     @cached_property
     def variables(self) -> List[Tuple[Tuple[Any, int], int]]:
@@ -215,7 +217,7 @@ class VariableDict(groups.VariableGroup):
         (variable name, number of states)
 
         Args:
-            val: a variable name
+            val: a variable name (without the object hash)
 
         Returns:
             The queried variable
@@ -223,7 +225,9 @@ class VariableDict(groups.VariableGroup):
         assert isinstance(self.num_states, np.ndarray)
         if (self.__hash__(), val) not in self.variable_names:
             raise ValueError(f"Variable {val} is not in VariableDict")
-        return ((self.__hash__(), val), self.num_states[0])
+
+        idx = self.variable_names.index((self.__hash__(), val))
+        return ((self.__hash__(), val), self.num_states[idx])
 
     def flatten(
         self, data: Mapping[Tuple[Tuple[int, int], int], Union[np.ndarray, jnp.ndarray]]

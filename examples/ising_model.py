@@ -37,7 +37,7 @@ for ii in range(50):
         kk = (ii + 1) % 50
         ll = (jj + 1) % 50
         variables_for_factors.append([variables[ii, jj], variables[kk, jj]])
-        variables_for_factors.append([variables[ii, jj], variables[kk, ll]])
+        variables_for_factors.append([variables[ii, jj], variables[ii, ll]])
 
 factor_group = enumeration.PairwiseFactorGroup(
     variables_for_factors=variables_for_factors,
@@ -52,8 +52,6 @@ fg.add_factors(factor_group)
 bp = graph.BP(fg.bp_state, temperature=0)
 
 # %%
-# TODO: check\ time for before BP vs time for BP
-# TODO: time PGMAX vs PMP
 bp_arrays = bp.init(
     evidence_updates={variables: jax.device_put(np.random.gumbel(size=(50, 50, 2)))}
 )

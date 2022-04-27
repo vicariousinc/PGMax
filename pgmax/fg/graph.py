@@ -49,9 +49,6 @@ class FactorGraph:
     variable_groups: Union[groups.VariableGroup, Sequence[groups.VariableGroup]]
 
     def __post_init__(self):
-        import time
-
-        start = time.time()
         if isinstance(self.variable_groups, groups.VariableGroup):
             self.variable_groups = [self.variable_groups]
 
@@ -68,6 +65,7 @@ class FactorGraph:
         )
 
         # See FactorGraphState docstrings for documentation on the following fields
+        # TODO: vars_to_starts does not have to be a dict
         self._vars_to_starts: Dict[Tuple[int, int], int] = {}
 
         vars_num_states_cumsum = 0
@@ -82,7 +80,6 @@ class FactorGraph:
             )
             vars_num_states_cumsum += vg_num_states_cumsum[-1]
         self._num_var_states = vars_num_states_cumsum
-        print("Init", time.time() - start)
 
     def __hash__(self) -> int:
         return hash(self.factor_groups)

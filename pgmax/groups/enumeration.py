@@ -231,9 +231,6 @@ class PairwiseFactorGroup(groups.FactorGroup):
                 f"Got log_potential_matrix for {log_potential_matrix.shape[0]} factors."
             )
 
-        import time
-
-        start = time.time()
         log_potential_shape = log_potential_matrix.shape[-2:]
         for variables_for_factor in self.variables_for_factors:
             if len(variables_for_factor) != 2:
@@ -252,8 +249,7 @@ class PairwiseFactorGroup(groups.FactorGroup):
                     f"configurations) does not match the specified log_potential_matrix "
                     f"(with {log_potential_shape} configurations)."
                 )
-            object.__setattr__(self, "log_potential_matrix", log_potential_matrix)
-        print(time.time() - start)
+        object.__setattr__(self, "log_potential_matrix", log_potential_matrix)
 
         factor_configs = (
             np.mgrid[

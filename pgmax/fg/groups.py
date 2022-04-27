@@ -23,6 +23,8 @@ import numpy as np
 import pgmax.fg.nodes as nodes
 from pgmax.utils import cached_property
 
+MAX_SIZE = 1e9
+
 
 @total_ordering
 @dataclass(frozen=True, eq=False)
@@ -33,6 +35,13 @@ class VariableGroup:
     Attributes:
         this_hash: Hash of the VariableGroup
     """
+
+    def __post_init__(self):
+        # Only compute the hash once, which is guaranteed to be an int64
+        this_id = id(self) % 2**32
+        this_hash = this_id * int(MAX_SIZE)
+        assert this_hash < 2**63
+        object.__setattr__(self, "this_hash", this_hash)
 
     def __hash__(self):
         return self.this_hash
@@ -328,9 +337,7 @@ class SingleFactorGroup(FactorGroup):
         )
 
 
-nb.jit(parallel=False, cache=True, fastmath=True, nopython=False)
-
-
+# @nb.jit(parallel=False, cache=True, fastmath=True)
 def _compile_edges_num_states_numba(factor_edges_num_states, variables_for_factors):
     idx = 0
     for variables_for_factor in variables_for_factors:
