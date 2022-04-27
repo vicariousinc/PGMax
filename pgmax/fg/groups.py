@@ -23,8 +23,6 @@ import numpy as np
 import pgmax.fg.nodes as nodes
 from pgmax.utils import cached_property
 
-MAX_SIZE = 1e10
-
 
 @total_ordering
 @dataclass(frozen=True, eq=False)

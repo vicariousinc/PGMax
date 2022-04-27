@@ -54,7 +54,7 @@ def test_variable_dict():
 
 
 def test_nd_variable_array():
-    max_size = int(groups.MAX_SIZE)
+    max_size = int(vgroup.MAX_SIZE)
     with pytest.raises(
         ValueError,
         match=re.escape(
