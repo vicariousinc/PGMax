@@ -17,6 +17,7 @@ from typing import (
 )
 
 import jax.numpy as jnp
+import numba as nb
 import numpy as np
 
 import pgmax.fg.nodes as nodes
@@ -30,10 +31,13 @@ MAX_SIZE = 1e10
 class VariableGroup:
     """Class to represent a group of variables.
     Each variable is represented via a tuple of the form (variable hash/name, number of states)
+
+    Attributes:
+        this_hash: Hash of the VariableGroup
     """
 
     def __hash__(self):
-        return id(self) * int(MAX_SIZE)
+        return self.this_hash
 
     def __eq__(self, other):
         return hash(self) == hash(other)
@@ -107,6 +111,9 @@ class FactorGroup:
 
     Attributes:
         factor_type: Factor type shared by all the Factors in the FactorGroup.
+        factor_sizes: Array of the different factor sizes.
+        factor_edges_num_states: Array concatenating the number of states for the variables connected to each Factor of
+            the FactorGroup. Each variable will appear once for each Factor it connects to.
 
     Raises:
         ValueError: if the FactorGroup does not contain a Factor
@@ -116,10 +123,26 @@ class FactorGroup:
     factor_configs: np.ndarray = field(init=False)
     log_potentials: np.ndarray = field(init=False, default=np.empty((0,)))
     factor_type: Type = field(init=False)
+    factor_sizes: np.ndarray = field(init=False)
+    factor_edges_num_states: np.ndarray = field(init=False)
 
     def __post_init__(self):
         if len(self.variables_for_factors) == 0:
             raise ValueError("Cannot create a FactorGroup with no Factor.")
+
+        factor_sizes = np.array(
+            [
+                len(variables_for_factor)
+                for variables_for_factor in self.variables_for_factors
+            ]
+        )
+        object.__setattr__(self, "factor_sizes", factor_sizes)
+
+        factor_edges_num_states = np.empty(shape=(self.factor_sizes.sum(),), dtype=int)
+        _compile_edges_num_states_numba(
+            factor_edges_num_states, self.variables_for_factors
+        )
+        object.__setattr__(self, "factor_edges_num_states", factor_edges_num_states)
 
     def __hash__(self):
         return id(self)
@@ -159,22 +182,6 @@ class FactorGroup:
             A dictionnary mapping set of connected variables to the corresponding factors
         """
         return self._get_variables_to_factors()
-
-    @cached_property
-    def total_num_states(self) -> int:
-        """Function to return the total number of states for all the variables involved in all the Factors
-
-        Returns:
-            Total number of variable states in the FactorGroup
-        """
-        # TODO: this could be returned by the wiring to loop over variables_for_factors only once
-        return sum(
-            [
-                variable[1]
-                for variables_for_factor in self.variables_for_factors
-                for variable in variables_for_factor
-            ]
-        )
 
     @cached_property
     def factor_group_log_potentials(self) -> np.ndarray:
@@ -321,3 +328,14 @@ class SingleFactorGroup(FactorGroup):
         raise NotImplementedError(
             "SingleFactorGroup does not support vectorized factor operations."
         )
+
+
+nb.jit(parallel=False, cache=True, fastmath=True, nopython=False)
+
+
+def _compile_edges_num_states_numba(factor_edges_num_states, variables_for_factors):
+    idx = 0
+    for variables_for_factor in variables_for_factors:
+        for variable in variables_for_factor:
+            factor_edges_num_states[idx] = variable[1]
+            idx += 1

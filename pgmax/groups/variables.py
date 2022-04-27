@@ -10,6 +10,8 @@ import numpy as np
 from pgmax.fg import groups
 from pgmax.utils import cached_property
 
+MAX_SIZE = 1e9
+
 
 @dataclass(frozen=True, eq=False)
 class NDVariableArray(groups.VariableGroup):
@@ -26,13 +28,13 @@ class NDVariableArray(groups.VariableGroup):
     num_states: Union[int, np.ndarray]
 
     def __post_init__(self):
-        if np.prod(self.shape) > int(groups.MAX_SIZE):
+        if np.prod(self.shape) > MAX_SIZE:
             raise ValueError(
-                f"Currently only support NDVariableArray of size smaller than {int(groups.MAX_SIZE)}. Got {np.prod(self.shape)}"
+                f"Currently only support NDVariableArray of size smaller than {int(MAX_SIZE)}. Got {np.prod(self.shape)}"
             )
 
         if np.isscalar(self.num_states):
-            num_states = np.full(self.shape, fill_value=self.num_states, dtype=np.int32)
+            num_states = np.full(self.shape, fill_value=self.num_states, dtype=np.int64)
             object.__setattr__(self, "num_states", num_states)
         elif isinstance(self.num_states, np.ndarray) and np.issubdtype(
             self.num_states.dtype, int
@@ -45,6 +47,12 @@ class NDVariableArray(groups.VariableGroup):
             raise ValueError(
                 "num_states should be an integer or a NumPy array of dtype int"
             )
+
+        # Only compute the hash once, which is guaranteed to be an int64
+        this_id = id(self) % 2**32
+        this_hash = this_id * int(MAX_SIZE)
+        assert this_hash < 2**63
+        object.__setattr__(self, "this_hash", this_hash)
 
     def __getitem__(
         self, val: Union[int, slice, Tuple]
@@ -61,12 +69,16 @@ class NDVariableArray(groups.VariableGroup):
             A single variable or a list of variables
         """
         assert isinstance(self.num_states, np.ndarray)
-        if np.isscalar(self.variable_names[val]):
-            return (self.variable_names[val], self.num_states[val])
-        else:
+
+        if isinstance(val, slice) or (
+            isinstance(val, tuple) and isinstance(val[0], slice)
+        ):
+            assert isinstance(self.num_states, np.ndarray)
             vars_names = self.variable_names[val].flatten()
             vars_num_states = self.num_states[val].flatten()
             return list(zip(vars_names, vars_num_states))
+
+        return (self.variable_names[val], self.num_states[val])
 
     @cached_property
     def variables(self) -> List[Tuple]:
@@ -176,6 +188,9 @@ class VariableDict(groups.VariableGroup):
             (len(self.variable_names),), fill_value=self.num_states, dtype=np.int32
         )
         object.__setattr__(self, "num_states", num_states)
+
+        # Only compute the hash once
+        object.__setattr__(self, "this_hash", id(self))
 
         hash_and_names = tuple(
             (self.__hash__(), var_name) for var_name in self.variable_names

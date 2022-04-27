@@ -65,7 +65,6 @@ class EnumerationFactorGroup(groups.FactorGroup):
             raise ValueError(
                 f"Potentials should be floats. Got {log_potentials.dtype}."
             )
-
         object.__setattr__(self, "log_potentials", log_potentials)
 
     def _get_variables_to_factors(
@@ -232,6 +231,10 @@ class PairwiseFactorGroup(groups.FactorGroup):
                 f"Got log_potential_matrix for {log_potential_matrix.shape[0]} factors."
             )
 
+        import time
+
+        start = time.time()
+        log_potential_shape = log_potential_matrix.shape[-2:]
         for variables_for_factor in self.variables_for_factors:
             if len(variables_for_factor) != 2:
                 raise ValueError(
@@ -239,15 +242,19 @@ class PairwiseFactorGroup(groups.FactorGroup):
                     f" {len(variables_for_factor)} variables ({variables_for_factor})."
                 )
 
-            num_states0 = variables_for_factor[0][1]
-            num_states1 = variables_for_factor[1][1]
-            if not log_potential_matrix.shape[-2:] == (num_states0, num_states1):
+            factor_num_configs = (
+                variables_for_factor[0][1],
+                variables_for_factor[1][1],
+            )
+            if log_potential_shape != factor_num_configs:
                 raise ValueError(
-                    f"The specified pairwise factor {variables_for_factor} (with {(num_states0, num_states1)}"
+                    f"The specified pairwise factor {variables_for_factor} (with {factor_num_configs}"
                     f"configurations) does not match the specified log_potential_matrix "
-                    f"(with {log_potential_matrix.shape[-2:]} configurations)."
+                    f"(with {log_potential_shape} configurations)."
                 )
-        object.__setattr__(self, "log_potential_matrix", log_potential_matrix)
+            object.__setattr__(self, "log_potential_matrix", log_potential_matrix)
+        print(time.time() - start)
+
         factor_configs = (
             np.mgrid[
                 : log_potential_matrix.shape[-2],
@@ -257,6 +264,7 @@ class PairwiseFactorGroup(groups.FactorGroup):
             .reshape((-1, 2))
         )
         object.__setattr__(self, "factor_configs", factor_configs)
+
         log_potential_matrix = np.broadcast_to(
             log_potential_matrix,
             (len(self.variables_for_factors),) + log_potential_matrix.shape[-2:],

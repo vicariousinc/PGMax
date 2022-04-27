@@ -68,9 +68,8 @@ class FactorGraph:
         )
 
         # See FactorGraphState docstrings for documentation on the following fields
-        self._vars_to_starts: OrderedDict[
-            Tuple[int, int], int
-        ] = collections.OrderedDict()
+        self._vars_to_starts: Dict[Tuple[int, int], int] = {}
+
         vars_num_states_cumsum = 0
         for variable_group in self.variable_groups:
             vg_num_states = variable_group.num_states.flatten()
@@ -159,7 +158,7 @@ class FactorGraph:
                     factor_group
                 ] = factor_num_configs_cumsum
 
-                factor_num_states_cumsum += factor_group.total_num_states
+                factor_num_states_cumsum += factor_group.factor_edges_num_states.sum()
                 factor_num_configs_cumsum += (
                     factor_group.factor_group_log_potentials.shape[0]
                 )

@@ -140,7 +140,9 @@ class LogicalFactor(nodes.Factor):
 
     @staticmethod
     def compile_wiring(
+        factor_edges_num_states: np.ndarray,
         variables_for_factors: Sequence[List],
+        factor_sizes: np.ndarray,
         vars_to_starts: Mapping[Tuple[Any, int], int],
         edge_states_offset: int,
     ) -> LogicalWiring:
@@ -148,8 +150,11 @@ class LogicalFactor(nodes.Factor):
         Internally calls _compile_var_states_numba and _compile_logical_wiring_numba for speed.
 
         Args:
-            variables_for_factors: A list of list of variables. Each list within the outer list contains the
-                variables connected to a Factor. The same variable can be connected to multiple Factors.
+            factor_edges_num_states: An array concatenating the number of states for the variables connected to each
+                Factor of the FactorGroup. Each variable will appear once for each Factor it connects to.
+            variables_for_factors: A tuple of tuples containing variables connected to each Factor of the FactorGroup.
+                Each variable will appear once for each Factor it connects to.
+            factor_sizes: An array containing the different factor sizes.
             vars_to_starts: A dictionary that maps variables to their global starting indices
                 For an n-state variable, a global start index of m means the global indices
                 of its n variable states are m, m + 1, ..., m + n - 1
@@ -159,17 +164,12 @@ class LogicalFactor(nodes.Factor):
         Returns:
             The LogicalWiring
         """
-        factor_sizes = []
+        # TODO: Don't use vars_to_starts
         var_states = []
-        factor_edges_num_states = []
         for variables_for_factor in variables_for_factors:
-            factor_sizes.append(len(variables_for_factor))
             for variable in variables_for_factor:
                 var_states.append(vars_to_starts[variable])
-                factor_edges_num_states.append(variable[1])
-        factor_sizes = np.array(factor_sizes)
         var_states = np.array(var_states)
-        factor_edges_num_states = np.array(factor_edges_num_states)
 
         # Relevant state differs for ANDFactors and ORFactors
         relevant_state = (-edge_states_offset + 1) // 2
@@ -239,6 +239,16 @@ class ANDFactor(LogicalFactor):
     """
 
     edge_states_offset: int = field(init=False, default=-1)
+
+
+@nb.jit(parallel=False, cache=True, fastmath=True, nopython=True)
+def _compile_utils_numba(var_states, factor_edges_num_states, variables_for_factors):
+    idx = 0
+    for variables_for_factor in variables_for_factors:
+        for variable in variables_for_factor:
+            var_states[idx] = variable
+            factor_edges_num_states[idx] = variable[1]
+            idx += 1
 
 
 @nb.jit(parallel=False, cache=True, fastmath=True, nopython=True)

@@ -90,9 +90,10 @@ pairwise_factors = enumeration.PairwiseFactorGroup(
     ],
     log_potential_matrix=log_potential_matrix,
 )
-fg.add_factors(pairwise_factors)
+print("Time", time.time() - start)
+# #%snakeviz pairwise_factors = enumeration.PairwiseFactorGroup(variables_for_factors=[ [hidden_variables[ii], visible_variables[jj]] for ii in range(bh.shape[0]) for jj in range(bv.shape[0])],log_potential_matrix=log_potential_matrix,)
 
-# # %snakeviz fg.add_factors(factory=enumeration.PairwiseFactorGroup, variables_for_factors=v, log_potential_matrix=log_potential_matrix,)
+fg.add_factors(pairwise_factors)
 print("Time", time.time() - start)
 
 

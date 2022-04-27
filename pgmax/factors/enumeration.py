@@ -154,6 +154,7 @@ class EnumerationFactor(nodes.Factor):
 
     @staticmethod
     def compile_wiring(
+        factor_edges_num_states: np.ndarray,
         variables_for_factors: Sequence[List],
         factor_configs: np.ndarray,
         vars_to_starts: Mapping[Tuple[Any, int], int],
@@ -163,10 +164,14 @@ class EnumerationFactor(nodes.Factor):
         Internally calls _compile_var_states_numba and _compile_enumeration_wiring_numba for speed.
 
         Args:
+            factor_edges_num_states: An array concatenating the number of states for the variables connected to each
+                Factor of the FactorGroup. Each variable will appear once for each Factor it connects to.
             variables_for_factors: A list of list of variables. Each list within the outer list contains the
                 variables connected to a Factor. The same variable can be connected to multiple Factors.
             factor_configs: Array of shape (num_val_configs, num_variables) containing an explicit enumeration
                 of all valid configurations.
+            factor_edges_num_states: Array concatenating the number of states for the variables connected to each Factor of
+                the FactorGroup. Each variable will appear once for each Factor it connects to.
             vars_to_starts: A dictionary that maps variables to their global starting indices
                 For an n-state variable, a global start index of m means the global indices
                 of its n variable states are m, m + 1, ..., m + n - 1
@@ -178,14 +183,12 @@ class EnumerationFactor(nodes.Factor):
         Returns:
             The EnumerationWiring
         """
+        # TODO: Don't use vars_to_starts
         var_states = []
-        factor_edges_num_states = []
         for variables_for_factor in variables_for_factors:
             for variable in variables_for_factor:
                 var_states.append(vars_to_starts[variable])
-                factor_edges_num_states.append(variable[1])
         var_states = np.array(var_states)
-        factor_edges_num_states = np.array(factor_edges_num_states)
 
         num_states_cumsum = np.insert(np.cumsum(factor_edges_num_states), 0, 0)
         var_states_for_edges = np.empty(shape=(num_states_cumsum[-1],), dtype=int)
