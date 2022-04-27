@@ -24,7 +24,7 @@ def test_variable_dict():
             "num_states should be an integer or a NumPy array of dtype int"
         ),
     ):
-        vgroup.NDVariableArray(shape=(2, 2), num_states=num_states)
+        vgroup.VariableDict(variable_names=tuple([0, 1, 2]), num_states=num_states)
 
     variable_dict = vgroup.VariableDict(variable_names=tuple([0, 1, 2]), num_states=15)
     with pytest.raises(

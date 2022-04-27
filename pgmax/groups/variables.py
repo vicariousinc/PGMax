@@ -212,7 +212,7 @@ class VariableDict(groups.VariableGroup):
         return (self.variable_hashes[var_idx], self.num_states[var_idx])
 
     def flatten(
-        self, data: Mapping[Tuple[Tuple[int, int], int], Union[np.ndarray, jnp.ndarray]]
+        self, data: Mapping[Any, Union[np.ndarray, jnp.ndarray]]
     ) -> jnp.ndarray:
         """Function that turns meaningful structured data into a flat data array for internal use.
 

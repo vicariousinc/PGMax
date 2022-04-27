@@ -271,7 +271,7 @@ class FactorGroup:
             "Please subclass the FactorGroup class and override this method"
         )
 
-    def compile_wiring(self, vars_to_starts: Mapping[Tuple[Any, int], int]) -> Any:
+    def compile_wiring(self, vars_to_starts: Mapping[Tuple[int, int], int]) -> Any:
         """Compile an efficient wiring for the FactorGroup.
 
         Args:

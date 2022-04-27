@@ -1,7 +1,7 @@
 """A module containing classes that specify the basic components of a Factor Graph."""
 
 from dataclasses import asdict, dataclass
-from typing import Any, List, Sequence, Tuple, Union
+from typing import List, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -48,7 +48,7 @@ class Factor:
         NotImplementedError: If compile_wiring is not implemented
     """
 
-    variables: List[Tuple[Any, int]]
+    variables: List[Tuple[int, int]]
     log_potentials: np.ndarray
 
     def __post_init__(self):
