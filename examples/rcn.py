@@ -38,9 +38,9 @@ from scipy.ndimage import maximum_filter
 from scipy.signal import fftconvolve
 from sklearn.datasets import fetch_openml
 
-from pgmax.factors.enumeration import EnumerationFactor
 from pgmax.fg import graph
 from pgmax.groups import variables as vgroup
+from pgmax.groups.enumeration import EnumerationFactorGroup
 
 memory = Memory("./example_data/tmp")
 fetch_openml_cached = memory.cache(fetch_openml)
@@ -280,12 +280,13 @@ for idx in range(edges.shape[0]):
 
     for e in edge:
         i1, i2, r = e
-        factor = EnumerationFactor(
-            variables=[variables_all_models[idx][i1], variables_all_models[idx][i2]],
+        factor_group = EnumerationFactorGroup(
+            variables_for_factors=[
+                [variables_all_models[idx][i1], variables_all_models[idx][i2]]
+            ],
             factor_configs=valid_configs_list[r],
-            log_potentials=np.zeros(valid_configs_list[r].shape[0]),
         )
-        fg.add_factors(factor=factor)
+        fg.add_factors(factor_group)
 
 end = time.time()
 print(f"Creating factors took {end-start:.3f} seconds.")
@@ -384,7 +385,10 @@ def get_evidence(bu_msg: np.ndarray, frc: np.ndarray) -> np.ndarray:
 
 
 # %%
-frcs_dict = {model_idx: frcs[model_idx] for model_idx in range(frcs.shape[0])}
+frcs_dict = {
+    variables_all_models[model_idx]: frcs[model_idx]
+    for model_idx in range(frcs.shape[0])
+}
 bp = graph.BP(fg.bp_state, temperature=0.0)
 scores = np.zeros((len(test_set), frcs.shape[0]))
 map_states_dict = {}
@@ -413,8 +417,8 @@ for test_idx in range(len(test_set)):
         evidence_updates,
         map_states,
     )
-    for ii in score:
-        scores[test_idx, ii] = score[ii]
+    for idx, score in enumerate(score.values()):
+        scores[test_idx, idx] = score
     end = time.time()
     print(f"Computing scores took {end-start:.3f} seconds for image {test_idx}.")
 
@@ -437,7 +441,9 @@ print(f"accuracy = {accuracy}")
 fig, ax = plt.subplots(5, 4, figsize=(16, 20))
 for test_idx in range(20):
     idx = np.unravel_index(test_idx, (5, 4))
-    map_state = map_states_dict[test_idx][best_model_idx[test_idx]]
+    map_state = map_states_dict[test_idx][
+        variables_all_models[best_model_idx[test_idx]]
+    ]
     offsets = np.array(
         np.unravel_index(map_state, (2 * hps + 1, 2 * vps + 1))
     ).T - np.array([hps, vps])

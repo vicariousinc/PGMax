@@ -69,14 +69,12 @@ hidden_unaries = enumeration.EnumerationFactorGroup(
     factor_configs=np.arange(2)[:, None],
     log_potentials=np.stack([np.zeros_like(bh), bh], axis=1),
 )
-fg.add_factors(hidden_unaries)
 
 visible_unaries = enumeration.EnumerationFactorGroup(
     variables_for_factors=[[visible_variables[jj]] for jj in range(bv.shape[0])],
     factor_configs=np.arange(2)[:, None],
     log_potentials=np.stack([np.zeros_like(bv), bv], axis=1),
 )
-fg.add_factors(visible_unaries)
 
 # Add pairwise factors
 log_potential_matrix = np.zeros(W.shape + (2, 2)).reshape((-1, 2, 2))
@@ -94,7 +92,7 @@ pairwise_factors = enumeration.PairwiseFactorGroup(
 )
 print("Time", time.time() - start)
 
-fg.add_factors(pairwise_factors)
+fg.add_factors([hidden_unaries, visible_unaries, pairwise_factors])
 print("Time", time.time() - start)
 
 
@@ -107,6 +105,7 @@ print("Time", time.time() - start)
 #
 # An alternative way of creating the above factors is to add them iteratively by calling [`fg.add_factor`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.graph.FactorGraph.html#pgmax.fg.graph.FactorGraph.add_factor) as below. This approach is not recommended as it is not computationally efficient.
 # ~~~python
+# from pgmax.factors import enumeration as enumeration_factor
 # import itertools
 # from tqdm import tqdm
 #
@@ -117,7 +116,7 @@ print("Time", time.time() - start)
 #         factor_configs=np.arange(2)[:, None],
 #         log_potentials=np.array([0, bh[ii]]),
 #     )
-#     fg.add_factors(factor=factor)
+#     fg.add_factors(factor)
 #
 # for jj in range(bv.shape[0]):
 #     factor = enumeration_factor.EnumerationFactor(
@@ -125,7 +124,7 @@ print("Time", time.time() - start)
 #         factor_configs=np.arange(2)[:, None],
 #         log_potentials=np.array([0, bv[jj]]),
 #     )
-#     fg.add_factors(factor=factor)
+#     fg.add_factors(factor)
 #
 # # Add pairwise factors
 # factor_configs = np.array(list(itertools.product(np.arange(2), repeat=2)))
@@ -136,7 +135,7 @@ print("Time", time.time() - start)
 #             factor_configs=factor_configs,
 #             log_potentials=np.array([0, 0, 0, W[ii, jj]]),
 #         )
-#         fg.add_factors(factor=factor)
+#         fg.add_factors(factor)
 # ~~~
 #
 # Once we have added the factors, we can run max-product LBP and get MAP decoding by

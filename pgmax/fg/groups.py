@@ -17,7 +17,6 @@ from typing import (
 )
 
 import jax.numpy as jnp
-import numba as nb
 import numpy as np
 
 import pgmax.fg.nodes as nodes
@@ -32,9 +31,12 @@ class VariableGroup:
     """Class to represent a group of variables.
     Each variable is represented via a tuple of the form (variable hash/name, number of states)
 
-    Attributes:
-        this_hash: Hash of the VariableGroup
+    Arguments:
+        num_states: An integer or an array specifying the number of states of the variables
+            in this VariableGroup
     """
+
+    num_states: Union[int, np.ndarray] = field(init=False)
 
     def __post_init__(self):
         # Only compute the hash once, which is guaranteed to be an int64
@@ -52,9 +54,9 @@ class VariableGroup:
     def __lt__(self, other):
         return hash(self) < hash(other)
 
-    def __getitem__(self, val: Any) -> Union[Tuple[Any, int], List[Tuple[Any, int]]]:
+    def __getitem__(self, val: Any) -> Union[Tuple[int, int], List[Tuple[int, int]]]:
         """Given a variable name, index, or a group of variable indices, retrieve the associated variable(s).
-        Each variable is returned via a tuple of the form (variable hash/name, number of states)
+        Each variable is returned via a tuple of the form (variable hash, number of states)
 
         Args:
             val: a variable index, slice, or name
@@ -67,16 +69,29 @@ class VariableGroup:
         )
 
     @cached_property
-    def variables(self) -> List[Tuple]:
-        """Function that returns the list of all variables in the VariableGroup.
-        Each variable is represented by a tuple of the form (variable hash/name, number of states)
+    def variable_hashes(self) -> np.ndarray:
+        """Function that generates a variable hash for each variable
 
         Returns:
-            List of variables in the VariableGroup
+            Array of variables hashes.
         """
         raise NotImplementedError(
             "Please subclass the VariableGroup class and override this method"
         )
+
+    @cached_property
+    def variables(self) -> List[Tuple[int, int]]:
+        """Function that returns the list of all variables in the VariableGroup.
+        Each variable is represented by a tuple of the form (variable hash, number of states)
+
+        Returns:
+            List of variables in the VariableGroup
+        """
+        assert isinstance(self.variable_hashes, np.ndarray)
+        assert isinstance(self.num_states, np.ndarray)
+        vars_hashes = self.variable_hashes.flatten()
+        vars_num_states = self.num_states.flatten()
+        return list(zip(vars_hashes, vars_num_states))
 
     def flatten(self, data: Any) -> jnp.ndarray:
         """Function that turns meaningful structured data into a flat data array for internal use.
@@ -118,9 +133,6 @@ class FactorGroup:
 
     Attributes:
         factor_type: Factor type shared by all the Factors in the FactorGroup.
-        factor_sizes: Array of the different factor sizes.
-        factor_edges_num_states: Array concatenating the number of states for the variables connected to each Factor of
-            the FactorGroup. Each variable will appear once for each Factor it connects to.
 
     Raises:
         ValueError: if the FactorGroup does not contain a Factor
@@ -130,26 +142,10 @@ class FactorGroup:
     factor_configs: np.ndarray = field(init=False)
     log_potentials: np.ndarray = field(init=False, default=np.empty((0,)))
     factor_type: Type = field(init=False)
-    factor_sizes: np.ndarray = field(init=False)
-    factor_edges_num_states: np.ndarray = field(init=False)
 
     def __post_init__(self):
         if len(self.variables_for_factors) == 0:
             raise ValueError("Cannot create a FactorGroup with no Factor.")
-
-        factor_sizes = np.array(
-            [
-                len(variables_for_factor)
-                for variables_for_factor in self.variables_for_factors
-            ]
-        )
-        object.__setattr__(self, "factor_sizes", factor_sizes)
-
-        factor_edges_num_states = np.empty(shape=(self.factor_sizes.sum(),), dtype=int)
-        _compile_edges_num_states_numba(
-            factor_edges_num_states, self.variables_for_factors
-        )
-        object.__setattr__(self, "factor_edges_num_states", factor_edges_num_states)
 
     def __hash__(self):
         return id(self)
@@ -179,6 +175,38 @@ class FactorGroup:
                 f"The queried factor connected to the set of variables {variables} is not present in the factor group."
             )
         return self._variables_to_factors[variables]
+
+    @cached_property
+    def factor_sizes(self) -> np.ndarray:
+        """Computes the factor sizes
+
+        Returns:
+            Array of the different factor sizes.
+        """
+        return np.array(
+            [
+                len(variables_for_factor)
+                for variables_for_factor in self.variables_for_factors
+            ]
+        )
+
+    @cached_property
+    def factor_edges_num_states(self) -> np.ndarray:
+        """Computes an array concatenating the number of states for the variables connected to each Factor of
+        the FactorGroup. Each variable will appear once for each Factor it connects to.
+
+        Returns:
+            Array with the the number of states for the variables connected to each Factor.
+        """
+        factor_edges_num_states = np.empty(shape=(self.factor_sizes.sum(),), dtype=int)
+
+        # TODO: create variables_for_factors as an array and move this to numba
+        idx = 0
+        for variables_for_factor in self.variables_for_factors:
+            for variable in variables_for_factor:
+                factor_edges_num_states[idx] = variable[1]
+                idx += 1
+        return factor_edges_num_states
 
     @cached_property
     def _variables_to_factors(self) -> Mapping[FrozenSet, nodes.Factor]:
@@ -335,12 +363,3 @@ class SingleFactorGroup(FactorGroup):
         raise NotImplementedError(
             "SingleFactorGroup does not support vectorized factor operations."
         )
-
-
-# @nb.jit(parallel=False, cache=True, fastmath=True)
-def _compile_edges_num_states_numba(factor_edges_num_states, variables_for_factors):
-    idx = 0
-    for variables_for_factor in variables_for_factors:
-        for variable in variables_for_factor:
-            factor_edges_num_states[idx] = variable[1]
-            idx += 1

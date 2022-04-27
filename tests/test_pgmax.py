@@ -207,7 +207,7 @@ def test_e2e_sanity_check():
     extra_row_names: List[Tuple[Any, ...]] = [(0, row, N - 1) for row in range(M - 1)]
     extra_col_names: List[Tuple[Any, ...]] = [(1, M - 1, col) for col in range(N - 1)]
     additional_names = tuple(extra_row_names + extra_col_names)
-    additional_vars = vgroup.VariableDict(additional_names, num_states=3)
+    additional_vars = vgroup.VariableDict(variable_names=additional_names, num_states=3)
 
     true_map_state_output = {
         (grid_vars, (0, 0, 0)): 2,
@@ -218,10 +218,14 @@ def test_e2e_sanity_check():
         (grid_vars, (1, 0, 1)): 0,
         (grid_vars, (1, 1, 0)): 1,
         (grid_vars, (1, 1, 1)): 0,
-        (additional_vars, ((additional_vars.__hash__(), (0, 0, 2)), 3)): 0,
-        (additional_vars, ((additional_vars.__hash__(), (0, 1, 2)), 3)): 2,
-        (additional_vars, ((additional_vars.__hash__(), (1, 2, 0)), 3)): 1,
-        (additional_vars, ((additional_vars.__hash__(), (1, 2, 1)), 3)): 0,
+        # (additional_vars, ((additional_vars.__hash__(), (0, 0, 2)), 3)): 0,
+        # (additional_vars, ((additional_vars.__hash__(), (0, 1, 2)), 3)): 2,
+        # (additional_vars, ((additional_vars.__hash__(), (1, 2, 0)), 3)): 1,
+        # (additional_vars, ((additional_vars.__hash__(), (1, 2, 1)), 3)): 0,
+        (additional_vars, (0, 0, 2)): 0,
+        (additional_vars, (0, 1, 2)): 2,
+        (additional_vars, (1, 2, 0)): 1,
+        (additional_vars, (1, 2, 1)): 0,
     }
 
     gt_has_cuts = gt_has_cuts.astype(np.int32)
@@ -251,9 +255,7 @@ def test_e2e_sanity_check():
                 except IndexError:
                     try:
                         _ = additional_vars[i, row, col]
-                        additional_vars_evidence_dict[
-                            additional_vars[i, row, col]
-                        ] = evidence_vals_arr
+                        additional_vars_evidence_dict[i, row, col] = evidence_vals_arr
                     except ValueError:
                         pass
 
@@ -302,7 +304,7 @@ def test_e2e_sanity_check():
                         valid_configs_non_supp.shape[0], dtype=float
                     ),
                 )
-                fg.add_factors(factor=factor)
+                fg.add_factors(factor)
             else:
                 factor = EnumerationFactor(
                     variables=curr_vars,
@@ -311,7 +313,7 @@ def test_e2e_sanity_check():
                         valid_configs_non_supp.shape[0], dtype=float
                     ),
                 )
-                fg.add_factors(factor=factor)
+                fg.add_factors(factor)
 
     # Create an EnumerationFactorGroup for vertical suppression factors
     vert_suppression_vars: List[List[Tuple[Any, ...]]] = []

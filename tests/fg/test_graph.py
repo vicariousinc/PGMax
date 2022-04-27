@@ -16,30 +16,12 @@ def test_factor_graph():
     vg = vgroup.VariableDict(variable_names=(0,), num_states=15)
     fg = graph.FactorGraph(vg)
 
-    with pytest.raises(
-        ValueError,
-        match="A Factor or a FactorGroup is required",
-    ):
-        fg.add_factors(factor_group=None, factor=None)
-
     factor = enumeration_factor.EnumerationFactor(
         variables=[vg[0]],
         factor_configs=np.arange(15)[:, None],
         log_potentials=np.zeros(15),
     )
-
-    factor_group = enumeration.EnumerationFactorGroup(
-        variables_for_factors=[[vg[0]]],
-        factor_configs=np.arange(15)[:, None],
-        log_potentials=np.zeros(15),
-    )
-    with pytest.raises(
-        ValueError,
-        match="Cannot simultaneously add a Factor and a FactorGroup",
-    ):
-        fg.add_factors(factor_group=factor_group, factor=factor)
-
-    fg.add_factors(factor=factor)
+    fg.add_factors(factor)
 
     factor_group = enumeration.EnumerationFactorGroup(
         variables_for_factors=[[vg[0]]],
@@ -49,7 +31,7 @@ def test_factor_graph():
     with pytest.raises(
         ValueError,
         match=re.escape(
-            f"A Factor of type {enumeration_factor.EnumerationFactor} involving variables {frozenset([((vg.__hash__(), 0), 15)])} already exists."
+            f"A Factor of type {enumeration_factor.EnumerationFactor} involving variables {frozenset([(vg.__hash__(), 15)])} already exists."
         ),
     ):
         fg.add_factors(factor_group)
@@ -63,10 +45,10 @@ def test_bp_state():
         factor_configs=np.arange(15)[:, None],
         log_potentials=np.zeros(15),
     )
-    fg0.add_factors(factor=factor)
+    fg0.add_factors(factor)
 
     fg1 = graph.FactorGraph(vg)
-    fg1.add_factors(factor=factor)
+    fg1.add_factors(factor)
 
     with pytest.raises(
         ValueError,
@@ -137,7 +119,7 @@ def test_ftov_msgs():
     with pytest.raises(
         ValueError,
         match=re.escape(
-            f"Given belief shape (10,) does not match expected shape (15,) for variable (({vg.__hash__()}, 0), 15)."
+            f"Given belief shape (10,) does not match expected shape (15,) for variable ({vg.__hash__()}, 15)."
         ),
     ):
         fg.bp_state.ftov_msgs[vg[0]] = np.ones(10)

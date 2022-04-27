@@ -195,7 +195,7 @@ OR_factor_group = logical.ORFactorGroup(variables_for_ORFactors)
 fg.add_factors(OR_factor_group)
 print("Time", time.time() - start)
 
-for factor_type, factor_groups in fg._factor_types_to_groups.items():
+for factor_type, factor_groups in fg.factor_groups.items():
     if len(factor_groups) > 0:
         assert len(factor_groups) == 1
         print(f"The factor graph contains {factor_groups[0].num_factors} {factor_type}")

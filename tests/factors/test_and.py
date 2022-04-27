@@ -104,7 +104,7 @@ def test_run_bp_with_ANDFactors():
                     factor_configs=valid_configs,
                     log_potentials=np.zeros(valid_configs.shape[0]),
                 )
-                fg1.add_factors(factor=enum_factor)
+                fg1.add_factors(enum_factor)
             else:
                 if idx != 0:
                     # Add the second half of factors to FactorGraph2
@@ -113,7 +113,7 @@ def test_run_bp_with_ANDFactors():
                         factor_configs=valid_configs,
                         log_potentials=np.zeros(valid_configs.shape[0]),
                     )
-                    fg2.add_factors(factor=enum_factor)
+                    fg2.add_factors(enum_factor)
                 else:
                     # Add all the EnumerationFactors to FactorGraph1 for the first iter
                     enum_factor = EnumerationFactor(
@@ -121,7 +121,7 @@ def test_run_bp_with_ANDFactors():
                         factor_configs=valid_configs,
                         log_potentials=np.zeros(valid_configs.shape[0]),
                     )
-                    fg1.add_factors(factor=enum_factor)
+                    fg1.add_factors(enum_factor)
 
         # Option 2: Define the ANDFactors
         num_parents_cumsum = np.insert(np.cumsum(num_parents), 0, 0)

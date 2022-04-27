@@ -82,36 +82,44 @@ class FactorGraph:
         self._num_var_states = vars_num_states_cumsum
 
     def __hash__(self) -> int:
-        return hash(self.factor_groups)
+        all_factor_groups = tuple(
+            [
+                factor_group
+                for factor_groups_per_type in self._factor_types_to_groups.values()
+                for factor_group in factor_groups_per_type
+            ]
+        )
+        return hash(all_factor_groups)
 
     def add_factors(
         self,
-        factor_group: Optional[groups.FactorGroup] = None,
-        factor: Optional[nodes.Factor] = None,
+        factors: Union[
+            nodes.Factor,
+            groups.FactorGroup,
+            Sequence[Union[nodes.Factor, groups.FactorGroup]],
+        ],
     ) -> None:
-        """Add a FactorGroup or a single Factor to the FactorGraph, by updating the FactorGraphState.
+        """Add a single Factor, a FactorGroup or a list of single Factors and FactorGroups to the FactorGraph,
+        by updating the FactorGraphState.
 
         Args:
-            factor_group: The FactorGroup to be added to the FactorGraph.
-            factor: The Factor to be added to the FactorGraph.
+            factors: The Factor, FactorGroup or list of Factors and FactorGroups to be added to the FactorGraph.
 
         Raises:
-            ValueError: If
-                (1) Both a Factor and a FactorGroup are added
-                (2) The FactorGroup involving the same variables already exists in the FactorGraph.
+            ValueError: A FactorGroup involving the same variables already exists in the FactorGraph.
         """
-        if factor is None and factor_group is None:
-            raise ValueError("A Factor or a FactorGroup is required")
+        if isinstance(factors, list):
+            for factor in factors:
+                self.add_factors(factor)
+            return None
 
-        if factor is not None and factor_group is not None:
-            raise ValueError("Cannot simultaneously add a Factor and a FactorGroup")
-
-        if factor is not None:
+        if isinstance(factors, groups.FactorGroup):
+            factor_group = factors
+        elif isinstance(factors, nodes.Factor):
             factor_group = groups.SingleFactorGroup(
-                variables_for_factors=[factor.variables],
-                factor=factor,
+                variables_for_factors=[factors.variables],
+                factor=factors,
             )
-        assert factor_group is not None
 
         factor_type = factor_group.factor_type
         for var_names_for_factor in factor_group.variables_for_factors:
@@ -253,15 +261,9 @@ class FactorGraph:
         return factors
 
     @property
-    def factor_groups(self) -> Tuple[groups.FactorGroup, ...]:
+    def factor_groups(self) -> OrderedDict[Type, List[groups.FactorGroup]]:
         """Tuple of factor groups in the factor graph"""
-        return tuple(
-            [
-                factor_group
-                for factor_groups_per_type in self._factor_types_to_groups.values()
-                for factor_group in factor_groups_per_type
-            ]
-        )
+        return self._factor_types_to_groups
 
     @cached_property
     def fg_state(self) -> FactorGraphState:
@@ -278,7 +280,6 @@ class FactorGraph:
             vars_to_starts=self._vars_to_starts,
             num_var_states=self._num_var_states,
             total_factor_num_states=self._total_factor_num_states,
-            factor_groups=self.factor_groups,
             factor_type_to_msgs_range=copy.copy(self._factor_type_to_msgs_range),
             factor_type_to_potentials_range=copy.copy(
                 self._factor_type_to_potentials_range
@@ -314,7 +315,6 @@ class FactorGraphState:
             contains evidence to the variable.
         num_var_states: Total number of variable states.
         total_factor_num_states: Size of the flat ftov messages array.
-        factor_groups: FactorGroups in the FactorGraph
         factor_type_to_msgs_range: Maps factors types to their start and end indices in the flat ftov messages.
         factor_type_to_potentials_range: Maps factor types to their start and end indices in the flat log potentials.
         factor_group_to_potentials_starts: Maps factor groups to their starting indices in the flat log potentials.
@@ -326,7 +326,6 @@ class FactorGraphState:
     vars_to_starts: Mapping[Tuple[Any, int], int]
     num_var_states: int
     total_factor_num_states: int
-    factor_groups: Tuple[groups.FactorGroup, ...]
     factor_type_to_msgs_range: OrderedDict[type, Tuple[int, int]]
     factor_type_to_potentials_range: OrderedDict[type, Tuple[int, int]]
     factor_group_to_potentials_starts: OrderedDict[groups.FactorGroup, int]
@@ -395,7 +394,7 @@ def update_log_potentials(
         (2) Provided name is not valid for log_potentials updates.
     """
     for factor_group, data in updates.items():
-        if factor_group in fg_state.factor_groups:
+        if factor_group in fg_state.factor_group_to_potentials_starts:
             flat_data = factor_group.flatten(data)
             if flat_data.shape != factor_group.factor_group_log_potentials.shape:
                 raise ValueError(
@@ -450,7 +449,7 @@ class LogPotentials:
             The queried log potentials.
         """
         value = cast(np.ndarray, self.value)
-        if factor_group in self.fg_state.factor_groups:
+        if factor_group in self.fg_state.factor_group_to_potentials_starts:
             start = self.fg_state.factor_group_to_potentials_starts[factor_group]
             log_potentials = value[
                 start : start + factor_group.factor_group_log_potentials.shape[0]
@@ -558,7 +557,7 @@ class FToVMessages:
 
     def __setitem__(
         self,
-        variable: Tuple[Any, int],
+        variable: Tuple[int, int],
         data: Union[np.ndarray, jnp.ndarray],
     ) -> None:
         """Spreading beliefs at a variable to all connected Factors
@@ -641,7 +640,7 @@ class Evidence:
 
             object.__setattr__(self, "value", self.value)
 
-    def __getitem__(self, variable: Tuple[Any, int]) -> np.ndarray:
+    def __getitem__(self, variable: Tuple[int, int]) -> np.ndarray:
         """Function to query evidence for a variable
 
         Args:

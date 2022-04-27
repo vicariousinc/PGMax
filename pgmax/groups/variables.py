@@ -16,14 +16,14 @@ class NDVariableArray(groups.VariableGroup):
     """Subclass of VariableGroup for n-dimensional grids of variables.
 
     Args:
-        shape: Tuple specifying the size of each dimension of the grid (similar to
-            the notion of a NumPy ndarray shape)
         num_states: An integer or an array specifying the number of states of the
             variables in this VariableGroup
+        shape: Tuple specifying the size of each dimension of the grid (similar to
+            the notion of a NumPy ndarray shape)
     """
 
-    shape: Tuple[int, ...]
     num_states: Union[int, np.ndarray]
+    shape: Tuple[int, ...]
 
     def __post_init__(self):
         super().__post_init__()
@@ -69,31 +69,18 @@ class NDVariableArray(groups.VariableGroup):
             isinstance(val, tuple) and isinstance(val[0], slice)
         ):
             assert isinstance(self.num_states, np.ndarray)
-            vars_names = self.variable_names[val].flatten()
+            vars_names = self.variable_hashes[val].flatten()
             vars_num_states = self.num_states[val].flatten()
             return list(zip(vars_names, vars_num_states))
 
-        return (self.variable_names[val], self.num_states[val])
+        return (self.variable_hashes[val], self.num_states[val])
 
     @cached_property
-    def variables(self) -> List[Tuple]:
-        """Function that returns the list of all variables in the VariableGroup.
-        Each variable is represented by a tuple of the form (variable hash, number of states)
+    def variable_hashes(self) -> np.ndarray:
+        """Function that generates a variable hash for each variable
 
         Returns:
-            List of variables in the VariableGroup
-        """
-        assert isinstance(self.num_states, np.ndarray)
-        vars_names = self.variable_names.flatten()
-        vars_num_states = self.num_states.flatten()
-        return list(zip(vars_names, vars_num_states))
-
-    @cached_property
-    def variable_names(self) -> np.ndarray:
-        """Function that generates all the variables names, in the form of hashes
-
-        Returns:
-            Array of variables names.
+            Array of variables hashes.
         """
         indices = np.reshape(np.arange(np.product(self.shape)), self.shape)
         return self.__hash__() + indices
@@ -167,28 +154,22 @@ class NDVariableArray(groups.VariableGroup):
 
 @dataclass(frozen=True, eq=False)
 class VariableDict(groups.VariableGroup):
-    """A variable dictionary that contains a set of variables of the same size
+    """A variable dictionary that contains a set of variables
 
     Args:
         num_states: The size of the variables in this VariableGroup
-        variable_names: A tuple of all names of the variables in this VariableGroup.
-            Note that we overwrite variable_names to add the hash of the VariableDict
+        variable_names: A tuple of all the names of the variables in this VariableGroup.
     """
 
-    variable_names: Tuple[Any, ...]
     num_states: Union[int, np.ndarray]
+    variable_names: Tuple[Any, ...]
 
     def __post_init__(self):
         super().__post_init__()
 
-        hash_and_names = tuple(
-            (self.__hash__(), var_name) for var_name in self.variable_names
-        )
-        object.__setattr__(self, "variable_names", hash_and_names)
-
         if np.isscalar(self.num_states):
             num_states = np.full(
-                len(self.variable_names), fill_value=self.num_states, dtype=np.int64
+                (len(self.variable_names),), fill_value=self.num_states, dtype=np.int64
             )
             object.__setattr__(self, "num_states", num_states)
         elif isinstance(self.num_states, np.ndarray) and np.issubdtype(
@@ -196,38 +177,39 @@ class VariableDict(groups.VariableGroup):
         ):
             if self.num_states.shape != len(self.variable_names):
                 raise ValueError(
-                    f"Expected num_states shape {len(self.variable_names)}. Got {self.num_states.shape}."
+                    f"Expected num_states shape ({len(self.variable_names)},). Got {self.num_states.shape}."
                 )
+        else:
+            raise ValueError(
+                "num_states should be an integer or a NumPy array of dtype int"
+            )
 
     @cached_property
-    def variables(self) -> List[Tuple[Tuple[Any, int], int]]:
-        """Function that returns the list of all variables in the VariableGroup.
-        Each variable is represented by a tuple of the form (variable name, number of states)
+    def variable_hashes(self) -> np.ndarray:
+        """Function that generates a variable hash for each variable
 
         Returns:
-            List of variables in the VariableGroup
+            Array of variables hashes.
         """
-        assert isinstance(self.num_states, np.ndarray)
-        vars_names = list(self.variable_names)
-        vars_num_states = self.num_states.flatten()
-        return list(zip(vars_names, vars_num_states))
+        indices = np.arange(len(self.variable_names))
+        return self.__hash__() + indices
 
-    def __getitem__(self, val: Any) -> Tuple[Tuple[Any, int], int]:
+    def __getitem__(self, var_name: Any) -> Tuple[int, int]:
         """Given a variable name retrieve the associated variable, returned via a tuple of the form
-        (variable name, number of states)
+        (variable hash, number of states)
 
         Args:
-            val: a variable name (without the object hash)
+            val: a variable name
 
         Returns:
             The queried variable
         """
         assert isinstance(self.num_states, np.ndarray)
-        if (self.__hash__(), val) not in self.variable_names:
-            raise ValueError(f"Variable {val} is not in VariableDict")
+        if var_name not in self.variable_names:
+            raise ValueError(f"Variable {var_name} is not in VariableDict")
 
-        idx = self.variable_names.index((self.__hash__(), val))
-        return ((self.__hash__(), val), self.num_states[idx])
+        var_idx = self.variable_names.index(var_name)
+        return (self.variable_hashes[var_idx], self.num_states[var_idx])
 
     def flatten(
         self, data: Mapping[Tuple[Tuple[int, int], int], Union[np.ndarray, jnp.ndarray]]
@@ -249,20 +231,23 @@ class VariableDict(groups.VariableGroup):
         """
         assert isinstance(self.num_states, np.ndarray)
 
-        for variable in data:
-            if variable not in self.variables:
+        for var_name in data:
+            if var_name not in self.variable_names:
                 raise ValueError(
-                    f"data is referring to a non-existent variable {variable}."
+                    f"data is referring to a non-existent variable {var_name}."
                 )
 
-            if data[variable].shape != (variable[1],) and data[variable].shape != (1,):
+            var_idx = self.variable_names.index(var_name)
+            if data[var_name].shape != (self.num_states[var_idx],) and data[
+                var_name
+            ].shape != (1,):
                 raise ValueError(
-                    f"Variable {variable} expects a data array of shape "
-                    f"{(variable[1],)} or (1,). Got {data[variable].shape}."
+                    f"Variable {var_name} expects a data array of shape "
+                    f"{(self.num_states[var_idx],)} or (1,). Got {data[var_name].shape}."
                 )
 
         flat_data = jnp.concatenate(
-            [data[variable].flatten() for variable in self.variables]
+            [data[var_name].flatten() for var_name in self.variable_names]
         )
         return flat_data
 
@@ -306,12 +291,14 @@ class VariableDict(groups.VariableGroup):
 
         start = 0
         data = {}
-        for variable in self.variables:
+        for var_name in self.variable_names:
             if use_num_states:
-                data[variable] = flat_data[start : start + variable[1]]
-                start += variable[1]
+                var_idx = self.variable_names.index(var_name)
+                var_num_states = self.num_states[var_idx]
+                data[var_name] = flat_data[start : start + var_num_states]
+                start += var_num_states
             else:
-                data[variable] = flat_data[np.array([start])]
+                data[var_name] = flat_data[np.array([start])]
                 start += 1
 
         return data

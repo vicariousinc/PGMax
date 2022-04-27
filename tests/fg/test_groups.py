@@ -11,6 +11,21 @@ from pgmax.groups import variables as vgroup
 
 
 def test_variable_dict():
+    num_states = np.full((4,), fill_value=2)
+    with pytest.raises(
+        ValueError, match=re.escape("Expected num_states shape (3,). Got (4,).")
+    ):
+        vgroup.VariableDict(variable_names=tuple([0, 1, 2]), num_states=num_states)
+
+    num_states = np.full((3,), fill_value=2, dtype=np.float32)
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "num_states should be an integer or a NumPy array of dtype int"
+        ),
+    ):
+        vgroup.NDVariableArray(shape=(2, 2), num_states=num_states)
+
     variable_dict = vgroup.VariableDict(variable_names=tuple([0, 1, 2]), num_states=15)
     with pytest.raises(
         ValueError, match="data is referring to a non-existent variable 3"
@@ -20,10 +35,10 @@ def test_variable_dict():
     with pytest.raises(
         ValueError,
         match=re.escape(
-            f"Variable (({variable_dict.__hash__()}, 2), 15) expects a data array of shape (15,) or (1,). Got (10,)"
+            "Variable 2 expects a data array of shape (15,) or (1,). Got (10,)."
         ),
     ):
-        variable_dict.flatten({((variable_dict.__hash__(), 2), 15): np.zeros(10)})
+        variable_dict.flatten({2: np.zeros(10)})
 
     with pytest.raises(
         ValueError, match="Can only unflatten 1D array. Got a 2D array."
@@ -36,10 +51,7 @@ def test_variable_dict():
                 jax.tree_util.tree_multimap(
                     lambda x, y: jnp.all(x == y),
                     variable_dict.unflatten(jnp.zeros(3)),
-                    {
-                        ((variable_dict.__hash__(), name), 15): np.zeros(1)
-                        for name in range(3)
-                    },
+                    {name: np.zeros(1) for name in range(3)},
                 )
             )
         )
@@ -54,7 +66,7 @@ def test_variable_dict():
 
 
 def test_nd_variable_array():
-    max_size = int(vgroup.MAX_SIZE)
+    max_size = int(groups.MAX_SIZE)
     with pytest.raises(
         ValueError,
         match=re.escape(
