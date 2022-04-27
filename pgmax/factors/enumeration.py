@@ -2,7 +2,7 @@
 
 import functools
 from dataclasses import dataclass
-from typing import Any, List, Mapping, Sequence, Tuple, Union
+from typing import List, Mapping, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -157,7 +157,7 @@ class EnumerationFactor(nodes.Factor):
         factor_edges_num_states: np.ndarray,
         variables_for_factors: Sequence[List],
         factor_configs: np.ndarray,
-        vars_to_starts: Mapping[Tuple[Any, int], int],
+        vars_to_starts: Mapping[Tuple[int, int], int],
         num_factors: int,
     ) -> EnumerationWiring:
         """Compile an EnumerationWiring for an EnumerationFactor or a FactorGroup with EnumerationFactors.
@@ -183,7 +183,6 @@ class EnumerationFactor(nodes.Factor):
         Returns:
             The EnumerationWiring
         """
-        # TODO: Don't use vars_to_starts
         var_states = []
         for variables_for_factor in variables_for_factors:
             for variable in variables_for_factor:

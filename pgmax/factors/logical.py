@@ -2,7 +2,7 @@
 
 import functools
 from dataclasses import dataclass, field
-from typing import Any, List, Mapping, Optional, Sequence, Tuple, Union
+from typing import List, Mapping, Optional, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -143,7 +143,7 @@ class LogicalFactor(nodes.Factor):
         factor_edges_num_states: np.ndarray,
         variables_for_factors: Sequence[List],
         factor_sizes: np.ndarray,
-        vars_to_starts: Mapping[Tuple[Any, int], int],
+        vars_to_starts: Mapping[Tuple[int, int], int],
         edge_states_offset: int,
     ) -> LogicalWiring:
         """Compile a LogicalWiring for a LogicalFactor or a FactorGroup with LogicalFactors.
@@ -164,7 +164,6 @@ class LogicalFactor(nodes.Factor):
         Returns:
             The LogicalWiring
         """
-        # TODO: Don't use vars_to_starts
         var_states = []
         for variables_for_factor in variables_for_factors:
             for variable in variables_for_factor:
