@@ -323,7 +323,7 @@ class FactorGraphState:
     """
 
     variable_groups: Sequence[groups.VariableGroup]
-    vars_to_starts: Mapping[Tuple[Any, int], int]
+    vars_to_starts: Mapping[Tuple[int, int], int]
     num_var_states: int
     total_factor_num_states: int
     factor_type_to_msgs_range: OrderedDict[type, Tuple[int, int]]
@@ -460,7 +460,7 @@ class LogPotentials:
 
     def __setitem__(
         self,
-        factor_group: Any,
+        factor_group: groups.FactorGroup,
         data: Union[np.ndarray, jnp.ndarray],
     ):
         """Set the log potentials for a FactorGroup
@@ -563,7 +563,7 @@ class FToVMessages:
         """Spreading beliefs at a variable to all connected Factors
 
         Args:
-            variable: A tuple representing a variable
+            variable: Variable queried
             data: An array containing the beliefs to be spread uniformly
                 across all factors to variable messages involving this variable.
         """

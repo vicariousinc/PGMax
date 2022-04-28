@@ -42,7 +42,7 @@ class Factor:
 
     Args:
         variables: List of variables connected by the Factor.
-            Each variable is represented by a tuple of the form (variable hash/name, number of states)
+            Each variable is represented by a tuple (variable hash, variable num_ states)
 
     Raises:
         NotImplementedError: If compile_wiring is not implemented

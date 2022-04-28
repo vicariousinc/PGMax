@@ -220,7 +220,7 @@ print("Time", time.time() - start)
 
 # %%
 pW = 0.25
-pS = 1e-70
+pS = 1e-100
 pX = 1e-100
 
 # Sparsity inducing priors for W and S

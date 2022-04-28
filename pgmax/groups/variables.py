@@ -22,7 +22,6 @@ class NDVariableArray(groups.VariableGroup):
             the notion of a NumPy ndarray shape)
     """
 
-    num_states: Union[int, np.ndarray]
     shape: Tuple[int, ...]
 
     def __post_init__(self):
@@ -161,7 +160,6 @@ class VariableDict(groups.VariableGroup):
         variable_names: A tuple of all the names of the variables in this VariableGroup.
     """
 
-    num_states: Union[int, np.ndarray]
     variable_names: Tuple[Any, ...]
 
     def __post_init__(self):

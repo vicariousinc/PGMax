@@ -417,8 +417,8 @@ for test_idx in range(len(test_set)):
         evidence_updates,
         map_states,
     )
-    for idx, score in enumerate(score.values()):
-        scores[test_idx, idx] = score
+    for model_idx in range(frcs.shape[0]):
+        scores[test_idx, model_idx] = score[variables_all_models[model_idx]]
     end = time.time()
     print(f"Computing scores took {end-start:.3f} seconds for image {test_idx}.")
 

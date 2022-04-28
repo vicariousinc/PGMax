@@ -29,14 +29,14 @@ MAX_SIZE = 1e9
 @dataclass(frozen=True, eq=False)
 class VariableGroup:
     """Class to represent a group of variables.
-    Each variable is represented via a tuple of the form (variable hash/name, number of states)
+    Each variable is represented via a tuple of the form (variable hash, variable num_states)
 
     Arguments:
         num_states: An integer or an array specifying the number of states of the variables
             in this VariableGroup
     """
 
-    num_states: Union[int, np.ndarray] = field(init=False)
+    num_states: Union[int, np.ndarray]
 
     def __post_init__(self):
         # Only compute the hash once, which is guaranteed to be an int64
@@ -56,7 +56,7 @@ class VariableGroup:
 
     def __getitem__(self, val: Any) -> Union[Tuple[int, int], List[Tuple[int, int]]]:
         """Given a variable name, index, or a group of variable indices, retrieve the associated variable(s).
-        Each variable is returned via a tuple of the form (variable hash, number of states)
+        Each variable is returned via a tuple of the form (variable hash, variable num_states)
 
         Args:
             val: a variable index, slice, or name
@@ -82,7 +82,7 @@ class VariableGroup:
     @cached_property
     def variables(self) -> List[Tuple[int, int]]:
         """Function that returns the list of all variables in the VariableGroup.
-        Each variable is represented by a tuple of the form (variable hash, number of states)
+        Each variable is represented by a tuple of the form (variable hash, variable num_states)
 
         Returns:
             List of variables in the VariableGroup
