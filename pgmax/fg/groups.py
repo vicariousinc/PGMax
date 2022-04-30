@@ -41,12 +41,12 @@ class VariableGroup:
     def __post_init__(self):
         # Only compute the hash once, which is guaranteed to be an int64
         this_id = id(self) % 2**32
-        this_hash = this_id * int(MAX_SIZE)
-        assert this_hash < 2**63
-        object.__setattr__(self, "this_hash", this_hash)
+        _hash = this_id * int(MAX_SIZE)
+        assert _hash < 2**63
+        object.__setattr__(self, "_hash", _hash)
 
     def __hash__(self):
-        return self.this_hash
+        return self._hash
 
     def __eq__(self, other):
         return hash(self) == hash(other)
