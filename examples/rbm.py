@@ -146,10 +146,6 @@ fg.add_factors([hidden_unaries, visible_unaries, pairwise_factors])
 # More generally, PGMax implements LBP with temperature, with `temperature=0.0` and `temperature=1.0` corresponding to the commonly used max/sum-product LBP respectively.
 #
 # Now we are ready to demonstrate PMP sampling from RBM. PMP perturbs the model with [Gumbel](https://numpy.org/doc/stable/reference/random/generated/numpy.random.gumbel.html) unary potentials, and draws a sample from the RBM as the MAP decoding from running max-product LBP on the perturbed model
-#
-# import itertools
-#
-# from tqdm import tqdm
 
 # %%
 bp = graph.BP(fg.bp_state, temperature=0.0)
