@@ -10,12 +10,13 @@ import numba as nb
 import numpy as np
 
 from pgmax.bp import bp_utils
-from pgmax.fg import nodes
+
+from . import factor
 
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True, eq=False)
-class EnumerationWiring(nodes.Wiring):
+class EnumerationWiring(factor.Wiring):
     """Wiring for EnumerationFactors.
 
     Args:
@@ -42,7 +43,7 @@ class EnumerationWiring(nodes.Wiring):
 
 
 @dataclass(frozen=True, eq=False)
-class EnumerationFactor(nodes.Factor):
+class EnumerationFactor(factor.Factor):
     """An enumeration factor
 
     Args:

@@ -12,12 +12,13 @@ from jax.nn import log_sigmoid, sigmoid
 
 from pgmax.bp import bp_utils
 from pgmax.factors import enumeration
-from pgmax.fg import nodes
+
+from . import factor
 
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True, eq=False)
-class LogicalWiring(nodes.Wiring):
+class LogicalWiring(factor.Wiring):
     """Wiring for LogicalFactors.
 
     Args:
@@ -68,7 +69,7 @@ class LogicalWiring(nodes.Wiring):
 
 
 @dataclass(frozen=True, eq=False)
-class LogicalFactor(nodes.Factor):
+class LogicalFactor(factor.Factor):
     """A logical OR/AND factor of the form (p1,...,pn, c)
     where p1,...,pn are the parents variables and c is the child variable.
 
