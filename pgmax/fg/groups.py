@@ -200,7 +200,6 @@ class FactorGroup:
         """
         factor_edges_num_states = np.empty(shape=(self.factor_sizes.sum(),), dtype=int)
 
-        # TODO: create variables_for_factors as an array and move this to numba
         idx = 0
         for variables_for_factor in self.variables_for_factors:
             for variable in variables_for_factor:

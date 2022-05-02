@@ -116,9 +116,6 @@ n_images, n_chan, im_height, im_width = X_gt.shape
 s_height = im_height - feat_height + 1
 s_width = im_width - feat_width + 1
 
-import time
-
-start = time.time()
 # Binary features
 W = vgroup.NDVariableArray(
     num_states=2, shape=(n_chan, n_feat, feat_height, feat_width)
@@ -135,16 +132,13 @@ SW = vgroup.NDVariableArray(
 
 # Binary images obtained by convolution
 X = vgroup.NDVariableArray(num_states=2, shape=X_gt.shape)
-print("Time", time.time() - start)
 
 # %% [markdown]
-# For computation efficiency, we construct large FactorGroups instead of individual Factors
+# For computation efficiency, we construct large FactorGroups instead of individual factors
 
 # %%
-start = time.time()
 # Factor graph
 fg = graph.FactorGraph(variable_groups=[S, W, SW, X])
-print(time.time() - start)
 
 # Define the ANDFactors
 variables_for_ANDFactors = []
@@ -177,12 +171,10 @@ for idx_img in tqdm(range(n_images)):
 
                             X_var = X[idx_img, idx_chan, idx_img_height, idx_img_width]
                             variables_for_ORFactors_dict[X_var].append(SW_var)
-print("After loop", time.time() - start)
 
 # Add ANDFactorGroup, which is computationally efficient
 AND_factor_group = logical.ANDFactorGroup(variables_for_ANDFactors)
 fg.add_factors(AND_factor_group)
-print(time.time() - start)
 
 # Define the ORFactors
 variables_for_ORFactors = [
@@ -193,7 +185,6 @@ variables_for_ORFactors = [
 # Add ORFactorGroup, which is computationally efficient
 OR_factor_group = logical.ORFactorGroup(variables_for_ORFactors)
 fg.add_factors(OR_factor_group)
-print("Time", time.time() - start)
 
 for factor_type, factor_groups in fg.factor_groups.items():
     if len(factor_groups) > 0:
@@ -211,16 +202,14 @@ for factor_type, factor_groups in fg.factor_groups.items():
 # in the same manner does not change X, so this naturally results in multiple equivalent modes.
 
 # %%
-start = time.time()
 bp = graph.BP(fg.bp_state, temperature=0.0)
-print("Time", time.time() - start)
 
 # %% [markdown]
 # We first compute the evidence without perturbation, similar to the PMP paper.
 
 # %%
 pW = 0.25
-pS = 1e-100
+pS = 1e-75
 pX = 1e-100
 
 # Sparsity inducing priors for W and S
@@ -235,13 +224,12 @@ uX = np.zeros((X_gt.shape) + (2,))
 uX[..., 0] = (2 * X_gt - 1) * logit(pX)
 
 # %% [markdown]
-# We draw a batch of samples from the posterior in parallel by transforming `run_bp`/`get_beliefs` with `jax.vmap`
+# We draw a batch of samples from the posterior in parallel by transforming `bp.init`/`bp.run_bp`/`bp.get_beliefs` with `jax.vmap`
 
 # %%
-np.random.seed(seed=42)
+np.random.seed(seed=0)
 n_samples = 4
 
-start = time.time()
 bp_arrays = jax.vmap(bp.init, in_axes=0, out_axes=0)(
     evidence_updates={
         S: uS[None] + np.random.gumbel(size=(n_samples,) + uS.shape),
@@ -250,13 +238,13 @@ bp_arrays = jax.vmap(bp.init, in_axes=0, out_axes=0)(
         X: uX[None] + np.zeros(shape=(n_samples,) + uX.shape),
     },
 )
-print("Time", time.time() - start)
+
 bp_arrays = jax.vmap(
     functools.partial(bp.run_bp, num_iters=100, damping=0.5),
     in_axes=0,
     out_axes=0,
 )(bp_arrays)
-print("Time", time.time() - start)
+
 beliefs = jax.vmap(bp.get_beliefs, in_axes=0, out_axes=0)(bp_arrays)
 map_states = graph.decode_map_states(beliefs)
 

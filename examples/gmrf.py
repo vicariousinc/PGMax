@@ -58,7 +58,7 @@ variables = vgroup.NDVariableArray(num_states=num_states, shape=(M, N))
 fg = graph.FactorGraph(variables)
 
 # %%
-# Add top-down factors
+# Create top-down factors
 top_down = enumeration.PairwiseFactorGroup(
     variables_for_factors=[
         [variables[ii, jj], variables[ii + 1, jj]]
@@ -66,9 +66,8 @@ top_down = enumeration.PairwiseFactorGroup(
         for jj in range(N)
     ],
 )
-fg.add_factors(top_down)
 
-# Add left-right factors
+# Create left-right factors
 left_right = enumeration.PairwiseFactorGroup(
     variables_for_factors=[
         [variables[ii, jj], variables[ii, jj + 1]]
@@ -76,9 +75,8 @@ left_right = enumeration.PairwiseFactorGroup(
         for jj in range(N - 1)
     ],
 )
-fg.add_factors(left_right)
 
-# Add diagonal factors
+# Create diagonal factors
 diagonal0 = enumeration.PairwiseFactorGroup(
     variables_for_factors=[
         [variables[ii, jj], variables[ii + 1, jj + 1]]
@@ -86,8 +84,6 @@ diagonal0 = enumeration.PairwiseFactorGroup(
         for jj in range(N - 1)
     ],
 )
-fg.add_factors(diagonal0)
-
 diagonal1 = enumeration.PairwiseFactorGroup(
     variables_for_factors=[
         [variables[ii, jj], variables[ii - 1, jj + 1]]
@@ -95,7 +91,9 @@ diagonal1 = enumeration.PairwiseFactorGroup(
         for jj in range(N - 1)
     ],
 )
-fg.add_factors(diagonal1)
+
+# Add factors
+fg.add_factors([top_down, left_right, diagonal0, diagonal1])
 
 # %%
 bp = graph.BP(fg.bp_state, temperature=1.0)

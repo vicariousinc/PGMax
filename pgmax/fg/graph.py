@@ -65,7 +65,6 @@ class FactorGraph:
         )
 
         # See FactorGraphState docstrings for documentation on the following fields
-        # TODO: vars_to_starts does not have to be a dict
         self._vars_to_starts: Dict[Tuple[int, int], int] = {}
 
         vars_num_states_cumsum = 0
