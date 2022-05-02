@@ -40,6 +40,7 @@ from sklearn.datasets import fetch_openml
 
 from pgmax.fg import graph
 from pgmax.groups import variables as vgroup
+from pgmax.groups.enumeration import EnumerationFactorGroup
 
 memory = Memory("./example_data/tmp")
 fetch_openml_cached = memory.cache(fetch_openml)
@@ -211,11 +212,11 @@ M = (2 * hps + 1) * (
     2 * vps + 1
 )  # The number of pool choices for the different variables of the PGM.
 
-variables_all_models = {}
+variables_all_models = []
 for idx in range(frcs.shape[0]):
     frc = frcs[idx]
-    variables_all_models[idx] = vgroup.NDVariableArray(
-        num_states=M, shape=(frc.shape[0],)
+    variables_all_models.append(
+        vgroup.NDVariableArray(num_states=M, shape=(frc.shape[0],))
     )
 
 end = time.time()
@@ -271,7 +272,7 @@ valid_configs_list = [valid_configs(r, hps, vps) for r in range(max_perturb_radi
 
 # %%
 start = time.time()
-fg = graph.FactorGraph(variables=variables_all_models)
+fg = graph.FactorGraph(variables_all_models)
 
 # Adding rcn model edges to the pgmax factor graph.
 for idx in range(edges.shape[0]):
@@ -279,10 +280,13 @@ for idx in range(edges.shape[0]):
 
     for e in edge:
         i1, i2, r = e
-        fg.add_factor(
-            [(idx, i1), (idx, i2)],
-            valid_configs_list[r],
+        factor_group = EnumerationFactorGroup(
+            variables_for_factors=[
+                [variables_all_models[idx][i1], variables_all_models[idx][i2]]
+            ],
+            factor_configs=valid_configs_list[r],
         )
+        fg.add_factors(factor_group)
 
 end = time.time()
 print(f"Creating factors took {end-start:.3f} seconds.")
@@ -381,7 +385,10 @@ def get_evidence(bu_msg: np.ndarray, frc: np.ndarray) -> np.ndarray:
 
 
 # %%
-frcs_dict = {model_idx: frcs[model_idx] for model_idx in range(frcs.shape[0])}
+frcs_dict = {
+    variables_all_models[model_idx]: frcs[model_idx]
+    for model_idx in range(frcs.shape[0])
+}
 bp = graph.BP(fg.bp_state, temperature=0.0)
 scores = np.zeros((len(test_set), frcs.shape[0]))
 map_states_dict = {}
@@ -410,8 +417,8 @@ for test_idx in range(len(test_set)):
         evidence_updates,
         map_states,
     )
-    for ii in score:
-        scores[test_idx, ii] = score[ii]
+    for model_idx in range(frcs.shape[0]):
+        scores[test_idx, model_idx] = score[variables_all_models[model_idx]]
     end = time.time()
     print(f"Computing scores took {end-start:.3f} seconds for image {test_idx}.")
 
@@ -434,7 +441,9 @@ print(f"accuracy = {accuracy}")
 fig, ax = plt.subplots(5, 4, figsize=(16, 20))
 for test_idx in range(20):
     idx = np.unravel_index(test_idx, (5, 4))
-    map_state = map_states_dict[test_idx][best_model_idx[test_idx]]
+    map_state = map_states_dict[test_idx][
+        variables_all_models[best_model_idx[test_idx]]
+    ]
     offsets = np.array(
         np.unravel_index(map_state, (2 * hps + 1, 2 * vps + 1))
     ).T - np.array([hps, vps])

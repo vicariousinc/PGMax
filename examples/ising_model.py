@@ -29,21 +29,21 @@ from pgmax.groups import variables as vgroup
 
 # %%
 variables = vgroup.NDVariableArray(num_states=2, shape=(50, 50))
-fg = graph.FactorGraph(variables=variables)
-variable_names_for_factors = []
+fg = graph.FactorGraph(variable_groups=variables)
+
+variables_for_factors = []
 for ii in range(50):
     for jj in range(50):
         kk = (ii + 1) % 50
         ll = (jj + 1) % 50
-        variable_names_for_factors.append([(ii, jj), (kk, jj)])
-        variable_names_for_factors.append([(ii, jj), (ii, ll)])
+        variables_for_factors.append([variables[ii, jj], variables[kk, jj]])
+        variables_for_factors.append([variables[ii, jj], variables[ii, ll]])
 
-fg.add_factor_group(
-    factory=enumeration.PairwiseFactorGroup,
-    variable_names_for_factors=variable_names_for_factors,
+factor_group = enumeration.PairwiseFactorGroup(
+    variables_for_factors=variables_for_factors,
     log_potential_matrix=0.8 * np.array([[1.0, -1.0], [-1.0, 1.0]]),
-    name="factors",
 )
+fg.add_factors(factor_group)
 
 # %% [markdown]
 # ### Run inference and visualize results
@@ -53,12 +53,13 @@ bp = graph.BP(fg.bp_state, temperature=0)
 
 # %%
 bp_arrays = bp.init(
-    evidence_updates={None: jax.device_put(np.random.gumbel(size=(50, 50, 2)))}
+    evidence_updates={variables: jax.device_put(np.random.gumbel(size=(50, 50, 2)))}
 )
 bp_arrays = bp.run_bp(bp_arrays, num_iters=3000)
+beliefs = bp.get_beliefs(bp_arrays)
 
 # %%
-img = graph.decode_map_states(bp.get_beliefs(bp_arrays))
+img = graph.decode_map_states(beliefs)[variables]
 fig, ax = plt.subplots(1, 1, figsize=(10, 10))
 ax.imshow(img)
 
@@ -73,19 +74,20 @@ def loss(log_potentials_updates, evidence_updates):
     )
     bp_arrays = bp.run_bp(bp_arrays, num_iters=3000)
     beliefs = bp.get_beliefs(bp_arrays)
-    loss = -jnp.sum(beliefs)
+    loss = -jnp.sum(beliefs[variables])
     return loss
 
 
-batch_loss = jax.jit(jax.vmap(loss, in_axes=(None, {None: 0}), out_axes=0))
+batch_loss = jax.jit(jax.vmap(loss, in_axes=(None, {variables: 0}), out_axes=0))
 log_potentials_grads = jax.jit(jax.grad(loss, argnums=0))
 
 # %%
-batch_loss(None, {None: jax.device_put(np.random.gumbel(size=(10, 50, 50, 2)))})
+batch_loss(None, {variables: jax.device_put(np.random.gumbel(size=(10, 50, 50, 2)))})
 
 # %%
 grads = log_potentials_grads(
-    {"factors": jnp.eye(2)}, {None: jax.device_put(np.random.gumbel(size=(50, 50, 2)))}
+    {factor_group: jnp.eye(2)},
+    {variables: jax.device_put(np.random.gumbel(size=(50, 50, 2)))},
 )
 
 # %% [markdown]
@@ -95,15 +97,15 @@ grads = log_potentials_grads(
 bp_state = bp.to_bp_state(bp_arrays)
 
 # Query evidence for variable (0, 0)
-bp_state.evidence[0, 0]
+bp_state.evidence[variables[0, 0]]
 
 # %%
 # Set evidence for variable (0, 0)
-bp_state.evidence[0, 0] = np.array([1.0, 1.0])
-bp_state.evidence[0, 0]
+bp_state.evidence[variables[0, 0]] = np.array([1.0, 1.0])
+bp_state.evidence[variables[0, 0]]
 
 # %%
 # Set evidence for all variables using an array
 evidence = np.random.randn(50, 50, 2)
-bp_state.evidence[None] = evidence
-bp_state.evidence[10, 10] == evidence[10, 10]
+bp_state.evidence[variables] = evidence
+np.allclose(bp_state.evidence[variables[10, 10]], evidence[10, 10])

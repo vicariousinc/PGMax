@@ -2,7 +2,7 @@
 
 import functools
 from dataclasses import dataclass, field
-from typing import Mapping, Optional, Sequence, Tuple, Union
+from typing import List, Mapping, Optional, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -88,10 +88,10 @@ class LogicalFactor(nodes.Factor):
     def __post_init__(self):
         if len(self.variables) < 2:
             raise ValueError(
-                "At least one parent variable and one child variable is required"
+                "A LogicalFactor requires at least one parent variable and one child variable"
             )
 
-        if not np.all([variable.num_states == 2 for variable in self.variables]):
+        if not np.all([variable[1] == 2 for variable in self.variables]):
             raise ValueError("All variables should all be binary")
 
     @staticmethod
@@ -141,9 +141,9 @@ class LogicalFactor(nodes.Factor):
     @staticmethod
     def compile_wiring(
         factor_edges_num_states: np.ndarray,
-        variables_for_factors: Tuple[nodes.Variable, ...],
+        variables_for_factors: Sequence[List],
         factor_sizes: np.ndarray,
-        vars_to_starts: Mapping[nodes.Variable, int],
+        vars_to_starts: Mapping[Tuple[int, int], int],
         edge_states_offset: int,
     ) -> LogicalWiring:
         """Compile a LogicalWiring for a LogicalFactor or a FactorGroup with LogicalFactors.
@@ -164,11 +164,15 @@ class LogicalFactor(nodes.Factor):
         Returns:
             The LogicalWiring
         """
+        var_states = []
+        for variables_for_factor in variables_for_factors:
+            for variable in variables_for_factor:
+                var_states.append(vars_to_starts[variable])
+        var_states = np.array(var_states)
+
+        # Relevant state differs for ANDFactors and ORFactors
         relevant_state = (-edge_states_offset + 1) // 2
 
-        var_states = np.array(
-            [vars_to_starts[variable] for variable in variables_for_factors]
-        )
         # Note: all the variables in a LogicalFactorGroup are binary
         num_states_cumsum = np.arange(0, 2 * var_states.shape[0] + 2, 2)
         var_states_for_edges = np.empty(shape=(2 * var_states.shape[0],), dtype=int)

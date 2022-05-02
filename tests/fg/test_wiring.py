@@ -19,51 +19,50 @@ def test_wiring_with_PairwiseFactorGroup():
     B = vgroup.NDVariableArray(num_states=2, shape=(10,))
 
     # First test that compile_wiring enforces the correct factor_edges_num_states shape
-    fg = graph.FactorGraph(variables=dict(A=A, B=B))
-    fg.add_factor_group(
-        factory=enumeration.PairwiseFactorGroup,
-        variable_names_for_factors=[[("A", idx), ("B", idx)] for idx in range(10)],
+    fg = graph.FactorGraph(variable_groups=[A, B])
+    factor_group = enumeration.PairwiseFactorGroup(
+        variables_for_factors=[[A[idx], B[idx]] for idx in range(10)]
     )
+    fg.add_factors(factor_group)
+
     factor_group = fg.factor_groups[enumeration_factor.EnumerationFactor][0]
     object.__setattr__(
-        factor_group,
-        "factor_edges_num_states",
-        factor_group.factor_edges_num_states[:-1],
+        factor_group, "factor_configs", factor_group.factor_configs[:, :1]
     )
     with pytest.raises(
         ValueError,
-        match=re.escape("Expected factor_edges_num_states shape is (20,). Got (19,)."),
+        match=re.escape("Expected factor_edges_num_states shape is (10,). Got (20,)."),
     ):
         factor_group.compile_wiring(fg._vars_to_starts)
 
     # FactorGraph with a single PairwiseFactorGroup
-    fg1 = graph.FactorGraph(variables=dict(A=A, B=B))
-    fg1.add_factor_group(
-        factory=enumeration.PairwiseFactorGroup,
-        variable_names_for_factors=[[("A", idx), ("B", idx)] for idx in range(10)],
+    fg1 = graph.FactorGraph(variable_groups=[A, B])
+    factor_group = enumeration.PairwiseFactorGroup(
+        variables_for_factors=[[A[idx], B[idx]] for idx in range(10)]
     )
+    fg1.add_factors(factor_group)
     assert len(fg1.factor_groups[enumeration_factor.EnumerationFactor]) == 1
 
     # FactorGraph with multiple PairwiseFactorGroup
-    fg2 = graph.FactorGraph(variables=dict(A=A, B=B))
+    fg2 = graph.FactorGraph(variable_groups=[A, B])
     for idx in range(10):
-        fg2.add_factor_group(
-            factory=enumeration.PairwiseFactorGroup,
-            variable_names_for_factors=[[("A", idx), ("B", idx)]],
+        factor_group = enumeration.PairwiseFactorGroup(
+            variables_for_factors=[[A[idx], B[idx]]]
         )
+        fg2.add_factors(factor_group)
     assert len(fg2.factor_groups[enumeration_factor.EnumerationFactor]) == 10
 
     # FactorGraph with multiple SingleFactorGroup
-    fg3 = graph.FactorGraph(variables=dict(A=A, B=B))
+    fg3 = graph.FactorGraph(variable_groups=[A, B])
+    factors = []
     for idx in range(10):
-        fg3.add_factor_by_type(
-            variable_names=[("A", idx), ("B", idx)],
-            factor_type=enumeration_factor.EnumerationFactor,
-            **{
-                "factor_configs": np.array([[0, 0], [0, 1], [1, 0], [1, 1]]),
-                "log_potentials": np.zeros((4,)),
-            }
+        factor = enumeration_factor.EnumerationFactor(
+            variables=[A[idx], B[idx]],
+            factor_configs=np.array([[0, 0], [0, 1], [1, 0], [1, 1]]),
+            log_potentials=np.zeros((4,)),
         )
+        factors.append(factor)
+    fg3.add_factors(factors)
     assert len(fg3.factor_groups[enumeration_factor.EnumerationFactor]) == 10
 
     assert len(fg1.factors) == len(fg2.factors) == len(fg3.factors)
@@ -98,31 +97,29 @@ def test_wiring_with_ORFactorGroup():
     C = vgroup.NDVariableArray(num_states=2, shape=(10,))
 
     # FactorGraph with a single ORFactorGroup
-    fg1 = graph.FactorGraph(variables=dict(A=A, B=B, C=C))
-    fg1.add_factor_group(
-        factory=logical.ORFactorGroup,
-        variable_names_for_factors=[
-            [("A", idx), ("B", idx), ("C", idx)] for idx in range(10)
-        ],
+    fg1 = graph.FactorGraph(variable_groups=[A, B, C])
+    factor_group = logical.ORFactorGroup(
+        variables_for_factors=[[A[idx], B[idx], C[idx]] for idx in range(10)],
     )
+    fg1.add_factors(factor_group)
     assert len(fg1.factor_groups[logical_factor.ORFactor]) == 1
 
     # FactorGraph with multiple ORFactorGroup
-    fg2 = graph.FactorGraph(variables=dict(A=A, B=B, C=C))
+    fg2 = graph.FactorGraph(variable_groups=[A, B, C])
     for idx in range(10):
-        fg2.add_factor_group(
-            factory=logical.ORFactorGroup,
-            variable_names_for_factors=[[("A", idx), ("B", idx), ("C", idx)]],
+        factor_group = logical.ORFactorGroup(
+            variables_for_factors=[[A[idx], B[idx], C[idx]]],
         )
+        fg2.add_factors(factor_group)
     assert len(fg2.factor_groups[logical_factor.ORFactor]) == 10
 
     # FactorGraph with multiple SingleFactorGroup
-    fg3 = graph.FactorGraph(variables=dict(A=A, B=B, C=C))
+    fg3 = graph.FactorGraph(variable_groups=[A, B, C])
     for idx in range(10):
-        fg3.add_factor_by_type(
-            variable_names=[("A", idx), ("B", idx), ("C", idx)],
-            factor_type=logical_factor.ORFactor,
+        factor = logical_factor.ORFactor(
+            variables=[A[idx], B[idx], C[idx]],
         )
+        fg3.add_factors(factor)
     assert len(fg3.factor_groups[logical_factor.ORFactor]) == 10
 
     assert len(fg1.factors) == len(fg2.factors) == len(fg3.factors)
@@ -155,31 +152,29 @@ def test_wiring_with_ANDFactorGroup():
     C = vgroup.NDVariableArray(num_states=2, shape=(10,))
 
     # FactorGraph with a single ANDFactorGroup
-    fg1 = graph.FactorGraph(variables=dict(A=A, B=B, C=C))
-    fg1.add_factor_group(
-        factory=logical.ANDFactorGroup,
-        variable_names_for_factors=[
-            [("A", idx), ("B", idx), ("C", idx)] for idx in range(10)
-        ],
+    fg1 = graph.FactorGraph(variable_groups=[A, B, C])
+    factor_group = logical.ANDFactorGroup(
+        variables_for_factors=[[A[idx], B[idx], C[idx]] for idx in range(10)],
     )
+    fg1.add_factors(factor_group)
     assert len(fg1.factor_groups[logical_factor.ANDFactor]) == 1
 
     # FactorGraph with multiple ANDFactorGroup
-    fg2 = graph.FactorGraph(variables=dict(A=A, B=B, C=C))
+    fg2 = graph.FactorGraph(variable_groups=[A, B, C])
     for idx in range(10):
-        fg2.add_factor_group(
-            factory=logical.ANDFactorGroup,
-            variable_names_for_factors=[[("A", idx), ("B", idx), ("C", idx)]],
+        factor_group = logical.ANDFactorGroup(
+            variables_for_factors=[[A[idx], B[idx], C[idx]]],
         )
+        fg2.add_factors(factor_group)
     assert len(fg2.factor_groups[logical_factor.ANDFactor]) == 10
 
     # FactorGraph with multiple SingleFactorGroup
-    fg3 = graph.FactorGraph(variables=dict(A=A, B=B, C=C))
+    fg3 = graph.FactorGraph(variable_groups=[A, B, C])
     for idx in range(10):
-        fg3.add_factor_by_type(
-            variable_names=[("A", idx), ("B", idx), ("C", idx)],
-            factor_type=logical_factor.ANDFactor,
+        factor = logical_factor.ANDFactor(
+            variables=[A[idx], B[idx], C[idx]],
         )
+        fg3.add_factors(factor)
     assert len(fg3.factor_groups[logical_factor.ANDFactor]) == 10
 
     assert len(fg1.factors) == len(fg2.factors) == len(fg3.factors)

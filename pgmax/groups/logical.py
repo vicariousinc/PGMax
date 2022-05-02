@@ -4,6 +4,8 @@ import collections
 from dataclasses import dataclass, field
 from typing import FrozenSet, OrderedDict, Type
 
+import numpy as np
+
 from pgmax.factors import logical
 from pgmax.fg import groups
 
@@ -20,6 +22,7 @@ class LogicalFactorGroup(groups.FactorGroup):
             For ORFactors the edge_states_offset is 1, for ANDFactors the edge_states_offset is -1.
     """
 
+    factor_configs: np.ndarray = field(init=False, default=None)
     edge_states_offset: int = field(init=False)
 
     def _get_variables_to_factors(
@@ -34,14 +37,10 @@ class LogicalFactorGroup(groups.FactorGroup):
         variables_to_factors = collections.OrderedDict(
             [
                 (
-                    frozenset(self.variable_names_for_factors[ii]),
-                    self.factor_type(
-                        variables=tuple(
-                            self.variable_group[self.variable_names_for_factors[ii]]
-                        ),
-                    ),
+                    frozenset(variables_for_factor),
+                    self.factor_type(variables=variables_for_factor),
                 )
-                for ii in range(len(self.variable_names_for_factors))
+                for variables_for_factor in self.variables_for_factors
             ]
         )
         return variables_to_factors

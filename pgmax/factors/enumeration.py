@@ -2,7 +2,7 @@
 
 import functools
 from dataclasses import dataclass
-from typing import Mapping, Sequence, Tuple, Union
+from typing import List, Mapping, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -93,7 +93,7 @@ class EnumerationFactor(nodes.Factor):
                 f"shape {self.log_potentials.shape}."
             )
 
-        vars_num_states = np.array([variable.num_states for variable in self.variables])
+        vars_num_states = np.array([variable[1] for variable in self.variables])
         if not np.logical_and(
             self.factor_configs >= 0, self.factor_configs < vars_num_states[None]
         ).all():
@@ -155,9 +155,9 @@ class EnumerationFactor(nodes.Factor):
     @staticmethod
     def compile_wiring(
         factor_edges_num_states: np.ndarray,
-        variables_for_factors: Tuple[nodes.Variable, ...],
+        variables_for_factors: Sequence[List],
         factor_configs: np.ndarray,
-        vars_to_starts: Mapping[nodes.Variable, int],
+        vars_to_starts: Mapping[Tuple[int, int], int],
         num_factors: int,
     ) -> EnumerationWiring:
         """Compile an EnumerationWiring for an EnumerationFactor or a FactorGroup with EnumerationFactors.
@@ -166,10 +166,12 @@ class EnumerationFactor(nodes.Factor):
         Args:
             factor_edges_num_states: An array concatenating the number of states for the variables connected to each
                 Factor of the FactorGroup. Each variable will appear once for each Factor it connects to.
-            variables_for_factors: A tuple of tuples containing variables connected to each Factor of the FactorGroup.
-                Each variable will appear once for each Factor it connects to.
+            variables_for_factors: A list of list of variables. Each list within the outer list contains the
+                variables connected to a Factor. The same variable can be connected to multiple Factors.
             factor_configs: Array of shape (num_val_configs, num_variables) containing an explicit enumeration
                 of all valid configurations.
+            factor_edges_num_states: Array concatenating the number of states for the variables connected to each Factor of
+                the FactorGroup. Each variable will appear once for each Factor it connects to.
             vars_to_starts: A dictionary that maps variables to their global starting indices
                 For an n-state variable, a global start index of m means the global indices
                 of its n variable states are m, m + 1, ..., m + n - 1
@@ -181,13 +183,13 @@ class EnumerationFactor(nodes.Factor):
         Returns:
             The EnumerationWiring
         """
-        var_states = np.array(
-            [vars_to_starts[variable] for variable in variables_for_factors]
-        )
-        num_states = np.array(
-            [variable.num_states for variable in variables_for_factors]
-        )
-        num_states_cumsum = np.insert(np.cumsum(num_states), 0, 0)
+        var_states = []
+        for variables_for_factor in variables_for_factors:
+            for variable in variables_for_factor:
+                var_states.append(vars_to_starts[variable])
+        var_states = np.array(var_states)
+
+        num_states_cumsum = np.insert(np.cumsum(factor_edges_num_states), 0, 0)
         var_states_for_edges = np.empty(shape=(num_states_cumsum[-1],), dtype=int)
         _compile_var_states_numba(var_states_for_edges, num_states_cumsum, var_states)
 

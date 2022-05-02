@@ -5,85 +5,28 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from pgmax.fg import groups, nodes
-from pgmax.groups import enumeration
+from pgmax.fg import groups
+from pgmax.groups import enumeration, logical
 from pgmax.groups import variables as vgroup
 
 
-def test_composite_variable_group():
-    variable_dict1 = vgroup.VariableDict(15, tuple([0, 1, 2]))
-    variable_dict2 = vgroup.VariableDict(15, tuple([0, 1, 2]))
-    composite_variable_sequence = groups.CompositeVariableGroup(
-        [variable_dict1, variable_dict2]
-    )
-    composite_variable_dict = groups.CompositeVariableGroup(
-        {(0, 1): variable_dict1, (2, 3): variable_dict2}
-    )
-    with pytest.raises(ValueError, match="The name needs to have at least 2 elements"):
-        composite_variable_sequence[(0,)]
-
-    assert composite_variable_sequence[0, 1] == variable_dict1[1]
-    assert (
-        composite_variable_sequence[[(0, 1), (1, 2)]]
-        == composite_variable_dict[[((0, 1), 1), ((2, 3), 2)]]
-    )
-    assert composite_variable_dict[(0, 1), 0] == variable_dict1[0]
-    assert composite_variable_dict[[((0, 1), 1), ((2, 3), 2)]] == [
-        variable_dict1[1],
-        variable_dict2[2],
-    ]
-    assert jnp.all(
-        composite_variable_sequence.flatten(
-            [{name: np.zeros(15) for name in range(3)} for _ in range(2)]
-        )
-        == composite_variable_dict.flatten(
-            {
-                (0, 1): {name: np.zeros(15) for name in range(3)},
-                (2, 3): {name: np.zeros(15) for name in range(3)},
-            }
-        )
-    )
-    assert jnp.all(
-        jnp.array(
-            jax.tree_util.tree_leaves(
-                jax.tree_util.tree_multimap(
-                    lambda x, y: jnp.all(x == y),
-                    composite_variable_sequence.unflatten(jnp.zeros(15 * 3 * 2)),
-                    [{name: jnp.zeros(15) for name in range(3)} for _ in range(2)],
-                )
-            )
-        )
-    )
-    assert jnp.all(
-        jnp.array(
-            jax.tree_util.tree_leaves(
-                jax.tree_util.tree_multimap(
-                    lambda x, y: jnp.all(x == y),
-                    composite_variable_dict.unflatten(jnp.zeros(3 * 2)),
-                    {
-                        (0, 1): {name: np.zeros(1) for name in range(3)},
-                        (2, 3): {name: np.zeros(1) for name in range(3)},
-                    },
-                )
-            )
-        )
-    )
+def test_variable_dict():
+    num_states = np.full((4,), fill_value=2)
     with pytest.raises(
-        ValueError, match="Can only unflatten 1D array. Got a 2D array."
+        ValueError, match=re.escape("Expected num_states shape (3,). Got (4,).")
     ):
-        composite_variable_dict.unflatten(jnp.zeros((10, 20)))
+        vgroup.VariableDict(variable_names=tuple([0, 1, 2]), num_states=num_states)
 
+    num_states = np.full((3,), fill_value=2, dtype=np.float32)
     with pytest.raises(
         ValueError,
         match=re.escape(
-            "flat_data should be either of shape (num_variables(=6),), or (num_variable_states(=90),)"
+            "num_states should be an integer or a NumPy array of dtype int"
         ),
     ):
-        composite_variable_dict.unflatten(jnp.zeros((100)))
+        vgroup.VariableDict(variable_names=tuple([0, 1, 2]), num_states=num_states)
 
-
-def test_variable_dict():
-    variable_dict = vgroup.VariableDict(15, tuple([0, 1, 2]))
+    variable_dict = vgroup.VariableDict(variable_names=tuple([0, 1, 2]), num_states=15)
     with pytest.raises(
         ValueError, match="data is referring to a non-existent variable 3"
     ):
@@ -92,7 +35,7 @@ def test_variable_dict():
     with pytest.raises(
         ValueError,
         match=re.escape(
-            "Variable 2 expects a data array of shape (15,) or (1,). Got (10,)"
+            "Variable 2 expects a data array of shape (15,) or (1,). Got (10,)."
         ),
     ):
         variable_dict.flatten({2: np.zeros(10)})
@@ -123,18 +66,49 @@ def test_variable_dict():
 
 
 def test_nd_variable_array():
-    variable_group = vgroup.NDVariableArray(2, (1,))
-    assert isinstance(variable_group[0], nodes.Variable)
-    variable_group = vgroup.NDVariableArray(3, (2, 2))
+    max_size = int(groups.MAX_SIZE)
     with pytest.raises(
         ValueError,
-        match=re.escape("data should be of shape (2, 2) or (2, 2, 3). Got (3, 3)."),
+        match=re.escape(
+            f"Currently only support NDVariableArray of size smaller than {max_size}. Got {max_size + 1}"
+        ),
+    ):
+        vgroup.NDVariableArray(shape=(max_size + 1,), num_states=2)
+
+    num_states = np.full((2, 3), fill_value=2)
+    with pytest.raises(
+        ValueError, match=re.escape("Expected num_states shape (2, 2). Got (2, 3).")
+    ):
+        vgroup.NDVariableArray(shape=(2, 2), num_states=num_states)
+
+    num_states = np.full((2, 3), fill_value=2, dtype=np.float32)
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "num_states should be an integer or a NumPy array of dtype int"
+        ),
+    ):
+        vgroup.NDVariableArray(shape=(2, 2), num_states=num_states)
+
+    variable_group0 = vgroup.NDVariableArray(shape=(5, 5), num_states=2)
+    assert len(variable_group0[:3, :3]) == 9
+
+    variable_group = vgroup.NDVariableArray(
+        shape=(2, 2), num_states=np.array([[1, 2], [3, 4]])
+    )
+    variable_group0 < variable_group
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape("data should be of shape (2, 2) or (2, 2, 4). Got (3, 3)."),
     ):
         variable_group.flatten(np.zeros((3, 3)))
 
     assert jnp.all(
         variable_group.flatten(np.array([[1, 2], [3, 4]])) == jnp.array([1, 2, 3, 4])
     )
+    assert jnp.all(variable_group.flatten(np.zeros((2, 2, 4))) == jnp.zeros((10,)))
+
     with pytest.raises(
         ValueError, match="Can only unflatten 1D array. Got a 2D array."
     ):
@@ -143,26 +117,52 @@ def test_nd_variable_array():
     with pytest.raises(
         ValueError,
         match=re.escape(
-            "flat_data should be compatible with shape (2, 2) or (2, 2, 3). Got (10,)."
+            "flat_data should be compatible with shape (2, 2) or (2, 2, 4). Got (12,)."
         ),
     ):
-        variable_group.unflatten(np.zeros((10,)))
+        variable_group.unflatten(np.zeros((12,)))
 
     assert jnp.all(variable_group.unflatten(np.zeros(4)) == jnp.zeros((2, 2)))
-    assert jnp.all(variable_group.unflatten(np.zeros(12)) == jnp.zeros((2, 2, 3)))
+    unflattened = jnp.full((2, 2, 4), fill_value=jnp.nan)
+    unflattened = unflattened.at[0, 0, 0].set(0)
+    unflattened = unflattened.at[0, 1, :1].set(0)
+    unflattened = unflattened.at[1, 0, :2].set(0)
+    unflattened = unflattened.at[1, 1].set(0)
+    mask = ~jnp.isnan(unflattened)
+    assert jnp.all(variable_group.unflatten(np.zeros(10))[mask] == unflattened[mask])
+
+
+def test_single_factor():
+    with pytest.raises(ValueError, match="Cannot create a FactorGroup with no Factor."):
+        logical.ORFactorGroup(variables_for_factors=[])
+
+    A = vgroup.NDVariableArray(num_states=2, shape=(10,))
+    B = vgroup.NDVariableArray(num_states=2, shape=(10,))
+
+    variables0 = (A[0], B[0])
+    variables1 = (A[1], B[1])
+    ORFactor0 = logical.ORFactorGroup(variables_for_factors=[variables0])
+    with pytest.raises(
+        ValueError, match="SingleFactorGroup should only contain one factor. Got 2"
+    ):
+        groups.SingleFactorGroup(
+            variables_for_factors=[variables0, variables1],
+            factor=ORFactor0,
+        )
+    ORFactor1 = logical.ORFactorGroup(variables_for_factors=[variables1])
+    ORFactor0 < ORFactor1
 
 
 def test_enumeration_factor_group():
-    variable_group = vgroup.NDVariableArray(3, (2, 2))
+    vg = vgroup.NDVariableArray(shape=(2, 2), num_states=3)
     with pytest.raises(
         ValueError,
         match=re.escape("Expected log potentials shape: (1,) or (2, 1). Got (3, 2)"),
     ):
         enumeration_factor_group = enumeration.EnumerationFactorGroup(
-            variable_group=variable_group,
-            variable_names_for_factors=[
-                [(0, 0), (0, 1), (1, 1)],
-                [(0, 1), (1, 0), (1, 1)],
+            variables_for_factors=[
+                [vg[0, 0], vg[0, 1], vg[1, 1]],
+                [vg[0, 1], vg[1, 0], vg[1, 1]],
             ],
             factor_configs=np.zeros((1, 3), dtype=int),
             log_potentials=np.zeros((3, 2)),
@@ -170,21 +170,22 @@ def test_enumeration_factor_group():
 
     with pytest.raises(ValueError, match=re.escape("Potentials should be floats")):
         enumeration_factor_group = enumeration.EnumerationFactorGroup(
-            variable_group=variable_group,
-            variable_names_for_factors=[
-                [(0, 0), (0, 1), (1, 1)],
-                [(0, 1), (1, 0), (1, 1)],
+            variables_for_factors=[
+                [vg[0, 0], vg[0, 1], vg[1, 1]],
+                [vg[0, 1], vg[1, 0], vg[1, 1]],
             ],
             factor_configs=np.zeros((1, 3), dtype=int),
             log_potentials=np.zeros((2, 1), dtype=int),
         )
 
     enumeration_factor_group = enumeration.EnumerationFactorGroup(
-        variable_group=variable_group,
-        variable_names_for_factors=[[(0, 0), (0, 1), (1, 1)], [(0, 1), (1, 0), (1, 1)]],
+        variables_for_factors=[
+            [vg[0, 0], vg[0, 1], vg[1, 1]],
+            [vg[0, 1], vg[1, 0], vg[1, 1]],
+        ],
         factor_configs=np.zeros((1, 3), dtype=int),
     )
-    name = [(0, 0), (1, 1)]
+    name = [vg[0, 0], vg[1, 1]]
     with pytest.raises(
         ValueError,
         match=re.escape(
@@ -194,7 +195,7 @@ def test_enumeration_factor_group():
         enumeration_factor_group[name]
 
     assert (
-        enumeration_factor_group[[(0, 1), (1, 0), (1, 1)]]
+        enumeration_factor_group[[vg[0, 1], vg[1, 0], vg[1, 1]]]
         == enumeration_factor_group.factors[1]
     )
     with pytest.raises(
@@ -227,20 +228,20 @@ def test_enumeration_factor_group():
 
 
 def test_pairwise_factor_group():
-    variable_group = vgroup.NDVariableArray(3, (2, 2))
+    vg = vgroup.NDVariableArray(shape=(2, 2), num_states=3)
 
     with pytest.raises(
         ValueError, match=re.escape("log_potential_matrix should be either a 2D array")
     ):
         enumeration.PairwiseFactorGroup(
-            variable_group, [[(0, 0), (1, 1)]], np.zeros((1,), dtype=float)
+            [[vg[0, 0], vg[1, 1]]], np.zeros((1,), dtype=float)
         )
 
     with pytest.raises(
         ValueError, match=re.escape("Potential matrix should be floats")
     ):
         enumeration.PairwiseFactorGroup(
-            variable_group, [[(0, 0), (1, 1)]], np.zeros((3, 3), dtype=int)
+            [[vg[0, 0], vg[1, 1]]], np.zeros((3, 3), dtype=int)
         )
 
     with pytest.raises(
@@ -250,7 +251,7 @@ def test_pairwise_factor_group():
         ),
     ):
         enumeration.PairwiseFactorGroup(
-            variable_group, [[(0, 0), (1, 1)]], np.zeros((2, 3, 3), dtype=float)
+            [[vg[0, 0], vg[1, 1]]], np.zeros((2, 3, 3), dtype=float)
         )
 
     with pytest.raises(
@@ -260,20 +261,18 @@ def test_pairwise_factor_group():
         ),
     ):
         enumeration.PairwiseFactorGroup(
-            variable_group, [[(0, 0), (1, 1), (0, 1)]], np.zeros((3, 3), dtype=float)
+            [[vg[0, 0], vg[1, 1], vg[0, 1]]], np.zeros((3, 3), dtype=float)
         )
 
+    name = [vg[0, 0], vg[1, 1]]
     with pytest.raises(
         ValueError,
-        match=re.escape("The specified pairwise factor [(0, 0), (1, 1)]"),
+        match=re.escape(f"The specified pairwise factor {name}"),
     ):
-        enumeration.PairwiseFactorGroup(
-            variable_group, [[(0, 0), (1, 1)]], np.zeros((4, 4), dtype=float)
-        )
+        enumeration.PairwiseFactorGroup([name], np.zeros((4, 4), dtype=float))
 
     pairwise_factor_group = enumeration.PairwiseFactorGroup(
-        variable_group,
-        [[(0, 0), (1, 1)], [(1, 0), (0, 1)]],
+        [[vg[0, 0], vg[1, 1]], [vg[1, 0], vg[0, 1]]],
     )
     with pytest.raises(
         ValueError,

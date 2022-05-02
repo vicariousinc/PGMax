@@ -5,36 +5,37 @@ import pytest
 
 from pgmax.factors import enumeration, logical
 from pgmax.fg import nodes
+from pgmax.groups import variables as vgroup
 
 
 def test_enumeration_factor():
-    variable = nodes.Variable(3)
+    variables = vgroup.NDVariableArray(num_states=3, shape=(1,))
 
     with pytest.raises(
         NotImplementedError, match="Please implement compile_wiring in for your factor"
     ):
         nodes.Factor(
-            variables=(variable,),
+            variables=[variables[0]],
             log_potentials=np.array([0.0]),
         )
 
     with pytest.raises(ValueError, match="Configurations should be integers. Got"):
         enumeration.EnumerationFactor(
-            variables=(variable,),
+            variables=[variables[0]],
             factor_configs=np.array([[1.0]]),
             log_potentials=np.array([0.0]),
         )
 
     with pytest.raises(ValueError, match="Potential should be floats. Got"):
         enumeration.EnumerationFactor(
-            variables=(variable,),
+            variables=[variables[0]],
             factor_configs=np.array([[1]]),
             log_potentials=np.array([0]),
         )
 
     with pytest.raises(ValueError, match="factor_configs should be a 2D array"):
         enumeration.EnumerationFactor(
-            variables=(variable,),
+            variables=[variables[0]],
             factor_configs=np.array([1]),
             log_potentials=np.array([0.0]),
         )
@@ -46,7 +47,7 @@ def test_enumeration_factor():
         ),
     ):
         enumeration.EnumerationFactor(
-            variables=(variable,),
+            variables=[variables[0]],
             factor_configs=np.array([[1, 2]]),
             log_potentials=np.array([0.0]),
         )
@@ -55,27 +56,27 @@ def test_enumeration_factor():
         ValueError, match=re.escape("Expected log potentials of shape (1,)")
     ):
         enumeration.EnumerationFactor(
-            variables=(variable,),
+            variables=[variables[0]],
             factor_configs=np.array([[1]]),
             log_potentials=np.array([0.0, 1.0]),
         )
 
     with pytest.raises(ValueError, match="Invalid configurations for given variables"):
         enumeration.EnumerationFactor(
-            variables=(variable,),
+            variables=[variables[0]],
             factor_configs=np.array([[10]]),
             log_potentials=np.array([0.0]),
         )
 
 
 def test_logical_factor():
-    child = nodes.Variable(2)
-    wrong_parent = nodes.Variable(3)
-    parent = nodes.Variable(2)
+    child = vgroup.NDVariableArray(num_states=2, shape=(1,))[0]
+    wrong_parent = vgroup.NDVariableArray(num_states=3, shape=(1,))[0]
+    parent = vgroup.NDVariableArray(num_states=2, shape=(1,))[0]
 
     with pytest.raises(
         ValueError,
-        match="At least one parent variable and one child variable is required",
+        match="A LogicalFactor requires at least one parent variable and one child variable",
     ):
         logical.LogicalFactor(
             variables=(child,),
@@ -100,7 +101,7 @@ def test_logical_factor():
 
     with pytest.raises(ValueError, match="The highest LogicalFactor index must be 0"):
         logical.LogicalWiring(
-            edges_num_states=logical_factor.edges_num_states,
+            edges_num_states=[2, 2],
             var_states_for_edges=None,
             parents_edge_states=parents_edge_states + np.array([[1, 0]]),
             children_edge_states=child_edge_state,
@@ -112,7 +113,7 @@ def test_logical_factor():
         match="The LogicalWiring must have 1 different LogicalFactor indices",
     ):
         logical.LogicalWiring(
-            edges_num_states=logical_factor.edges_num_states,
+            edges_num_states=[2, 2],
             var_states_for_edges=None,
             parents_edge_states=parents_edge_states + np.array([[0], [1]]),
             children_edge_states=child_edge_state,
@@ -126,7 +127,7 @@ def test_logical_factor():
         ),
     ):
         logical.LogicalWiring(
-            edges_num_states=logical_factor.edges_num_states,
+            edges_num_states=[2, 2],
             var_states_for_edges=None,
             parents_edge_states=parents_edge_states,
             children_edge_states=child_edge_state,

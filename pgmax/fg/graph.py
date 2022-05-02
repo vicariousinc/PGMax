@@ -6,7 +6,6 @@ import collections
 import copy
 import functools
 import inspect
-import typing
 from dataclasses import asdict, dataclass
 from types import MappingProxyType
 from typing import (
@@ -35,7 +34,6 @@ from jax.scipy.special import logsumexp
 from pgmax.bp import infer
 from pgmax.factors import FAC_TO_VAR_UPDATES
 from pgmax.fg import groups, nodes
-from pgmax.groups.enumeration import EnumerationFactorGroup
 from pgmax.utils import cached_property
 
 
@@ -45,34 +43,14 @@ class FactorGraph:
     Factors in a graph are clustered in factor groups, which are grouped according to their factor types.
 
     Args:
-        variables: A single VariableGroup or a container containing variable groups.
-            If not a single VariableGroup, supported containers include mapping and sequence.
-            For a mapping, the keys of the mapping are used to index the variable groups.
-            For a sequence, the indices of the sequence are used to index the variable groups.
-            Note that if not a single VariableGroup, a CompositeVariableGroup will be created from
-            this input, and the individual VariableGroups will need to be accessed by indexing.
+        variable_groups: A single VariableGroup or a list of VariableGroups.
     """
 
-    variables: Union[
-        Mapping[Any, groups.VariableGroup],
-        Sequence[groups.VariableGroup],
-        groups.VariableGroup,
-    ]
+    variable_groups: Union[groups.VariableGroup, Sequence[groups.VariableGroup]]
 
     def __post_init__(self):
-        if isinstance(self.variables, groups.VariableGroup):
-            self._variable_group = self.variables
-        else:
-            self._variable_group = groups.CompositeVariableGroup(self.variables)
-
-        vars_num_states_cumsum = np.insert(
-            np.array(
-                [variable.num_states for variable in self._variable_group.variables],
-                dtype=int,
-            ).cumsum(),
-            0,
-            0,
-        )
+        if isinstance(self.variable_groups, groups.VariableGroup):
+            self.variable_groups = [self.variable_groups]
 
         # Useful objects to build the FactorGraph
         self._factor_types_to_groups: OrderedDict[
@@ -80,21 +58,27 @@ class FactorGraph:
         ] = collections.OrderedDict(
             [(factor_type, []) for factor_type in FAC_TO_VAR_UPDATES]
         )
-        self._factor_types_to_variable_names_for_factors: OrderedDict[
+        self._factor_types_to_variables_for_factors: OrderedDict[
             Type, Set[FrozenSet]
         ] = collections.OrderedDict(
             [(factor_type, set()) for factor_type in FAC_TO_VAR_UPDATES]
         )
 
         # See FactorGraphState docstrings for documentation on the following fields
-        self._num_var_states = vars_num_states_cumsum[-1]
-        self._vars_to_starts = MappingProxyType(
-            {
-                variable: vars_num_states_cumsum[vv]
-                for vv, variable in enumerate(self._variable_group.variables)
-            }
-        )
-        self._named_factor_groups: Dict[Hashable, groups.FactorGroup] = {}
+        self._vars_to_starts: Dict[Tuple[int, int], int] = {}
+
+        vars_num_states_cumsum = 0
+        for variable_group in self.variable_groups:
+            vg_num_states = variable_group.num_states.flatten()
+            vg_num_states_cumsum = np.insert(np.cumsum(vg_num_states), 0, 0)
+            self._vars_to_starts.update(
+                zip(
+                    variable_group.variables,
+                    vars_num_states_cumsum + vg_num_states_cumsum[:-1],
+                )
+            )
+            vars_num_states_cumsum += vg_num_states_cumsum[-1]
+        self._num_var_states = vars_num_states_cumsum
 
     def __hash__(self) -> int:
         all_factor_groups = tuple(
@@ -106,120 +90,46 @@ class FactorGraph:
         )
         return hash(all_factor_groups)
 
-    def add_factor(
+    def add_factors(
         self,
-        variable_names: List,
-        factor_configs: np.ndarray,
-        log_potentials: Optional[np.ndarray] = None,
-        name: Optional[str] = None,
+        factors: Union[
+            nodes.Factor,
+            groups.FactorGroup,
+            Sequence[Union[nodes.Factor, groups.FactorGroup]],
+        ],
     ) -> None:
-        """Function to add a single factor to the FactorGraph.
+        """Add a single Factor, a FactorGroup or a list of single Factors and FactorGroups to the FactorGraph,
+        by updating the FactorGraphState.
 
         Args:
-            variable_names: A list containing the connected variable names.
-                Variable names are tuples of the type (variable_group_name, variable_name_within_variable_group)
-            factor_configs: Array of shape (num_val_configs, num_variables)
-                An array containing explicit enumeration of all valid configurations.
-                If the connected variables have n1, n2, ... states, 1 <= num_val_configs <= n1 * n2 * ...
-                factor_configs[config_idx, variable_idx] represents the state of variable_names[variable_idx]
-                in the configuration factor_configs[config_idx].
-            log_potentials: Optional array of shape (num_val_configs,).
-                If specified, log_potentials[config_idx] contains the log of the potential value for
-                the valid configuration factor_configs[config_idx].
-                If None, it is assumed the log potential is uniform 0 and such an array is automatically
-                initialized.
-        """
-        factor_group = EnumerationFactorGroup(
-            self._variable_group,
-            variable_names_for_factors=[variable_names],
-            factor_configs=factor_configs,
-            log_potentials=log_potentials,
-        )
-        self._register_factor_group(factor_group, name)
-
-    def add_factor_by_type(
-        self, variable_names: List, factor_type: type, *args, **kwargs
-    ) -> None:
-        """Function to add a single factor to the FactorGraph.
-
-        Args:
-            variable_names: A list containing the connected variable names.
-                Variable names are tuples of the type (variable_group_name, variable_name_within_variable_group)
-            factor_type: Type of factor to be added
-            args: Args to be passed to the factor_type.
-            kwargs: kwargs to be passed to the factor_type, and an optional "name" argument
-                for specifying the name of a named factor group.
-
-        Example:
-            To add an ORFactor to a FactorGraph fg, run::
-
-                fg.add_factor_by_type(
-                    variable_names=variables_names_for_OR_factor,
-                    factor_type=logical.ORFactor
-                )
-        """
-        if factor_type not in FAC_TO_VAR_UPDATES:
-            raise ValueError(
-                f"Type {factor_type} is not one of the supported factor types {FAC_TO_VAR_UPDATES.keys()}"
-            )
-
-        name = kwargs.pop("name", None)
-        variables = tuple(self._variable_group[variable_names])
-        factor = factor_type(variables, *args, **kwargs)
-        factor_group = groups.SingleFactorGroup(
-            variable_group=self._variable_group,
-            variable_names_for_factors=[variable_names],
-            factor=factor,
-        )
-        self._register_factor_group(factor_group, name)
-
-    def add_factor_group(self, factory: Callable, *args, **kwargs) -> None:
-        """Add a factor group to the factor graph
-
-        Args:
-            factory: Factory function that takes args and kwargs as input and outputs a factor group.
-            args: Args to be passed to the factory function.
-            kwargs: kwargs to be passed to the factory function, and an optional "name" argument
-                for specifying the name of a named factor group.
-        """
-        name = kwargs.pop("name", None)
-        factor_group = factory(self._variable_group, *args, **kwargs)
-        self._register_factor_group(factor_group, name)
-
-    def _register_factor_group(
-        self, factor_group: groups.FactorGroup, name: Optional[str] = None
-    ) -> None:
-        """Register a factor group to the factor graph, by updating the factor graph state.
-
-        Args:
-            factor_group: The factor group to be registered to the factor graph.
-            name: Optional name of the factor group.
+            factors: The Factor, FactorGroup or list of Factors and FactorGroups to be added to the FactorGraph.
 
         Raises:
-            ValueError: If the factor group with the same name or a factor involving the same variables
-                already exists in the factor graph.
+            ValueError: A FactorGroup involving the same variables already exists in the FactorGraph.
         """
-        if name in self._named_factor_groups:
-            raise ValueError(
-                f"A factor group with the name {name} already exists. Please choose a different name!"
+        if isinstance(factors, list):
+            for factor in factors:
+                self.add_factors(factor)
+            return None
+
+        if isinstance(factors, groups.FactorGroup):
+            factor_group = factors
+        elif isinstance(factors, nodes.Factor):
+            factor_group = groups.SingleFactorGroup(
+                variables_for_factors=[factors.variables],
+                factor=factors,
             )
 
         factor_type = factor_group.factor_type
-        for var_names_for_factor in factor_group.variable_names_for_factors:
+        for var_names_for_factor in factor_group.variables_for_factors:
             var_names = frozenset(var_names_for_factor)
-            if (
-                var_names
-                in self._factor_types_to_variable_names_for_factors[factor_type]
-            ):
+            if var_names in self._factor_types_to_variables_for_factors[factor_type]:
                 raise ValueError(
                     f"A Factor of type {factor_type} involving variables {var_names} already exists. Please merge the corresponding factors."
                 )
-
-            self._factor_types_to_variable_names_for_factors[factor_type].add(var_names)
+            self._factor_types_to_variables_for_factors[factor_type].add(var_names)
 
         self._factor_types_to_groups[factor_type].append(factor_group)
-        if name is not None:
-            self._named_factor_groups[name] = factor_group
 
     @functools.lru_cache(None)
     def compute_offsets(self) -> None:
@@ -252,7 +162,7 @@ class FactorGraph:
                     factor_group
                 ] = factor_num_configs_cumsum
 
-                factor_num_states_cumsum += sum(factor_group.factor_edges_num_states)
+                factor_num_states_cumsum += factor_group.factor_edges_num_states.sum()
                 factor_num_configs_cumsum += (
                     factor_group.factor_group_log_potentials.shape[0]
                 )
@@ -337,12 +247,14 @@ class FactorGraph:
                     tuple(
                         [
                             factor
-                            for factor_group in self.factor_groups[factor_type]
+                            for factor_group in self._factor_types_to_groups[
+                                factor_type
+                            ]
                             for factor in factor_group.factors
                         ]
                     ),
                 )
-                for factor_type in self.factor_groups
+                for factor_type in self._factor_types_to_groups
             ]
         )
         return factors
@@ -360,13 +272,13 @@ class FactorGraph:
         log_potentials = np.concatenate(
             [self.log_potentials[factor_type] for factor_type in self.log_potentials]
         )
+        assert isinstance(self.variable_groups, list)
 
         return FactorGraphState(
-            variable_group=self._variable_group,
+            variable_groups=self.variable_groups,
             vars_to_starts=self._vars_to_starts,
             num_var_states=self._num_var_states,
             total_factor_num_states=self._total_factor_num_states,
-            named_factor_groups=copy.copy(self._named_factor_groups),
             factor_type_to_msgs_range=copy.copy(self._factor_type_to_msgs_range),
             factor_type_to_potentials_range=copy.copy(
                 self._factor_type_to_potentials_range
@@ -396,13 +308,12 @@ class FactorGraphState:
     """FactorGraphState.
 
     Args:
-        variable_group: A variable group containing all the variables in the FactorGraph.
+        variable_groups: VariableGroups in the FactorGraph.
         vars_to_starts: Maps variables to their starting indices in the flat evidence array.
             flat_evidence[vars_to_starts[variable]: vars_to_starts[variable] + variable.num_var_states]
             contains evidence to the variable.
         num_var_states: Total number of variable states.
         total_factor_num_states: Size of the flat ftov messages array.
-        named_factor_groups: Maps the names of named factor groups to the corresponding factor groups.
         factor_type_to_msgs_range: Maps factors types to their start and end indices in the flat ftov messages.
         factor_type_to_potentials_range: Maps factor types to their start and end indices in the flat log potentials.
         factor_group_to_potentials_starts: Maps factor groups to their starting indices in the flat log potentials.
@@ -410,11 +321,10 @@ class FactorGraphState:
         wiring: Wiring derived for each factor type.
     """
 
-    variable_group: groups.VariableGroup
-    vars_to_starts: Mapping[nodes.Variable, int]
+    variable_groups: Sequence[groups.VariableGroup]
+    vars_to_starts: Mapping[Tuple[int, int], int]
     num_var_states: int
     total_factor_num_states: int
-    named_factor_groups: Mapping[Hashable, groups.FactorGroup]
     factor_type_to_msgs_range: OrderedDict[type, Tuple[int, int]]
     factor_type_to_potentials_range: OrderedDict[type, Tuple[int, int]]
     factor_group_to_potentials_starts: OrderedDict[groups.FactorGroup, int]
@@ -482,16 +392,13 @@ def update_log_potentials(
         (1) Provided log_potentials shape does not match the expected log_potentials shape.
         (2) Provided name is not valid for log_potentials updates.
     """
-    for name in updates:
-        data = updates[name]
-        if name in fg_state.named_factor_groups:
-            factor_group = fg_state.named_factor_groups[name]
-
+    for factor_group, data in updates.items():
+        if factor_group in fg_state.factor_group_to_potentials_starts:
             flat_data = factor_group.flatten(data)
             if flat_data.shape != factor_group.factor_group_log_potentials.shape:
                 raise ValueError(
                     f"Expected log potentials shape {factor_group.factor_group_log_potentials.shape} "
-                    f"for factor group {name}. Got incompatible data shape {data.shape}."
+                    f"for factor group. Got incompatible data shape {data.shape}."
                 )
 
             start = fg_state.factor_group_to_potentials_starts[factor_group]
@@ -499,7 +406,7 @@ def update_log_potentials(
                 flat_data
             )
         else:
-            raise ValueError(f"Invalid name {name} for log potentials updates.")
+            raise ValueError("Invalid FactorGroup for log potentials updates.")
 
     return log_potentials
 
@@ -531,54 +438,43 @@ class LogPotentials:
 
             object.__setattr__(self, "value", self.value)
 
-    def __getitem__(self, name: Any) -> np.ndarray:
-        """Function to query log potentials for a named factor group or a factor.
+    def __getitem__(self, factor_group: groups.FactorGroup) -> np.ndarray:
+        """Function to query log potentials for a FactorGroup.
 
         Args:
-            name: Name of a named factor group, or a frozenset containing the set
-                of connected variables for the queried factor.
+            factor_group: Queried FactorGroup
 
         Returns:
             The queried log potentials.
         """
         value = cast(np.ndarray, self.value)
-        if not isinstance(name, Hashable):
-            name = frozenset(name)
-
-        if name in self.fg_state.named_factor_groups:
-            factor_group = self.fg_state.named_factor_groups[name]
+        if factor_group in self.fg_state.factor_group_to_potentials_starts:
             start = self.fg_state.factor_group_to_potentials_starts[factor_group]
             log_potentials = value[
                 start : start + factor_group.factor_group_log_potentials.shape[0]
             ]
         else:
-            raise ValueError(f"Invalid name {name} for log potentials updates.")
-
+            raise ValueError("Invalid FactorGroup queried to access log potentials.")
         return log_potentials
 
     def __setitem__(
         self,
-        name: Any,
+        factor_group: groups.FactorGroup,
         data: Union[np.ndarray, jnp.ndarray],
     ):
-        """Set the log potentials for a named factor group or a factor.
+        """Set the log potentials for a FactorGroup
 
         Args:
-            name: Name of a named factor group, or a frozenset containing the set
-                of connected variables for the queried factor.
-            data: Array containing the log potentials for the named factor group
-                or the factor.
+            factor_group: FactorGroup
+            data: Array containing the log potentials for the FactorGroup
         """
-        if not isinstance(name, Hashable):
-            name = frozenset(name)
-
         object.__setattr__(
             self,
             "value",
             np.asarray(
                 update_log_potentials(
                     jax.device_put(self.value),
-                    {name: jax.device_put(data)},
+                    {factor_group: jax.device_put(data)},
                     self.fg_state,
                 )
             ),
@@ -601,16 +497,14 @@ def update_ftov_msgs(
 
     Raises: ValueError if:
         (1) provided ftov_msgs shape does not match the expected ftov_msgs shape.
-        (2) provided name is not valid for ftov_msgs updates.
+        (2) provided variable is not in the FactorGraph.
     """
-    for names in updates:
-        data = updates[names]
-        if names in fg_state.variable_group.names:
-            variable = fg_state.variable_group[names]
-            if data.shape != (variable.num_states,):
+    for variable, data in updates.items():
+        if variable in fg_state.vars_to_starts:
+            if data.shape != (variable[1],):
                 raise ValueError(
                     f"Given belief shape {data.shape} does not match expected "
-                    f"shape {(variable.num_states,)} for variable {names}."
+                    f"shape {(variable[1],)} for variable {variable}."
                 )
 
             var_states_for_edges = np.concatenate(
@@ -624,18 +518,11 @@ def update_ftov_msgs(
                 var_states_for_edges == fg_state.vars_to_starts[variable]
             )[0]
             for start in starts:
-                ftov_msgs = ftov_msgs.at[start : start + variable.num_states].set(
+                ftov_msgs = ftov_msgs.at[start : start + variable[1]].set(
                     data / starts.shape[0]
                 )
         else:
-            raise ValueError(
-                "Invalid names for setting messages. "
-                "Supported names include a tuple of length 2 with factor "
-                "and variable names for directly setting factor to variable "
-                "messages, or a valid variable name for spreading expected "
-                "beliefs at a variable"
-            )
-
+            raise ValueError("Provided variable is not in the FactorGraph")
     return ftov_msgs
 
 
@@ -667,44 +554,18 @@ class FToVMessages:
 
             object.__setattr__(self, "value", self.value)
 
-    @typing.overload
     def __setitem__(
         self,
-        names: Tuple[Any, Any],
+        variable: Tuple[int, int],
         data: Union[np.ndarray, jnp.ndarray],
     ) -> None:
-        """Setting messages from a factor to a variable
+        """Spreading beliefs at a variable to all connected Factors
 
         Args:
-            names: A tuple of length 2
-                names[0] is the name of the factor
-                names[1] is the name of the variable
-            data: An array containing messages from factor names[0]
-                to variable names[1]
-        """
-
-    @typing.overload
-    def __setitem__(
-        self,
-        names: Any,
-        data: Union[np.ndarray, jnp.ndarray],
-    ) -> None:
-        """Spreading beliefs at a variable to all connected factors
-
-        Args:
-            names: The name of the variable
+            variable: Variable queried
             data: An array containing the beliefs to be spread uniformly
-                across all factor to variable messages involving this
-                variable.
+                across all factors to variable messages involving this variable.
         """
-
-    def __setitem__(self, names, data) -> None:
-        if (
-            isinstance(names, tuple)
-            and len(names) == 2
-            and names[1] in self.fg_state.variable_group.names
-        ):
-            names = (frozenset(names[0]), names[1])
 
         object.__setattr__(
             self,
@@ -712,7 +573,7 @@ class FToVMessages:
             np.asarray(
                 update_ftov_msgs(
                     jax.device_put(self.value),
-                    {names: jax.device_put(data)},
+                    {variable: jax.device_put(data)},
                     self.fg_state,
                 )
             ),
@@ -733,26 +594,22 @@ def update_evidence(
     Returns:
         A flat jnp array containing updated evidence.
     """
-    for name in updates:
-        data = updates[name]
-        if name in fg_state.variable_group.container_names:
-            if name is None:
-                variable_group = fg_state.variable_group
-            else:
-                assert isinstance(
-                    fg_state.variable_group, groups.CompositeVariableGroup
-                )
-                variable_group = fg_state.variable_group.variable_group_container[name]
-
-            start_index = fg_state.vars_to_starts[variable_group.variables[0]]
-            flat_data = variable_group.flatten(data)
+    for name, data in updates.items():
+        # Name is a variable_group or a variable
+        if name in fg_state.variable_groups:
+            first_variable = name.variables[0]
+            start_index = fg_state.vars_to_starts[first_variable]
+            flat_data = name.flatten(data)
             evidence = evidence.at[start_index : start_index + flat_data.shape[0]].set(
                 flat_data
             )
+        elif name in fg_state.vars_to_starts:
+            start_index = fg_state.vars_to_starts[name]
+            evidence = evidence.at[start_index : start_index + name[1]].set(data)
         else:
-            var = fg_state.variable_group[name]
-            start_index = fg_state.vars_to_starts[var]
-            evidence = evidence.at[start_index : start_index + var.num_states].set(data)
+            raise ValueError(
+                "Got evidence for a variable or a VariableGroup not in the FactorGraph!"
+            )
     return evidence
 
 
@@ -782,19 +639,18 @@ class Evidence:
 
             object.__setattr__(self, "value", self.value)
 
-    def __getitem__(self, name: Any) -> np.ndarray:
+    def __getitem__(self, variable: Tuple[int, int]) -> np.ndarray:
         """Function to query evidence for a variable
 
         Args:
-            name: name for the variable
+            variable: Variable queried
 
         Returns:
             evidence for the queried variable
         """
         value = cast(np.ndarray, self.value)
-        variable = self.fg_state.variable_group[name]
         start = self.fg_state.vars_to_starts[variable]
-        evidence = value[start : start + variable.num_states]
+        evidence = value[start : start + variable[1]]
         return evidence
 
     def __setitem__(
@@ -809,7 +665,7 @@ class Evidence:
                 If name is the name of a variable group, updates are derived by using the variable group to
                 flatten the data.
                 If name is the name of a variable, data should be of an array shape (num_states,)
-                If name is None, updates are derived by using self.fg_state.variable_group to flatten the data.
+                If name is None, updates are derived by using self.fg_state.variable_groups to flatten the data.
             data: Array containing the evidence updates.
         """
         object.__setattr__(
@@ -893,7 +749,7 @@ class BeliefPropagation:
             Args:
                 bp_arrays: A BPArrays containing log_potentials, ftov_msgs, evidence.
             Returns:
-                beliefs: An array or a PyTree container containing the beliefs for the variables.
+                beliefs: Beliefs returned by belief propagation.
     """
 
     init: Callable
@@ -1034,8 +890,7 @@ def BP(bp_state: BPState, temperature: float = 0.0) -> BeliefPropagation:
             # update the factor to variable messages
             delta_msgs = ftov_msgs - msgs
             msgs = msgs + (1 - damping) * delta_msgs
-            # Normalize and clip these damped, updated messages before
-            # returning them.
+            # Normalize and clip these damped, updated messages before returning them.
             msgs = infer.normalize_and_clip_msgs(msgs, edges_num_states, max_msg_size)
             return msgs, None
 
@@ -1065,22 +920,43 @@ def BP(bp_state: BPState, temperature: float = 0.0) -> BeliefPropagation:
             evidence=Evidence(fg_state=bp_state.fg_state, value=bp_arrays.evidence),
         )
 
+    def unflatten_beliefs(flat_beliefs, variable_groups) -> Dict[Hashable, Any]:
+        """Function that returns unflattened beliefs from the flat beliefs
+
+        Args:
+            flat_beliefs: Flattened array of beliefs
+            variable_groups: All the variable groups in the FactorGraph.
+        """
+        beliefs = {}
+        start = 0
+        for variable_group in variable_groups:
+            num_states = variable_group.num_states
+            assert isinstance(num_states, np.ndarray)
+            length = num_states.sum()
+
+            beliefs[variable_group] = variable_group.unflatten(
+                flat_beliefs[start : start + length]
+            )
+            start += length
+        return beliefs
+
     @jax.jit
-    def get_beliefs(bp_arrays: BPArrays) -> Any:
+    def get_beliefs(bp_arrays: BPArrays) -> Dict[Hashable, Any]:
         """Function to calculate beliefs from a BPArrays
 
         Args:
             bp_arrays: A BPArrays containing log_potentials, ftov_msgs, evidence.
 
         Returns:
-            beliefs: An array or a PyTree container containing the beliefs for the variables.
+            beliefs: Beliefs returned by belief propagation.
         """
-        beliefs = bp_state.fg_state.variable_group.unflatten(
+
+        flat_beliefs = (
             jax.device_put(bp_arrays.evidence)
             .at[jax.device_put(var_states_for_edges)]
             .add(bp_arrays.ftov_msgs)
         )
-        return beliefs
+        return unflatten_beliefs(flat_beliefs, bp_state.fg_state.variable_groups)
 
     bp = BeliefPropagation(
         init=functools.partial(update, None),
@@ -1093,7 +969,7 @@ def BP(bp_state: BPState, temperature: float = 0.0) -> BeliefPropagation:
 
 
 @jax.jit
-def decode_map_states(beliefs: Any) -> Any:
+def decode_map_states(beliefs: Dict[Hashable, Any]) -> Any:
     """Function to decode MAP states given the calculated beliefs.
 
     Args:
@@ -1102,15 +978,11 @@ def decode_map_states(beliefs: Any) -> Any:
     Returns:
         An array or a PyTree container containing the MAP states for different variables.
     """
-    map_states = jax.tree_util.tree_map(
-        lambda x: jnp.argmax(x, axis=-1),
-        beliefs,
-    )
-    return map_states
+    return jax.tree_util.tree_map(lambda x: jnp.argmax(x, axis=-1), beliefs)
 
 
 @jax.jit
-def get_marginals(beliefs: Any) -> Any:
+def get_marginals(beliefs: Dict[Hashable, Any]) -> Any:
     """Function to get marginal probabilities given the calculated beliefs.
 
     Args:
@@ -1119,8 +991,6 @@ def get_marginals(beliefs: Any) -> Any:
     Returns:
         An array or a PyTree container containing the marginal probabilities different variables.
     """
-    marginals = jax.tree_util.tree_map(
-        lambda x: jnp.exp(x - logsumexp(x, axis=-1, keepdims=True)),
-        beliefs,
+    return jax.tree_util.tree_map(
+        lambda x: jnp.exp(x - logsumexp(x, axis=-1, keepdims=True)), beliefs
     )
-    return marginals

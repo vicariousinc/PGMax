@@ -38,8 +38,8 @@ target_images = data["images_test"]
 
 # %%
 # Load saved log potentials
-log_potentials = dict(**np.load("example_data/gmrf_log_potentials.npz"))
-n_clones = log_potentials.pop("n_clones")
+grmf_log_potentials = dict(**np.load("example_data/gmrf_log_potentials.npz"))
+n_clones = grmf_log_potentials.pop("n_clones")
 p_contour = jax.device_put(np.repeat(data["p_contour"], n_clones))
 prototype_targets = jax.device_put(
     np.array(
@@ -58,42 +58,54 @@ variables = vgroup.NDVariableArray(num_states=num_states, shape=(M, N))
 fg = graph.FactorGraph(variables)
 
 # %%
-# Add top-down factors
-fg.add_factor_group(
-    factory=enumeration.PairwiseFactorGroup,
-    variable_names_for_factors=[
-        [(ii, jj), (ii + 1, jj)] for ii in range(M - 1) for jj in range(N)
+# Create top-down factors
+top_down = enumeration.PairwiseFactorGroup(
+    variables_for_factors=[
+        [variables[ii, jj], variables[ii + 1, jj]]
+        for ii in range(M - 1)
+        for jj in range(N)
     ],
-    name="top_down",
 )
-# Add left-right factors
-fg.add_factor_group(
-    factory=enumeration.PairwiseFactorGroup,
-    variable_names_for_factors=[
-        [(ii, jj), (ii, jj + 1)] for ii in range(M) for jj in range(N - 1)
+
+# Create left-right factors
+left_right = enumeration.PairwiseFactorGroup(
+    variables_for_factors=[
+        [variables[ii, jj], variables[ii, jj + 1]]
+        for ii in range(M)
+        for jj in range(N - 1)
     ],
-    name="left_right",
 )
-# Add diagonal factors
-fg.add_factor_group(
-    factory=enumeration.PairwiseFactorGroup,
-    variable_names_for_factors=[
-        [(ii, jj), (ii + 1, jj + 1)] for ii in range(M - 1) for jj in range(N - 1)
+
+# Create diagonal factors
+diagonal0 = enumeration.PairwiseFactorGroup(
+    variables_for_factors=[
+        [variables[ii, jj], variables[ii + 1, jj + 1]]
+        for ii in range(M - 1)
+        for jj in range(N - 1)
     ],
-    name="diagonal0",
 )
-fg.add_factor_group(
-    factory=enumeration.PairwiseFactorGroup,
-    variable_names_for_factors=[
-        [(ii, jj), (ii - 1, jj + 1)] for ii in range(1, M) for jj in range(N - 1)
+diagonal1 = enumeration.PairwiseFactorGroup(
+    variables_for_factors=[
+        [variables[ii, jj], variables[ii - 1, jj + 1]]
+        for ii in range(1, M)
+        for jj in range(N - 1)
     ],
-    name="diagonal1",
 )
+
+# Add factors
+fg.add_factors([top_down, left_right, diagonal0, diagonal1])
 
 # %%
 bp = graph.BP(fg.bp_state, temperature=1.0)
 
 # %%
+log_potentials = {
+    top_down: grmf_log_potentials["top_down"],
+    left_right: grmf_log_potentials["left_right"],
+    diagonal0: grmf_log_potentials["diagonal0"],
+    diagonal1: grmf_log_potentials["diagonal1"],
+}
+
 n_plots = 5
 indices = np.random.permutation(noisy_images.shape[0])[:n_plots]
 fig, ax = plt.subplots(n_plots, 3, figsize=(30, 10 * n_plots))
@@ -106,14 +118,15 @@ for plot_idx, idx in tqdm(enumerate(indices), total=n_plots):
         bp.get_beliefs(
             bp.run_bp(
                 bp.init(
-                    evidence_updates={None: evidence},
+                    evidence_updates={variables: evidence},
                     log_potentials_updates=log_potentials,
                 ),
                 num_iters=15,
                 damping=0.0,
             )
         )
-    )
+    )[variables]
+
     pred_image = np.argmax(
         np.stack(
             [
@@ -153,7 +166,7 @@ def loss(noisy_image, target_image, log_potentials):
         bp.get_beliefs(
             bp.run_bp(
                 bp.init(
-                    evidence_updates={None: evidence},
+                    evidence_updates={variables: evidence},
                     log_potentials_updates=log_potentials,
                 ),
                 num_iters=15,
@@ -161,7 +174,7 @@ def loss(noisy_image, target_image, log_potentials):
             )
         )
     )
-    logp = jnp.mean(jnp.log(jnp.sum(target * marginals, axis=-1)))
+    logp = jnp.mean(jnp.log(jnp.sum(target * marginals[variables], axis=-1)))
     return -logp
 
 
@@ -191,10 +204,10 @@ def update(step, batch_noisy_images, batch_target_images, opt_state):
 # %%
 opt_state = init_fun(
     {
-        "top_down": np.random.randn(num_states, num_states),
-        "left_right": np.random.randn(num_states, num_states),
-        "diagonal0": np.random.randn(num_states, num_states),
-        "diagonal1": np.random.randn(num_states, num_states),
+        top_down: np.random.randn(num_states, num_states),
+        left_right: np.random.randn(num_states, num_states),
+        diagonal0: np.random.randn(num_states, num_states),
+        diagonal1: np.random.randn(num_states, num_states),
     }
 )
 

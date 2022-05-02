@@ -134,15 +134,15 @@ SW = vgroup.NDVariableArray(
 X = vgroup.NDVariableArray(num_states=2, shape=X_gt.shape)
 
 # %% [markdown]
-# For computation efficiency, we add large FactorGroups via `fg.add_factor_group` instead of adding individual Factors
+# For computation efficiency, we construct large FactorGroups instead of individual factors
 
 # %%
 # Factor graph
-fg = graph.FactorGraph(variables=dict(S=S, W=W, SW=SW, X=X))
+fg = graph.FactorGraph(variable_groups=[S, W, SW, X])
 
 # Define the ANDFactors
-variable_names_for_ANDFactors = []
-variable_names_for_ORFactors_dict = defaultdict(list)
+variables_for_ANDFactors = []
+variables_for_ORFactors_dict = defaultdict(list)
 for idx_img in tqdm(range(n_images)):
     for idx_chan in range(n_chan):
         for idx_s_height in range(s_height):
@@ -152,8 +152,7 @@ for idx_img in tqdm(range(n_images)):
                         for idx_feat_width in range(feat_width):
                             idx_img_height = idx_feat_height + idx_s_height
                             idx_img_width = idx_feat_width + idx_s_width
-                            SW_var = (
-                                "SW",
+                            SW_var = SW[
                                 idx_img,
                                 idx_chan,
                                 idx_img_height,
@@ -161,43 +160,31 @@ for idx_img in tqdm(range(n_images)):
                                 idx_feat,
                                 idx_feat_height,
                                 idx_feat_width,
-                            )
+                            ]
 
-                            variable_names_for_ANDFactor = [
-                                ("S", idx_img, idx_feat, idx_s_height, idx_s_width),
-                                (
-                                    "W",
-                                    idx_chan,
-                                    idx_feat,
-                                    idx_feat_height,
-                                    idx_feat_width,
-                                ),
+                            variables_for_ANDFactor = [
+                                S[idx_img, idx_feat, idx_s_height, idx_s_width],
+                                W[idx_chan, idx_feat, idx_feat_height, idx_feat_width],
                                 SW_var,
                             ]
-                            variable_names_for_ANDFactors.append(
-                                variable_names_for_ANDFactor
-                            )
+                            variables_for_ANDFactors.append(variables_for_ANDFactor)
 
-                            X_var = (idx_img, idx_chan, idx_img_height, idx_img_width)
-                            variable_names_for_ORFactors_dict[X_var].append(SW_var)
+                            X_var = X[idx_img, idx_chan, idx_img_height, idx_img_width]
+                            variables_for_ORFactors_dict[X_var].append(SW_var)
 
 # Add ANDFactorGroup, which is computationally efficient
-fg.add_factor_group(
-    factory=logical.ANDFactorGroup,
-    variable_names_for_factors=variable_names_for_ANDFactors,
-)
+AND_factor_group = logical.ANDFactorGroup(variables_for_ANDFactors)
+fg.add_factors(AND_factor_group)
 
 # Define the ORFactors
-variable_names_for_ORFactors = [
-    list(tuple(variable_names_for_ORFactors_dict[X_var]) + (("X",) + X_var,))
-    for X_var in variable_names_for_ORFactors_dict
+variables_for_ORFactors = [
+    list(tuple(variables_for_ORFactors_dict[X_var]) + (X_var,))
+    for X_var in variables_for_ORFactors_dict
 ]
 
 # Add ORFactorGroup, which is computationally efficient
-fg.add_factor_group(
-    factory=logical.ORFactorGroup,
-    variable_names_for_factors=variable_names_for_ORFactors,
-)
+OR_factor_group = logical.ORFactorGroup(variables_for_ORFactors)
+fg.add_factors(OR_factor_group)
 
 for factor_type, factor_groups in fg.factor_groups.items():
     if len(factor_groups) > 0:
@@ -222,7 +209,7 @@ bp = graph.BP(fg.bp_state, temperature=0.0)
 
 # %%
 pW = 0.25
-pS = 1e-100
+pS = 1e-75
 pX = 1e-100
 
 # Sparsity inducing priors for W and S
@@ -237,25 +224,27 @@ uX = np.zeros((X_gt.shape) + (2,))
 uX[..., 0] = (2 * X_gt - 1) * logit(pX)
 
 # %% [markdown]
-# We draw a batch of samples from the posterior in parallel by transforming `run_bp`/`get_beliefs` with `jax.vmap`
+# We draw a batch of samples from the posterior in parallel by transforming `bp.init`/`bp.run_bp`/`bp.get_beliefs` with `jax.vmap`
 
 # %%
-np.random.seed(seed=40)
+np.random.seed(seed=0)
 n_samples = 4
 
 bp_arrays = jax.vmap(bp.init, in_axes=0, out_axes=0)(
     evidence_updates={
-        "S": uS[None] + np.random.gumbel(size=(n_samples,) + uS.shape),
-        "W": uW[None] + np.random.gumbel(size=(n_samples,) + uW.shape),
-        "SW": np.zeros(shape=(n_samples,) + SW.shape),
-        "X": uX[None] + np.zeros(shape=(n_samples,) + uX.shape),
+        S: uS[None] + np.random.gumbel(size=(n_samples,) + uS.shape),
+        W: uW[None] + np.random.gumbel(size=(n_samples,) + uW.shape),
+        SW: np.zeros(shape=(n_samples,) + SW.shape),
+        X: uX[None] + np.zeros(shape=(n_samples,) + uX.shape),
     },
 )
+
 bp_arrays = jax.vmap(
     functools.partial(bp.run_bp, num_iters=100, damping=0.5),
     in_axes=0,
     out_axes=0,
 )(bp_arrays)
+
 beliefs = jax.vmap(bp.get_beliefs, in_axes=0, out_axes=0)(bp_arrays)
 map_states = graph.decode_map_states(beliefs)
 
@@ -265,4 +254,4 @@ map_states = graph.decode_map_states(beliefs)
 # Because we have used one extra feature for inference, each posterior sample recovers the 4 basic features used to generate the images, and includes an extra symbol.
 
 # %%
-_ = plot_images(map_states["W"].reshape(-1, feat_height, feat_width), nr=n_samples)
+_ = plot_images(map_states[W].reshape(-1, feat_height, feat_width), nr=n_samples)
