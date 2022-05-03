@@ -9,21 +9,22 @@ import jax.numpy as jnp
 import numba as nb
 import numpy as np
 
-from pgmax.bp import bp_utils
-from pgmax.fg import nodes
+from pgmax.utils import NEG_INF
+
+from . import factor
 
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True, eq=False)
-class EnumerationWiring(nodes.Wiring):
-    """Wiring for EnumerationFactors.
+class EnumWiring(factor.Wiring):
+    """Wiring for EnumFactors.
 
     Args:
         factor_configs_edge_states: Array of shape (num_factor_configs, 2)
             factor_configs_edge_states[ii] contains a pair of global enumeration factor_config and global edge_state indices
-            factor_configs_edge_states[ii, 0] contains the global EnumerationFactor config index,
+            factor_configs_edge_states[ii, 0] contains the global EnumFactor config index,
             factor_configs_edge_states[ii, 1] contains the corresponding global edge_state index.
-            Both indices only take into account the EnumerationFactors of the FactorGraph
+            Both indices only take into account the EnumFactors of the FactorGraph
 
     Attributes:
         num_val_configs: Number of valid configurations for this wiring
@@ -42,7 +43,7 @@ class EnumerationWiring(nodes.Wiring):
 
 
 @dataclass(frozen=True, eq=False)
-class EnumerationFactor(nodes.Factor):
+class EnumFactor(factor.Factor):
     """An enumeration factor
 
     Args:
@@ -78,7 +79,7 @@ class EnumerationFactor(nodes.Factor):
         if self.factor_configs.ndim != 2:
             raise ValueError(
                 "factor_configs should be a 2D array containing a list of valid configurations for "
-                f"EnumerationFactor. Got a factor_configs array of shape {self.factor_configs.shape}."
+                f"EnumFactor. Got a factor_configs array of shape {self.factor_configs.shape}."
             )
 
         if len(self.variables) != self.factor_configs.shape[1]:
@@ -100,17 +101,17 @@ class EnumerationFactor(nodes.Factor):
             raise ValueError("Invalid configurations for given variables")
 
     @staticmethod
-    def concatenate_wirings(wirings: Sequence[EnumerationWiring]) -> EnumerationWiring:
-        """Concatenate a list of EnumerationWirings
+    def concatenate_wirings(wirings: Sequence[EnumWiring]) -> EnumWiring:
+        """Concatenate a list of EnumWirings
 
         Args:
-            wirings: A list of EnumerationWirings
+            wirings: A list of EnumWirings
 
         Returns:
-            Concatenated EnumerationWiring
+            Concatenated EnumWiring
         """
         if len(wirings) == 0:
-            return EnumerationWiring(
+            return EnumWiring(
                 edges_num_states=np.empty((0,), dtype=int),
                 var_states_for_edges=np.empty((0,), dtype=int),
                 factor_configs_edge_states=np.empty((0, 2), dtype=int),
@@ -124,7 +125,7 @@ class EnumerationFactor(nodes.Factor):
             0,
         )[:-1]
 
-        # Note: this correspomds to all the factor_to_msgs_starts of the EnumerationFactors
+        # Note: this correspomds to all the factor_to_msgs_starts of the EnumFactors
         num_edge_states_cumsum = np.insert(
             np.array([wiring.edges_num_states.sum() for wiring in wirings]).cumsum(),
             0,
@@ -140,7 +141,7 @@ class EnumerationFactor(nodes.Factor):
                 )
             )
 
-        return EnumerationWiring(
+        return EnumWiring(
             edges_num_states=np.concatenate(
                 [wiring.edges_num_states for wiring in wirings]
             ),
@@ -159,8 +160,8 @@ class EnumerationFactor(nodes.Factor):
         factor_configs: np.ndarray,
         vars_to_starts: Mapping[Tuple[int, int], int],
         num_factors: int,
-    ) -> EnumerationWiring:
-        """Compile an EnumerationWiring for an EnumerationFactor or a FactorGroup with EnumerationFactors.
+    ) -> EnumWiring:
+        """Compile an EnumWiring for an EnumFactor or a FactorGroup with EnumFactors.
         Internally calls _compile_var_states_numba and _compile_enumeration_wiring_numba for speed.
 
         Args:
@@ -181,7 +182,7 @@ class EnumerationFactor(nodes.Factor):
             ValueError: if factor_edges_num_states is not of shape (num_factors * num_variables, )
 
         Returns:
-            The EnumerationWiring
+            The EnumWiring
         """
         var_states = []
         for variables_for_factor in variables_for_factors:
@@ -191,7 +192,9 @@ class EnumerationFactor(nodes.Factor):
 
         num_states_cumsum = np.insert(np.cumsum(factor_edges_num_states), 0, 0)
         var_states_for_edges = np.empty(shape=(num_states_cumsum[-1],), dtype=int)
-        _compile_var_states_numba(var_states_for_edges, num_states_cumsum, var_states)
+        factor._compile_var_states_numba(
+            var_states_for_edges, num_states_cumsum, var_states
+        )
 
         num_configs, num_variables = factor_configs.shape
         if not factor_edges_num_states.shape == (num_factors * num_variables,):
@@ -206,31 +209,11 @@ class EnumerationFactor(nodes.Factor):
             factor_configs_edge_states, factor_configs, factor_edges_starts, num_factors
         )
 
-        return EnumerationWiring(
+        return EnumWiring(
             edges_num_states=factor_edges_num_states,
             var_states_for_edges=var_states_for_edges,
             factor_configs_edge_states=factor_configs_edge_states,
         )
-
-
-@nb.jit(parallel=False, cache=True, fastmath=True, nopython=True)
-def _compile_var_states_numba(
-    var_states_for_edges: np.ndarray,
-    num_states_cumsum: np.ndarray,
-    var_states: np.ndarray,
-) -> np.ndarray:
-    """Fast numba computation of the var_states_for_edges of a Wiring.
-    var_states_for_edges is updated in-place.
-    """
-
-    for variable_idx in nb.prange(num_states_cumsum.shape[0] - 1):
-        start_variable, end_variable = (
-            num_states_cumsum[variable_idx],
-            num_states_cumsum[variable_idx + 1],
-        )
-        var_states_for_edges[start_variable:end_variable] = var_states[
-            variable_idx
-        ] + np.arange(end_variable - start_variable)
 
 
 @nb.jit(parallel=False, cache=True, fastmath=True, nopython=True)
@@ -240,7 +223,7 @@ def _compile_enumeration_wiring_numba(
     factor_edges_starts: np.ndarray,
     num_factors: int,
 ) -> np.ndarray:
-    """Fast numba computation of the factor_configs_edge_states of an EnumerationWiring.
+    """Fast numba computation of the factor_configs_edge_states of an EnumWiring.
     factor_edges_starts is updated in-place.
     """
 
@@ -274,30 +257,30 @@ def pass_enum_fac_to_var_messages(
     temperature: float,
 ) -> jnp.ndarray:
 
-    """Passes messages from EnumerationFactors to Variables.
+    """Passes messages from EnumFactors to Variables.
 
     The update is performed in two steps. First, a "summary" array is generated that has an entry for every valid
-    configuration for every EnumerationFactor. The elements of this array are simply the sums of messages across
+    configuration for every EnumFactor. The elements of this array are simply the sums of messages across
     each valid config. Then, the info from factor_configs_edge_states is used to apply the scattering operation and
     generate a flat set of output messages.
 
     Args:
         vtof_msgs: Array of shape (num_edge_state,). This holds all the flattened variable
-            to all the EnumerationFactors messages
+            to all the EnumFactors messages
         factor_configs_edge_states: Array of shape (num_factor_configs, 2)
             factor_configs_edge_states[ii] contains a pair of global factor_config and edge_state indices
-            factor_configs_edge_states[ii, 0] contains the global EnumerationFactor config index,
+            factor_configs_edge_states[ii, 0] contains the global EnumFactor config index,
             factor_configs_edge_states[ii, 1] contains the corresponding global edge_state index.
-            Both indices only take into account the EnumerationFactors of the FactorGraph
+            Both indices only take into account the EnumFactors of the FactorGraph
         log_potentials: Array of shape (num_val_configs, ). An entry at index i is the log potential
-            function value for the configuration with global EnumerationFactor config index i.
-        num_val_configs: the total number of valid configurations for all the EnumerationFactors
+            function value for the configuration with global EnumFactor config index i.
+        num_val_configs: the total number of valid configurations for all the EnumFactors
             in the factor graph.
         temperature: Temperature for loopy belief propagation.
             1.0 corresponds to sum-product, 0.0 corresponds to max-product.
 
     Returns:
-        Array of shape (num_edge_state,). This holds all the flattened EnumerationFactors to variable messages.
+        Array of shape (num_edge_state,). This holds all the flattened EnumFactors to variable messages.
     """
     fac_config_summary_sum = (
         jnp.zeros(shape=(num_val_configs,))
@@ -305,7 +288,7 @@ def pass_enum_fac_to_var_messages(
         .add(vtof_msgs[factor_configs_edge_states[..., 1]])
     ) + log_potentials
     max_factor_config_summary_for_edge_states = (
-        jnp.full(shape=(vtof_msgs.shape[0],), fill_value=bp_utils.NEG_INF)
+        jnp.full(shape=(vtof_msgs.shape[0],), fill_value=NEG_INF)
         .at[factor_configs_edge_states[..., 1]]
         .max(fac_config_summary_sum[factor_configs_edge_states[..., 0]])
     )
@@ -314,9 +297,7 @@ def pass_enum_fac_to_var_messages(
         ftov_msgs = ftov_msgs + (
             temperature
             * jnp.log(
-                jnp.full(
-                    shape=(vtof_msgs.shape[0],), fill_value=jnp.exp(bp_utils.NEG_INF)
-                )
+                jnp.full(shape=(vtof_msgs.shape[0],), fill_value=jnp.exp(NEG_INF))
                 .at[factor_configs_edge_states[..., 1]]
                 .add(
                     jnp.exp(

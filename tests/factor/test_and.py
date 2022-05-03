@@ -3,27 +3,24 @@ from itertools import product
 import jax
 import numpy as np
 
-from pgmax.factors.enumeration import EnumerationFactor
-from pgmax.fg import graph
-from pgmax.groups import logical
-from pgmax.groups import variables as vgroup
+from pgmax import factor, fgraph, fgroup, infer, vgroup
 
 
-def test_run_bp_with_ORFactors():
+def test_run_bp_with_ANDFactors():
     """
     Simultaneously test
-    (1) the support of ORFactors in a FactorGraph and their specialized inference for different temperatures
+    (1) the support of ANDFactors in a FactorGraph and their specialized inference for different temperatures
     (2) the support of several factor types in a FactorGraph and during inference
 
-    To do so, observe that an ORFactor can be defined as an equivalent EnumerationFactor
-    (which list all the valid OR configurations) and define two equivalent FactorGraphs
-    FG1: first half of factors are defined as EnumerationFactors, second half are defined as ORFactors
-    FG2: first half of factors are defined as ORFactors, second half are defined as EnumerationFactors
+    To do so, observe that an ANDFactor can be defined as an equivalent EnumFactor
+    (which list all the valid AND configurations) and define two equivalent FactorGraphs
+    FG1: first half of factors are defined as EnumFactors, second half are defined as ANDFactors
+    FG2: first half of factors are defined as ANDFactors, second half are defined as EnumFactors
 
-    Inference for the EnumerationFactors will be run with pass_enum_fac_to_var_messages while
-    inference for the ORFactors will be run with pass_logical_fac_to_var_messages.
+    Inference for the EnumFactors will be run with pass_enum_fac_to_var_messages while
+    inference for the ANDFactors will be run with pass_logical_fac_to_var_messages.
 
-    Note: for the first seed, add all the EnumerationFactors to FG1 and all the ORFactors to FG2
+    Note: for the first seed, add all the EnumFactors to FG1 and all the ANDFactors to FG2
     """
     for idx in range(10):
         np.random.seed(idx)
@@ -41,24 +38,20 @@ def test_run_bp_with_ORFactors():
             temperature = np.random.uniform(low=0.5, high=1.0)
 
         # Graph 1
-        parents_variables1 = vgroup.NDVariableArray(
-            num_states=2, shape=(num_parents.sum(),)
-        )
-        children_variables1 = vgroup.NDVariableArray(num_states=2, shape=(num_factors,))
-        fg1 = graph.FactorGraph(
+        parents_variables1 = vgroup.NDVarArray(num_states=2, shape=(num_parents.sum(),))
+        children_variables1 = vgroup.NDVarArray(num_states=2, shape=(num_factors,))
+        fg1 = fgraph.FactorGraph(
             variable_groups=[parents_variables1, children_variables1]
         )
 
         # Graph 2
-        parents_variables2 = vgroup.NDVariableArray(
-            num_states=2, shape=(num_parents.sum(),)
-        )
-        children_variables2 = vgroup.NDVariableArray(num_states=2, shape=(num_factors,))
-        fg2 = graph.FactorGraph(
+        parents_variables2 = vgroup.NDVarArray(num_states=2, shape=(num_parents.sum(),))
+        children_variables2 = vgroup.NDVarArray(num_states=2, shape=(num_factors,))
+        fg2 = fgraph.FactorGraph(
             variable_groups=[parents_variables2, children_variables2]
         )
 
-        # Variable names for factors
+        # Option 1: Define EnumFactors equivalent to the ANDFactors
         variables_for_factors1 = []
         variables_for_factors2 = []
         for factor_idx in range(num_factors):
@@ -80,24 +73,26 @@ def test_run_bp_with_ORFactors():
             ] + [children_variables2[factor_idx]]
             variables_for_factors2.append(variables2)
 
-        # Option 1: Define EnumerationFactors equivalent to the ORFactors
+        # Option 1: Define EnumFactors equivalent to the ANDFactors
         for factor_idx in range(num_factors):
             this_num_parents = num_parents[factor_idx]
 
             configs = np.array(list(product([0, 1], repeat=this_num_parents + 1)))
             # Children state is last
-            valid_ON_configs = configs[
-                np.logical_and(configs[:, :-1].sum(axis=1) >= 1, configs[:, -1] == 1)
+            valid_AND_configs = configs[
+                np.logical_and(
+                    configs[:, :-1].sum(axis=1) < this_num_parents, configs[:, -1] == 0
+                )
             ]
             valid_configs = np.concatenate(
-                [np.zeros((1, this_num_parents + 1), dtype=int), valid_ON_configs],
+                [np.ones((1, this_num_parents + 1), dtype=int), valid_AND_configs],
                 axis=0,
             )
             assert valid_configs.shape[0] == 2**this_num_parents
 
             if factor_idx < num_factors // 2:
                 # Add the first half of factors to FactorGraph1
-                enum_factor = EnumerationFactor(
+                enum_factor = factor.EnumFactor(
                     variables=variables_for_factors1[factor_idx],
                     factor_configs=valid_configs,
                     log_potentials=np.zeros(valid_configs.shape[0]),
@@ -106,51 +101,51 @@ def test_run_bp_with_ORFactors():
             else:
                 if idx != 0:
                     # Add the second half of factors to FactorGraph2
-                    enum_factor = EnumerationFactor(
+                    enum_factor = factor.EnumFactor(
                         variables=variables_for_factors2[factor_idx],
                         factor_configs=valid_configs,
                         log_potentials=np.zeros(valid_configs.shape[0]),
                     )
                     fg2.add_factors(enum_factor)
                 else:
-                    # Add all the EnumerationFactors to FactorGraph1 for the first iter
-                    enum_factor = EnumerationFactor(
+                    # Add all the EnumFactors to FactorGraph1 for the first iter
+                    enum_factor = factor.EnumFactor(
                         variables=variables_for_factors1[factor_idx],
                         factor_configs=valid_configs,
                         log_potentials=np.zeros(valid_configs.shape[0]),
                     )
                     fg1.add_factors(enum_factor)
 
-        # Option 2: Define the ORFactors
+        # Option 2: Define the ANDFactors
         num_parents_cumsum = np.insert(np.cumsum(num_parents), 0, 0)
-        variables_for_ORFactors_fg1 = []
-        variables_for_ORFactors_fg2 = []
+        variables_for_ANDFactors_fg1 = []
+        variables_for_ANDFactors_fg2 = []
 
         for factor_idx in range(num_factors):
             if factor_idx < num_factors // 2:
                 # Add the first half of factors to FactorGraph2
-                variables_for_ORFactors_fg2.append(variables_for_factors2[factor_idx])
+                variables_for_ANDFactors_fg2.append(variables_for_factors2[factor_idx])
             else:
                 if idx != 0:
                     # Add the second half of factors to FactorGraph1
-                    variables_for_ORFactors_fg1.append(
+                    variables_for_ANDFactors_fg1.append(
                         variables_for_factors1[factor_idx]
                     )
                 else:
-                    # Add all the ORFactors to FactorGraph2 for the first iter
-                    variables_for_ORFactors_fg2.append(
+                    # Add all the ANDFactors to FactorGraph2 for the first iter
+                    variables_for_ANDFactors_fg2.append(
                         variables_for_factors2[factor_idx]
                     )
         if idx != 0:
-            factor_group = logical.ORFactorGroup(variables_for_ORFactors_fg1)
+            factor_group = fgroup.ANDFactorGroup(variables_for_ANDFactors_fg1)
             fg1.add_factors(factor_group)
 
-        factor_group = logical.ORFactorGroup(variables_for_ORFactors_fg2)
+        factor_group = fgroup.ANDFactorGroup(variables_for_ANDFactors_fg2)
         fg2.add_factors(factor_group)
 
         # Run inference
-        bp1 = graph.BP(fg1.bp_state, temperature=temperature)
-        bp2 = graph.BP(fg2.bp_state, temperature=temperature)
+        bp1 = infer.BP(fg1.bp_state, temperature=temperature)
+        bp2 = infer.BP(fg2.bp_state, temperature=temperature)
 
         evidence_parents = jax.device_put(np.random.gumbel(size=(sum(num_parents), 2)))
         evidence_children = jax.device_put(np.random.gumbel(size=(num_factors, 2)))

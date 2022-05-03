@@ -20,16 +20,14 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 
-from pgmax.fg import graph
-from pgmax.groups import enumeration
-from pgmax.groups import variables as vgroup
+from pgmax import fgraph, fgroup, infer, vgroup
 
 # %% [markdown]
 # ### Construct variable grid, initialize factor graph, and add factors
 
 # %%
-variables = vgroup.NDVariableArray(num_states=2, shape=(50, 50))
-fg = graph.FactorGraph(variable_groups=variables)
+variables = vgroup.NDVarArray(num_states=2, shape=(50, 50))
+fg = fgraph.FactorGraph(variable_groups=variables)
 
 variables_for_factors = []
 for ii in range(50):
@@ -39,7 +37,7 @@ for ii in range(50):
         variables_for_factors.append([variables[ii, jj], variables[kk, jj]])
         variables_for_factors.append([variables[ii, jj], variables[ii, ll]])
 
-factor_group = enumeration.PairwiseFactorGroup(
+factor_group = fgroup.PairwiseFactorGroup(
     variables_for_factors=variables_for_factors,
     log_potential_matrix=0.8 * np.array([[1.0, -1.0], [-1.0, 1.0]]),
 )
@@ -49,7 +47,7 @@ fg.add_factors(factor_group)
 # ### Run inference and visualize results
 
 # %%
-bp = graph.BP(fg.bp_state, temperature=0)
+bp = infer.BP(fg.bp_state, temperature=0)
 
 # %%
 bp_arrays = bp.init(
@@ -59,7 +57,7 @@ bp_arrays = bp.run_bp(bp_arrays, num_iters=3000)
 beliefs = bp.get_beliefs(bp_arrays)
 
 # %%
-img = graph.decode_map_states(beliefs)[variables]
+img = infer.decode_map_states(beliefs)[variables]
 fig, ax = plt.subplots(1, 1, figsize=(10, 10))
 ax.imshow(img)
 

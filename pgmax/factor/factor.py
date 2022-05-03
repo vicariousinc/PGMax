@@ -1,10 +1,11 @@
-"""A module containing classes that specify the basic components of a Factor Graph."""
+"""A module containing classes that specify the basic components of a factor."""
 
 from dataclasses import asdict, dataclass
 from typing import List, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
+import numba as nb
 import numpy as np
 
 
@@ -70,3 +71,23 @@ class Factor:
         raise NotImplementedError(
             "Please subclass the Wiring class and override this method."
         )
+
+
+@nb.jit(parallel=False, cache=True, fastmath=True, nopython=True)
+def _compile_var_states_numba(
+    var_states_for_edges: np.ndarray,
+    num_states_cumsum: np.ndarray,
+    var_states: np.ndarray,
+) -> np.ndarray:
+    """Fast numba computation of the var_states_for_edges of a Wiring.
+    var_states_for_edges is updated in-place.
+    """
+
+    for variable_idx in nb.prange(num_states_cumsum.shape[0] - 1):
+        start_variable, end_variable = (
+            num_states_cumsum[variable_idx],
+            num_states_cumsum[variable_idx + 1],
+        )
+        var_states_for_edges[start_variable:end_variable] = var_states[
+            variable_idx
+        ] + np.arange(end_variable - start_variable)
