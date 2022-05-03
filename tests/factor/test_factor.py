@@ -3,9 +3,7 @@ import re
 import numpy as np
 import pytest
 
-from pgmax.factors import enumeration, logical
-from pgmax.fg import nodes
-from pgmax.groups import variables as vgroup
+from pgmax import factor, vgroup
 
 
 def test_enumeration_factor():
@@ -14,27 +12,27 @@ def test_enumeration_factor():
     with pytest.raises(
         NotImplementedError, match="Please implement compile_wiring in for your factor"
     ):
-        nodes.Factor(
+        factor.Factor(
             variables=[variables[0]],
             log_potentials=np.array([0.0]),
         )
 
     with pytest.raises(ValueError, match="Configurations should be integers. Got"):
-        enumeration.EnumerationFactor(
+        factor.EnumerationFactor(
             variables=[variables[0]],
             factor_configs=np.array([[1.0]]),
             log_potentials=np.array([0.0]),
         )
 
     with pytest.raises(ValueError, match="Potential should be floats. Got"):
-        enumeration.EnumerationFactor(
+        factor.EnumerationFactor(
             variables=[variables[0]],
             factor_configs=np.array([[1]]),
             log_potentials=np.array([0]),
         )
 
     with pytest.raises(ValueError, match="factor_configs should be a 2D array"):
-        enumeration.EnumerationFactor(
+        factor.EnumerationFactor(
             variables=[variables[0]],
             factor_configs=np.array([1]),
             log_potentials=np.array([0.0]),
@@ -46,7 +44,7 @@ def test_enumeration_factor():
             "Number of variables 1 doesn't match given configurations (1, 2)"
         ),
     ):
-        enumeration.EnumerationFactor(
+        factor.EnumerationFactor(
             variables=[variables[0]],
             factor_configs=np.array([[1, 2]]),
             log_potentials=np.array([0.0]),
@@ -55,14 +53,14 @@ def test_enumeration_factor():
     with pytest.raises(
         ValueError, match=re.escape("Expected log potentials of shape (1,)")
     ):
-        enumeration.EnumerationFactor(
+        factor.EnumerationFactor(
             variables=[variables[0]],
             factor_configs=np.array([[1]]),
             log_potentials=np.array([0.0, 1.0]),
         )
 
     with pytest.raises(ValueError, match="Invalid configurations for given variables"):
-        enumeration.EnumerationFactor(
+        factor.EnumerationFactor(
             variables=[variables[0]],
             factor_configs=np.array([[10]]),
             log_potentials=np.array([0.0]),
@@ -78,16 +76,16 @@ def test_logical_factor():
         ValueError,
         match="A LogicalFactor requires at least one parent variable and one child variable",
     ):
-        logical.LogicalFactor(
+        factor.logical.LogicalFactor(
             variables=(child,),
         )
 
     with pytest.raises(ValueError, match="All variables should all be binary"):
-        logical.LogicalFactor(
+        factor.logical.LogicalFactor(
             variables=(wrong_parent, child),
         )
 
-    logical_factor = logical.LogicalFactor(
+    logical_factor = factor.logical.LogicalFactor(
         variables=(parent, child),
     )
     num_parents = len(logical_factor.variables) - 1
@@ -100,7 +98,7 @@ def test_logical_factor():
     child_edge_state = np.array([2 * num_parents], dtype=int)
 
     with pytest.raises(ValueError, match="The highest LogicalFactor index must be 0"):
-        logical.LogicalWiring(
+        factor.logical.LogicalWiring(
             edges_num_states=[2, 2],
             var_states_for_edges=None,
             parents_edge_states=parents_edge_states + np.array([[1, 0]]),
@@ -112,7 +110,7 @@ def test_logical_factor():
         ValueError,
         match="The LogicalWiring must have 1 different LogicalFactor indices",
     ):
-        logical.LogicalWiring(
+        factor.logical.LogicalWiring(
             edges_num_states=[2, 2],
             var_states_for_edges=None,
             parents_edge_states=parents_edge_states + np.array([[0], [1]]),
@@ -126,7 +124,7 @@ def test_logical_factor():
             "The LogicalWiring's edge_states_offset must be 1 (for OR) and -1 (for AND), but is 0"
         ),
     ):
-        logical.LogicalWiring(
+        factor.logical.LogicalWiring(
             edges_num_states=[2, 2],
             var_states_for_edges=None,
             parents_edge_states=parents_edge_states,

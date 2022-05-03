@@ -9,12 +9,13 @@ import jax.numpy as jnp
 import numba as nb
 import numpy as np
 
-from pgmax.factors import enumeration
-from pgmax.fg import groups
+from pgmax.factor import enum
+
+from .fgroup import FactorGroup
 
 
 @dataclass(frozen=True, eq=False)
-class EnumerationFactorGroup(groups.FactorGroup):
+class EnumerationFactorGroup(FactorGroup):
     """Class to represent a group of EnumerationFactors.
 
     All factors in the group are assumed to have the same set of valid configurations and
@@ -38,7 +39,7 @@ class EnumerationFactorGroup(groups.FactorGroup):
 
     factor_configs: np.ndarray
     log_potentials: Optional[np.ndarray] = None
-    factor_type: Type = field(init=False, default=enumeration.EnumerationFactor)
+    factor_type: Type = field(init=False, default=enum.EnumerationFactor)
 
     def __post_init__(self):
         super().__post_init__()
@@ -69,7 +70,7 @@ class EnumerationFactorGroup(groups.FactorGroup):
 
     def _get_variables_to_factors(
         self,
-    ) -> OrderedDict[FrozenSet, enumeration.EnumerationFactor]:
+    ) -> OrderedDict[FrozenSet, enum.EnumerationFactor]:
         """Function that generates a dictionary mapping set of connected variables to factors.
         This function is only called on demand when the user requires it.
 
@@ -80,7 +81,7 @@ class EnumerationFactorGroup(groups.FactorGroup):
             [
                 (
                     frozenset(variables_for_factor),
-                    enumeration.EnumerationFactor(
+                    enum.EnumerationFactor(
                         variables=variables_for_factor,
                         factor_configs=self.factor_configs,
                         log_potentials=np.array(self.log_potentials)[ii],
@@ -170,7 +171,7 @@ class EnumerationFactorGroup(groups.FactorGroup):
 
 
 @dataclass(frozen=True, eq=False)
-class PairwiseFactorGroup(groups.FactorGroup):
+class PairwiseFactorGroup(FactorGroup):
     """Class to represent a group of EnumerationFactors where each factor connects to
     two different variables.
 
@@ -196,7 +197,7 @@ class PairwiseFactorGroup(groups.FactorGroup):
     """
 
     log_potential_matrix: Optional[np.ndarray] = None
-    factor_type: Type = field(init=False, default=enumeration.EnumerationFactor)
+    factor_type: Type = field(init=False, default=enum.EnumerationFactor)
 
     def __post_init__(self):
         super().__post_init__()
@@ -275,7 +276,7 @@ class PairwiseFactorGroup(groups.FactorGroup):
 
     def _get_variables_to_factors(
         self,
-    ) -> OrderedDict[FrozenSet, enumeration.EnumerationFactor]:
+    ) -> OrderedDict[FrozenSet, enum.EnumerationFactor]:
         """Function that generates a dictionary mapping set of connected variables to factors.
         This function is only called on demand when the user requires it.
 
@@ -286,7 +287,7 @@ class PairwiseFactorGroup(groups.FactorGroup):
             [
                 (
                     frozenset(variable_for_factor),
-                    enumeration.EnumerationFactor(
+                    enum.EnumerationFactor(
                         variables=variable_for_factor,
                         factor_configs=self.factor_configs,
                         log_potentials=self.log_potentials[ii],

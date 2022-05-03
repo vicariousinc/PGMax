@@ -10,10 +10,9 @@ import numba as nb
 import numpy as np
 from jax.nn import log_sigmoid, sigmoid
 
-from pgmax.bp import bp_utils
-from pgmax.factors import enumeration
+from pgmax.utils import NEG_INF
 
-from . import factor
+from . import enum, factor
 
 
 @jax.tree_util.register_pytree_node_class
@@ -177,7 +176,7 @@ class LogicalFactor(factor.Factor):
         # Note: all the variables in a LogicalFactorGroup are binary
         num_states_cumsum = np.arange(0, 2 * var_states.shape[0] + 2, 2)
         var_states_for_edges = np.empty(shape=(2 * var_states.shape[0],), dtype=int)
-        enumeration._compile_var_states_numba(
+        enum._compile_var_states_numba(
             var_states_for_edges, num_states_cumsum, var_states
         )
 
@@ -272,6 +271,38 @@ def _compile_logical_wiring_numba(
         )
 
 
+@functools.partial(jax.jit, static_argnames="num_labels")
+def get_maxes_and_argmaxes(
+    data: jnp.array, labels: jnp.array, num_labels: int
+) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    """
+    Given a flattened sequence of elements and their corresponding labels,
+    returns the maxes and argmaxes of each label.
+
+    Args:
+        data: Array of shape (a_len,) where a_len is an arbitrary integer.
+        labels: Label array of shape (a_len,), assigning a label to each entry.
+            Labels must be 0,..., num_labels - 1.
+        num_labels: Number of different labels.
+
+    Returns:
+        Maxes and argmaxes arrays
+    """
+    num_obs = data.shape[0]
+
+    maxes = jnp.full(shape=(num_labels,), fill_value=NEG_INF).at[labels].max(data)
+    only_maxes_pos = jnp.arange(num_obs) - num_obs * jnp.where(
+        data != maxes[labels], 1, 0
+    )
+
+    argmaxes = (
+        jnp.full(shape=(num_labels,), fill_value=NEG_INF, dtype=jnp.int32)
+        .at[labels]
+        .max(only_maxes_pos)
+    )
+    return maxes, argmaxes
+
+
 @functools.partial(jax.jit, static_argnames=("temperature"))
 def pass_logical_fac_to_var_messages(
     vtof_msgs: jnp.ndarray,
@@ -320,11 +351,11 @@ def pass_logical_fac_to_var_messages(
     # See https://arxiv.org/pdf/2111.02458.pdf, Appendix C.3
     if temperature == 0.0:
         # Get the first and second argmaxes for the incoming parents messages of each factor
-        _, first_parents_argmaxes = bp_utils.get_maxes_and_argmaxes(
+        _, first_parents_argmaxes = get_maxes_and_argmaxes(
             parents_tof_msgs, factor_indices, num_factors
         )
-        _, second_parents_argmaxes = bp_utils.get_maxes_and_argmaxes(
-            parents_tof_msgs.at[first_parents_argmaxes].set(bp_utils.NEG_INF),
+        _, second_parents_argmaxes = get_maxes_and_argmaxes(
+            parents_tof_msgs.at[first_parents_argmaxes].set(NEG_INF),
             factor_indices,
             num_factors,
         )

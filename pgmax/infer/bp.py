@@ -12,10 +12,11 @@ import jax.numpy as jnp
 import numpy as np
 from jax.scipy.special import logsumexp
 
-from pgmax.bp import BPArrays, BPState, Evidence, FToVMessages, LogPotentials
-from pgmax.bp import bp_state as bpstate
-from pgmax.bp import bp_utils
 from pgmax.factor import FAC_TO_VAR_UPDATES
+
+from . import bp_state as bpstate
+from . import bp_utils
+from .bp_state import BPArrays, BPState, Evidence, FToVMessages, LogPotentials
 
 
 @dataclass(frozen=True, eq=False)

@@ -26,12 +26,10 @@ import jax
 import matplotlib.pyplot as plt
 import numpy as np
 
-from pgmax.fg import graph
-from pgmax.groups import enumeration
-from pgmax.groups import variables as vgroup
+from pgmax import fgraph, fgroup, infer, vgroup
 
 # %% [markdown]
-# The [`pgmax.fg.graph`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.graph.html#module-pgmax.fg.graph) module contains core classes for specifying factor graphs and implementing LBP, while the [`pgmax.fg.groups`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.graph.html#module-pgmax.fg.graph) module contains classes for specifying groups of variables/factors.
+# The [`pgmax.fg.fgraph`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fgraph.html#module-pgmax.fgraph) module contains core classes for specifying factor graphs and implementing LBP, while the [`pgmax.fg.groups`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fgroup.html#module-pgmax.fgroup) module contains classes for specifying groups of variables/factors.
 #
 # We next load the RBM trained in Sec. 5.5 of the [PMP paper](https://proceedings.neurips.cc/paper/2021/hash/07b1c04a30f798b5506c1ec5acfb9031-Abstract.html) on MNIST digits.
 
@@ -49,7 +47,7 @@ W = params["W"]
 # Initialize factor graph
 hidden_variables = vgroup.NDVariableArray(num_states=2, shape=bh.shape)
 visible_variables = vgroup.NDVariableArray(num_states=2, shape=bv.shape)
-fg = graph.FactorGraph(variable_groups=[hidden_variables, visible_variables])
+fg = fgraph.FactorGraph(variable_groups=[hidden_variables, visible_variables])
 
 # %% [markdown]
 # [`NDVariableArray`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.groups.NDVariableArray.html#pgmax.fg.groups.NDVariableArray) is a convenient class for specifying a group of variables living on a multidimensional grid with the same number of states, and shares some similarities with [`numpy.ndarray`](https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html). The [`FactorGraph`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.graph.FactorGraph.html#pgmax.fg.graph.FactorGraph) `fg` is initialized with a set of variables, which can be either a single [`VariableGroup`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.groups.VariableGroup.html#pgmax.fg.groups.VariableGroup) (e.g. an [`NDVariableArray`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.groups.NDVariableArray.html#pgmax.fg.groups.NDVariableArray)), or a list/dictionary of [`VariableGroup`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.groups.VariableGroup.html#pgmax.fg.groups.VariableGroup)s. Once initialized, the set of variables in `fg` is fixed and cannot be changed.
@@ -58,12 +56,12 @@ fg = graph.FactorGraph(variable_groups=[hidden_variables, visible_variables])
 
 # %%
 # Create unary factors
-hidden_unaries = enumeration.EnumerationFactorGroup(
+hidden_unaries = fgroup.EnumerationFactorGroup(
     variables_for_factors=[[hidden_variables[ii]] for ii in range(bh.shape[0])],
     factor_configs=np.arange(2)[:, None],
     log_potentials=np.stack([np.zeros_like(bh), bh], axis=1),
 )
-visible_unaries = enumeration.EnumerationFactorGroup(
+visible_unaries = fgroup.EnumerationFactorGroup(
     variables_for_factors=[[visible_variables[jj]] for jj in range(bv.shape[0])],
     factor_configs=np.arange(2)[:, None],
     log_potentials=np.stack([np.zeros_like(bv), bv], axis=1),
@@ -78,7 +76,7 @@ variables_for_factors = [
     for ii in range(bh.shape[0])
     for jj in range(bv.shape[0])
 ]
-pairwise_factors = enumeration.PairwiseFactorGroup(
+pairwise_factors = fgroup.PairwiseFactorGroup(
     variables_for_factors=variables_for_factors,
     log_potential_matrix=log_potential_matrix,
 )
@@ -96,59 +94,59 @@ fg.add_factors([hidden_unaries, visible_unaries, pairwise_factors])
 #
 # An alternative way of creating the above factors is to add them iteratively without building the [`FactorGroup`](https://pgmax.readthedocs.io/en/latest/_autosummary/pgmax.fg.groups.FactorGroup.html#pgmax.fg.groups.FactorGroup)s as below. This approach is not recommended as it is not computationally efficient.
 # ~~~python
-# from pgmax.factors import enumeration as enumeration_factor
+# from pgmax import factor
 # import itertools
 # from tqdm import tqdm
 #
 # # Add unary factors
 # for ii in range(bh.shape[0]):
-#     factor = enumeration_factor.EnumerationFactor(
+#     unary_factor = factor.EnumerationFactor(
 #         variables=[hidden_variables[ii]],
 #         factor_configs=np.arange(2)[:, None],
 #         log_potentials=np.array([0, bh[ii]]),
 #     )
-#     fg.add_factors(factor)
+#     fg.add_factors(unary_factor)
 #
 # for jj in range(bv.shape[0]):
-#     factor = enumeration_factor.EnumerationFactor(
+#     unary_factor = factor.EnumerationFactor(
 #         variables=[visible_variables[jj]],
 #         factor_configs=np.arange(2)[:, None],
 #         log_potentials=np.array([0, bv[jj]]),
 #     )
-#     fg.add_factors(factor)
+#     fg.add_factors(unary_factor)
 #
 # # Add pairwise factors
 # factor_configs = np.array(list(itertools.product(np.arange(2), repeat=2)))
 # for ii in tqdm(range(bh.shape[0])):
 #     for jj in range(bv.shape[0]):
-#         factor = enumeration_factor.EnumerationFactor(
+#         pairwise_factor = factor.EnumerationFactor(
 #             variables=[hidden_variables[ii], visible_variables[jj]],
 #             factor_configs=factor_configs,
 #             log_potentials=np.array([0, 0, 0, W[ii, jj]]),
 #         )
-#         fg.add_factors(factor)
+#         fg.add_factors(pairwise_factor)
 # ~~~
 #
 # Once we have added the factors, we can run max-product LBP and get MAP decoding by
 # ~~~python
-# bp = graph.BP(fg.bp_state, temperature=0.0)
+# bp = infer.BP(fg.bp_state, temperature=0.0)
 # bp_arrays = bp.run_bp(bp.init(), num_iters=100, damping=0.5)
 # beliefs = bp.get_beliefs(bp_arrays)
-# map_states = graph.decode_map_states(beliefs)
+# map_states = infer.decode_map_states(beliefs)
 # ~~~
 # and run sum-product LBP and get estimated marginals by
 # ~~~python
-# bp = graph.BP(fg.bp_state, temperature=1.0)
+# bp = infer.BP(fg.bp_state, temperature=1.0)
 # bp_arrays = bp.run_bp(bp.init(), num_iters=100, damping=0.5)
 # beliefs = bp.get_beliefs(bp_arrays)
-# marginals = graph.get_marginals(beliefs)
+# marginals = infer.get_marginals(beliefs)
 # ~~~
 # More generally, PGMax implements LBP with temperature, with `temperature=0.0` and `temperature=1.0` corresponding to the commonly used max/sum-product LBP respectively.
 #
 # Now we are ready to demonstrate PMP sampling from RBM. PMP perturbs the model with [Gumbel](https://numpy.org/doc/stable/reference/random/generated/numpy.random.gumbel.html) unary potentials, and draws a sample from the RBM as the MAP decoding from running max-product LBP on the perturbed model
 
 # %%
-bp = graph.BP(fg.bp_state, temperature=0.0)
+bp = infer.BP(fg.bp_state, temperature=0.0)
 
 # %%
 bp_arrays = bp.init(
@@ -168,7 +166,7 @@ beliefs = bp.get_beliefs(bp_arrays)
 # %%
 fig, ax = plt.subplots(1, 1, figsize=(10, 10))
 ax.imshow(
-    graph.decode_map_states(beliefs)[visible_variables].copy().reshape((28, 28)),
+    infer.decode_map_states(beliefs)[visible_variables].copy().reshape((28, 28)),
     cmap="gray",
 )
 ax.axis("off")
@@ -176,9 +174,9 @@ ax.axis("off")
 # %% [markdown]
 # PGMax adopts a functional interface for implementing LBP: running LBP in PGMax starts with
 # ~~~python
-# bp = graph.BP(fg.bp_state, temperature=T)
+# bp = infer.BP(fg.bp_state, temperature=T)
 # ~~~
-# where the arguments of the `bp` are several useful functions to run LBP. In particular, `bp.init`, `bp.run_bp`, `bp.get_beliefs` are pure functions with no side-effects. This design choice means that we can easily apply JAX transformations like `jit`/`vmap`/`grad`, etc., to these functions, and additionally allows PGMax to seamlessly interact with other packages in the rapidly growing JAX ecosystem (see [here](https://deepmind.com/blog/article/using-jax-to-accelerate-our-research) and [here](https://github.com/n2cholas/awesome-jax)).
+# where the arguments of the `this_bp` are several useful functions to run LBP. In particular, `bp.init`, `bp.run_bp`, `bp.get_beliefs` are pure functions with no side-effects. This design choice means that we can easily apply JAX transformations like `jit`/`vmap`/`grad`, etc., to these functions, and additionally allows PGMax to seamlessly interact with other packages in the rapidly growing JAX ecosystem (see [here](https://deepmind.com/blog/article/using-jax-to-accelerate-our-research) and [here](https://github.com/n2cholas/awesome-jax)).
 #
 # As an example of applying `jax.vmap` to `bp.init`/`bp.run_bp`/`bp.get_beliefs` to process a batch of samples/models in parallel, instead of drawing one sample at a time as above, we can draw a batch of samples in parallel as follows:
 
@@ -197,7 +195,7 @@ bp_arrays = jax.vmap(
 )(bp_arrays)
 
 beliefs = jax.vmap(bp.get_beliefs, in_axes=0, out_axes=0)(bp_arrays)
-map_states = graph.decode_map_states(beliefs)
+map_states = infer.decode_map_states(beliefs)
 
 # %% [markdown]
 # Visualizing the MAP decodings, we see that we have sampled 10 MNIST digits in parallel!

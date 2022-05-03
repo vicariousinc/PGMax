@@ -3,6 +3,10 @@
 import functools
 from typing import Callable
 
+NEG_INF = (
+    -100000.0
+)  # A large negative value to use as -inf for numerical stability reasons
+
 
 def cached_property(func: Callable) -> property:
     """Customized cached property decorator

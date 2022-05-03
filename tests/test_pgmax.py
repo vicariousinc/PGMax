@@ -6,10 +6,7 @@ import numpy as np
 from numpy.random import default_rng
 from scipy.ndimage import gaussian_filter
 
-from pgmax.factors.enumeration import EnumerationFactor
-from pgmax.fg import graph, nodes
-from pgmax.groups import enumeration
-from pgmax.groups import variables as vgroup
+from pgmax import factor, fgraph, fgroup, infer, vgroup
 
 # Set random seed for rng
 rng = default_rng(23)
@@ -260,7 +257,7 @@ def test_e2e_sanity_check():
                         pass
 
     # Create the factor graph
-    fg = graph.FactorGraph(variable_groups=[grid_vars, additional_vars])
+    fg = fgraph.FactorGraph(variable_groups=[grid_vars, additional_vars])
 
     # Imperatively add EnumerationFactorGroups (each consisting of just one EnumerationFactor) to
     # the graph!
@@ -297,23 +294,23 @@ def test_e2e_sanity_check():
                     additional_vars[1, row + 1, col],
                 ]
             if row % 2 == 0:
-                factor = EnumerationFactor(
+                enum_factor = factor.EnumerationFactor(
                     variables=curr_vars,
                     factor_configs=valid_configs_non_supp,
                     log_potentials=np.zeros(
                         valid_configs_non_supp.shape[0], dtype=float
                     ),
                 )
-                fg.add_factors(factor)
+                fg.add_factors(enum_factor)
             else:
-                factor = EnumerationFactor(
+                enum_factor = factor.EnumerationFactor(
                     variables=curr_vars,
                     factor_configs=valid_configs_non_supp,
                     log_potentials=np.zeros(
                         valid_configs_non_supp.shape[0], dtype=float
                     ),
                 )
-                fg.add_factors(factor)
+                fg.add_factors(enum_factor)
 
     # Create an EnumerationFactorGroup for vertical suppression factors
     vert_suppression_vars: List[List[Tuple[Any, ...]]] = []
@@ -353,13 +350,13 @@ def test_e2e_sanity_check():
                 )
 
     # Add the suppression factors to the graph via kwargs
-    factor_group = enumeration.EnumerationFactorGroup(
+    factor_group = fgroup.EnumerationFactorGroup(
         variables_for_factors=vert_suppression_vars,
         factor_configs=valid_configs_supp,
     )
     fg.add_factors(factor_group)
 
-    factor_group = enumeration.EnumerationFactorGroup(
+    factor_group = fgroup.EnumerationFactorGroup(
         variables_for_factors=horz_suppression_vars,
         factor_configs=valid_configs_supp,
         log_potentials=np.zeros(valid_configs_supp.shape[0], dtype=float),
@@ -371,17 +368,17 @@ def test_e2e_sanity_check():
     bp_state = fg.bp_state
     assert np.all(
         [
-            isinstance(jax.device_put(this_wiring), nodes.Wiring)
+            isinstance(jax.device_put(this_wiring), factor.Wiring)
             for this_wiring in fg.fg_state.wiring.values()
         ]
     )
     bp_state.evidence[grid_vars] = grid_evidence_arr
     bp_state.evidence[additional_vars] = additional_vars_evidence_dict
-    bp = graph.BP(bp_state)
+    bp = infer.BP(bp_state)
     bp_arrays = bp.run_bp(bp.init(), num_iters=100)
     # Test that the output messages are close to the true messages
     assert jnp.allclose(bp_arrays.ftov_msgs, true_final_msgs_output, atol=1e-06)
-    decoded_map_states = graph.decode_map_states(bp.get_beliefs(bp_arrays))
+    decoded_map_states = infer.decode_map_states(bp.get_beliefs(bp_arrays))
     for name in true_map_state_output:
         assert true_map_state_output[name] == decoded_map_states[name[0]][name[1]]
 
@@ -398,7 +395,7 @@ def test_e2e_heretic():
     bXn = np.zeros((30, 30, 3))
 
     # Create the factor graph
-    fg = graph.FactorGraph([pixel_vars, hidden_vars])
+    fg = fgraph.FactorGraph([pixel_vars, hidden_vars])
 
     def binary_connected_variables(
         num_hidden_rows, num_hidden_cols, kernel_row, kernel_col
@@ -417,7 +414,7 @@ def test_e2e_heretic():
     W_pot = np.zeros((17, 3, 3, 3), dtype=float)
     for k_row in range(3):
         for k_col in range(3):
-            factor_group = enumeration.PairwiseFactorGroup(
+            factor_group = fgroup.PairwiseFactorGroup(
                 variables_for_factors=binary_connected_variables(28, 28, k_row, k_col),
                 log_potential_matrix=W_pot[:, :, k_row, k_col],
             )
@@ -431,7 +428,7 @@ def test_e2e_heretic():
     bp_state.evidence[hidden_vars[0, 0]]
     assert isinstance(bp_state.evidence.value, np.ndarray)
     assert len(sum(fg.factors.values(), ())) == 7056
-    bp = graph.BP(bp_state, temperature=1.0)
+    bp = infer.BP(bp_state, temperature=1.0)
     bp_arrays = bp.run_bp(bp.init(), num_iters=1)
-    marginals = graph.get_marginals(bp.get_beliefs(bp_arrays))
+    marginals = infer.get_marginals(bp.get_beliefs(bp_arrays))
     assert jnp.allclose(jnp.sum(marginals[pixel_vars], axis=-1), 1.0)

@@ -9,7 +9,7 @@ import jax.numpy as jnp
 import numba as nb
 import numpy as np
 
-from pgmax.bp import bp_utils
+from pgmax.utils import NEG_INF
 
 from . import factor
 
@@ -306,7 +306,7 @@ def pass_enum_fac_to_var_messages(
         .add(vtof_msgs[factor_configs_edge_states[..., 1]])
     ) + log_potentials
     max_factor_config_summary_for_edge_states = (
-        jnp.full(shape=(vtof_msgs.shape[0],), fill_value=bp_utils.NEG_INF)
+        jnp.full(shape=(vtof_msgs.shape[0],), fill_value=NEG_INF)
         .at[factor_configs_edge_states[..., 1]]
         .max(fac_config_summary_sum[factor_configs_edge_states[..., 0]])
     )
@@ -315,9 +315,7 @@ def pass_enum_fac_to_var_messages(
         ftov_msgs = ftov_msgs + (
             temperature
             * jnp.log(
-                jnp.full(
-                    shape=(vtof_msgs.shape[0],), fill_value=jnp.exp(bp_utils.NEG_INF)
-                )
+                jnp.full(shape=(vtof_msgs.shape[0],), fill_value=jnp.exp(NEG_INF))
                 .at[factor_configs_edge_states[..., 1]]
                 .add(
                     jnp.exp(

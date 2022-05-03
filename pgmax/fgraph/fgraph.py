@@ -8,6 +8,7 @@ import functools
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import (
+    Any,
     Dict,
     FrozenSet,
     List,
@@ -23,7 +24,6 @@ from typing import (
 import numpy as np
 
 from pgmax import factor, fgroup, vgroup
-from pgmax.bp import bp_state
 from pgmax.factor import FAC_TO_VAR_UPDATES
 from pgmax.utils import cached_property
 
@@ -282,10 +282,12 @@ class FactorGraph:
         )
 
     @property
-    def bp_state(self) -> bp_state.BPState:
+    def bp_state(self) -> Any:
         """Relevant information for doing belief propagation."""
         # Preliminary computations
         self.compute_offsets()
+
+        from pgmax.infer import bp_state
 
         return bp_state.BPState(
             log_potentials=bp_state.LogPotentials(fg_state=self.fg_state),

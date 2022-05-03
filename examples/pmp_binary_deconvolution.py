@@ -28,9 +28,7 @@ import numpy as np
 from scipy.special import logit
 from tqdm.notebook import tqdm
 
-from pgmax.fg import graph
-from pgmax.groups import logical
-from pgmax.groups import variables as vgroup
+from pgmax import fgraph, fgroup, infer, vgroup
 
 
 # %%
@@ -138,7 +136,7 @@ X = vgroup.NDVariableArray(num_states=2, shape=X_gt.shape)
 
 # %%
 # Factor graph
-fg = graph.FactorGraph(variable_groups=[S, W, SW, X])
+fg = fgraph.FactorGraph(variable_groups=[S, W, SW, X])
 
 # Define the ANDFactors
 variables_for_ANDFactors = []
@@ -173,7 +171,7 @@ for idx_img in tqdm(range(n_images)):
                             variables_for_ORFactors_dict[X_var].append(SW_var)
 
 # Add ANDFactorGroup, which is computationally efficient
-AND_factor_group = logical.ANDFactorGroup(variables_for_ANDFactors)
+AND_factor_group = fgroup.ANDFactorGroup(variables_for_ANDFactors)
 fg.add_factors(AND_factor_group)
 
 # Define the ORFactors
@@ -183,7 +181,7 @@ variables_for_ORFactors = [
 ]
 
 # Add ORFactorGroup, which is computationally efficient
-OR_factor_group = logical.ORFactorGroup(variables_for_ORFactors)
+OR_factor_group = fgroup.ORFactorGroup(variables_for_ORFactors)
 fg.add_factors(OR_factor_group)
 
 for factor_type, factor_groups in fg.factor_groups.items():
@@ -202,7 +200,7 @@ for factor_type, factor_groups in fg.factor_groups.items():
 # in the same manner does not change X, so this naturally results in multiple equivalent modes.
 
 # %%
-bp = graph.BP(fg.bp_state, temperature=0.0)
+bp = infer.BP(fg.bp_state, temperature=0.0)
 
 # %% [markdown]
 # We first compute the evidence without perturbation, similar to the PMP paper.
@@ -246,7 +244,7 @@ bp_arrays = jax.vmap(
 )(bp_arrays)
 
 beliefs = jax.vmap(bp.get_beliefs, in_axes=0, out_axes=0)(bp_arrays)
-map_states = graph.decode_map_states(beliefs)
+map_states = infer.decode_map_states(beliefs)
 
 # %% [markdown]
 # Visualizing the MAP decoding, we see that we have 4 good random samples (one per row) from the posterior!

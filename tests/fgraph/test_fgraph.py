@@ -6,24 +6,21 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from pgmax.factors import enumeration as enumeration_factor
-from pgmax.fg import graph
-from pgmax.groups import enumeration
-from pgmax.groups import variables as vgroup
+from pgmax import factor, fgraph, fgroup, infer, vgroup
 
 
 def test_factor_graph():
     vg = vgroup.VariableDict(variable_names=(0,), num_states=15)
-    fg = graph.FactorGraph(vg)
+    fg = fgraph.FactorGraph(vg)
 
-    factor = enumeration_factor.EnumerationFactor(
+    enum_factor = factor.EnumerationFactor(
         variables=[vg[0]],
         factor_configs=np.arange(15)[:, None],
         log_potentials=np.zeros(15),
     )
-    fg.add_factors(factor)
+    fg.add_factors(enum_factor)
 
-    factor_group = enumeration.EnumerationFactorGroup(
+    factor_group = fgroup.EnumerationFactorGroup(
         variables_for_factors=[[vg[0]]],
         factor_configs=np.arange(15)[:, None],
         log_potentials=np.zeros(15),
@@ -31,7 +28,7 @@ def test_factor_graph():
     with pytest.raises(
         ValueError,
         match=re.escape(
-            f"A Factor of type {enumeration_factor.EnumerationFactor} involving variables {frozenset([(vg.__hash__(), 15)])} already exists."
+            f"A Factor of type {factor.EnumerationFactor} involving variables {frozenset([(vg.__hash__(), 15)])} already exists."
         ),
     ):
         fg.add_factors(factor_group)
@@ -39,22 +36,22 @@ def test_factor_graph():
 
 def test_bp_state():
     vg = vgroup.VariableDict(variable_names=(0,), num_states=15)
-    fg0 = graph.FactorGraph(vg)
-    factor = enumeration_factor.EnumerationFactor(
+    fg0 = fgraph.FactorGraph(vg)
+    enum_factor = factor.EnumerationFactor(
         variables=[vg[0]],
         factor_configs=np.arange(15)[:, None],
         log_potentials=np.zeros(15),
     )
-    fg0.add_factors(factor)
+    fg0.add_factors(enum_factor)
 
-    fg1 = graph.FactorGraph(vg)
-    fg1.add_factors(factor)
+    fg1 = fgraph.FactorGraph(vg)
+    fg1.add_factors(enum_factor)
 
     with pytest.raises(
         ValueError,
         match="log_potentials, ftov_msgs and evidence should be derived from the same fg_state",
     ):
-        graph.BPState(
+        infer.BPState(
             log_potentials=fg0.bp_state.log_potentials,
             ftov_msgs=fg1.bp_state.ftov_msgs,
             evidence=fg1.bp_state.evidence,
@@ -63,8 +60,8 @@ def test_bp_state():
 
 def test_log_potentials():
     vg = vgroup.VariableDict(variable_names=(0,), num_states=15)
-    fg = graph.FactorGraph(vg)
-    factor_group = enumeration.EnumerationFactorGroup(
+    fg = fgraph.FactorGraph(vg)
+    factor_group = fgroup.EnumerationFactorGroup(
         variables_for_factors=[[vg[0]]],
         factor_configs=np.arange(10)[:, None],
     )
@@ -80,7 +77,7 @@ def test_log_potentials():
         ValueError,
         match=re.escape("Invalid FactorGroup for log potentials updates."),
     ):
-        factor_group2 = enumeration.EnumerationFactorGroup(
+        factor_group2 = fgroup.EnumerationFactorGroup(
             variables_for_factors=[[vg[0]]],
             factor_configs=np.arange(10)[:, None],
         )
@@ -95,16 +92,16 @@ def test_log_potentials():
     with pytest.raises(
         ValueError, match=re.escape("Expected log potentials shape (10,). Got (15,)")
     ):
-        graph.LogPotentials(fg_state=fg.fg_state, value=np.zeros(15))
+        infer.LogPotentials(fg_state=fg.fg_state, value=np.zeros(15))
 
-    log_potentials = graph.LogPotentials(fg_state=fg.fg_state, value=np.zeros(10))
+    log_potentials = infer.LogPotentials(fg_state=fg.fg_state, value=np.zeros(10))
     assert jnp.all(log_potentials[factor_group] == jnp.zeros(10))
 
 
 def test_ftov_msgs():
     vg = vgroup.VariableDict(variable_names=(0,), num_states=15)
-    fg = graph.FactorGraph(vg)
-    factor_group = enumeration.EnumerationFactorGroup(
+    fg = fgraph.FactorGraph(vg)
+    factor_group = fgroup.EnumerationFactorGroup(
         variables_for_factors=[[vg[0]]],
         factor_configs=np.arange(10)[:, None],
     )
@@ -127,9 +124,9 @@ def test_ftov_msgs():
     with pytest.raises(
         ValueError, match=re.escape("Expected messages shape (15,). Got (10,)")
     ):
-        graph.FToVMessages(fg_state=fg.fg_state, value=np.zeros(10))
+        infer.FToVMessages(fg_state=fg.fg_state, value=np.zeros(10))
 
-    ftov_msgs = graph.FToVMessages(fg_state=fg.fg_state, value=np.zeros(15))
+    ftov_msgs = infer.FToVMessages(fg_state=fg.fg_state, value=np.zeros(15))
     with pytest.raises(
         TypeError, match=re.escape("'FToVMessages' object is not subscriptable")
     ):
@@ -138,8 +135,8 @@ def test_ftov_msgs():
 
 def test_evidence():
     vg = vgroup.VariableDict(variable_names=(0,), num_states=15)
-    fg = graph.FactorGraph(vg)
-    factor_group = enumeration.EnumerationFactorGroup(
+    fg = fgraph.FactorGraph(vg)
+    factor_group = fgroup.EnumerationFactorGroup(
         variables_for_factors=[[vg[0]]],
         factor_configs=np.arange(10)[:, None],
     )
@@ -148,9 +145,9 @@ def test_evidence():
     with pytest.raises(
         ValueError, match=re.escape("Expected evidence shape (15,). Got (10,).")
     ):
-        graph.Evidence(fg_state=fg.fg_state, value=np.zeros(10))
+        infer.Evidence(fg_state=fg.fg_state, value=np.zeros(10))
 
-    evidence = graph.Evidence(fg_state=fg.fg_state, value=np.zeros(15))
+    evidence = infer.Evidence(fg_state=fg.fg_state, value=np.zeros(15))
     assert jnp.all(evidence.value == jnp.zeros(15))
 
     vg2 = vgroup.VariableDict(variable_names=(0,), num_states=15)
@@ -160,7 +157,7 @@ def test_evidence():
             "Got evidence for a variable or a VariableGroup not in the FactorGraph!"
         ),
     ):
-        graph.update_evidence(
+        infer.bp_state.update_evidence(
             jax.device_put(evidence.value),
             {vg2[0]: jax.device_put(np.zeros(15))},
             fg.fg_state,
@@ -169,14 +166,14 @@ def test_evidence():
 
 def test_bp():
     vg = vgroup.VariableDict(variable_names=(0,), num_states=15)
-    fg = graph.FactorGraph(vg)
-    factor_group = enumeration.EnumerationFactorGroup(
+    fg = fgraph.FactorGraph(vg)
+    factor_group = fgroup.EnumerationFactorGroup(
         variables_for_factors=[[vg[0]]],
         factor_configs=np.arange(10)[:, None],
     )
     fg.add_factors(factor_group)
 
-    bp = graph.BP(fg.bp_state, temperature=0)
+    bp = infer.BP(fg.bp_state, temperature=0)
     bp_arrays = bp.update()
     bp_arrays = bp.update(
         bp_arrays=bp_arrays,

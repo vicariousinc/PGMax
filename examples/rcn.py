@@ -38,9 +38,7 @@ from scipy.ndimage import maximum_filter
 from scipy.signal import fftconvolve
 from sklearn.datasets import fetch_openml
 
-from pgmax.fg import graph
-from pgmax.groups import variables as vgroup
-from pgmax.groups.enumeration import EnumerationFactorGroup
+from pgmax import fgraph, fgroup, infer, vgroup
 
 memory = Memory("./example_data/tmp")
 fetch_openml_cached = memory.cache(fetch_openml)
@@ -272,7 +270,7 @@ valid_configs_list = [valid_configs(r, hps, vps) for r in range(max_perturb_radi
 
 # %%
 start = time.time()
-fg = graph.FactorGraph(variables_all_models)
+fg = fgraph.FactorGraph(variables_all_models)
 
 # Adding rcn model edges to the pgmax factor graph.
 for idx in range(edges.shape[0]):
@@ -280,7 +278,7 @@ for idx in range(edges.shape[0]):
 
     for e in edge:
         i1, i2, r = e
-        factor_group = EnumerationFactorGroup(
+        factor_group = fgroup.EnumerationFactorGroup(
             variables_for_factors=[
                 [variables_all_models[idx][i1], variables_all_models[idx][i2]]
             ],
@@ -389,7 +387,7 @@ frcs_dict = {
     variables_all_models[model_idx]: frcs[model_idx]
     for model_idx in range(frcs.shape[0])
 }
-bp = graph.BP(fg.bp_state, temperature=0.0)
+bp = infer.BP(fg.bp_state, temperature=0.0)
 scores = np.zeros((len(test_set), frcs.shape[0]))
 map_states_dict = {}
 
@@ -406,7 +404,7 @@ for test_idx in range(len(test_set)):
 
     start = end
     bp_arrays = bp.run_bp(bp.init(evidence_updates=evidence_updates), num_iters=30)
-    map_states = graph.decode_map_states(bp.get_beliefs(bp_arrays))
+    map_states = infer.decode_map_states(bp.get_beliefs(bp_arrays))
     end = time.time()
     print(f"Max product inference took {end-start:.3f} seconds for image {test_idx}.")
 

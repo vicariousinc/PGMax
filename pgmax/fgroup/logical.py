@@ -6,12 +6,13 @@ from typing import FrozenSet, OrderedDict, Type
 
 import numpy as np
 
-from pgmax.factors import logical
-from pgmax.fg import groups
+from pgmax.factor import logical
+
+from .fgroup import FactorGroup
 
 
 @dataclass(frozen=True, eq=False)
-class LogicalFactorGroup(groups.FactorGroup):
+class LogicalFactorGroup(FactorGroup):
     """Class to represent a group of LogicalFactors.
 
     All factors in the group are assumed to have the same edge_states_offset.

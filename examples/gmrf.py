@@ -22,9 +22,7 @@ import numpy as np
 from jax.example_libraries import optimizers
 from tqdm.notebook import tqdm
 
-from pgmax.fg import graph
-from pgmax.groups import enumeration
-from pgmax.groups import variables as vgroup
+from pgmax import fgraph, fgroup, infer, vgroup
 
 # %% [markdown]
 # # Visualize a trained GMRF
@@ -55,11 +53,11 @@ prototype_targets = jax.device_put(
 M, N = target_images.shape[-2:]
 num_states = np.sum(n_clones)
 variables = vgroup.NDVariableArray(num_states=num_states, shape=(M, N))
-fg = graph.FactorGraph(variables)
+fg = fgraph.FactorGraph(variables)
 
 # %%
 # Create top-down factors
-top_down = enumeration.PairwiseFactorGroup(
+top_down = fgroup.PairwiseFactorGroup(
     variables_for_factors=[
         [variables[ii, jj], variables[ii + 1, jj]]
         for ii in range(M - 1)
@@ -68,7 +66,7 @@ top_down = enumeration.PairwiseFactorGroup(
 )
 
 # Create left-right factors
-left_right = enumeration.PairwiseFactorGroup(
+left_right = fgroup.PairwiseFactorGroup(
     variables_for_factors=[
         [variables[ii, jj], variables[ii, jj + 1]]
         for ii in range(M)
@@ -77,14 +75,14 @@ left_right = enumeration.PairwiseFactorGroup(
 )
 
 # Create diagonal factors
-diagonal0 = enumeration.PairwiseFactorGroup(
+diagonal0 = fgroup.PairwiseFactorGroup(
     variables_for_factors=[
         [variables[ii, jj], variables[ii + 1, jj + 1]]
         for ii in range(M - 1)
         for jj in range(N - 1)
     ],
 )
-diagonal1 = enumeration.PairwiseFactorGroup(
+diagonal1 = fgroup.PairwiseFactorGroup(
     variables_for_factors=[
         [variables[ii, jj], variables[ii - 1, jj + 1]]
         for ii in range(1, M)
@@ -96,7 +94,7 @@ diagonal1 = enumeration.PairwiseFactorGroup(
 fg.add_factors([top_down, left_right, diagonal0, diagonal1])
 
 # %%
-bp = graph.BP(fg.bp_state, temperature=1.0)
+bp = infer.BP(fg.bp_state, temperature=1.0)
 
 # %%
 log_potentials = {
@@ -114,7 +112,7 @@ for plot_idx, idx in tqdm(enumerate(indices), total=n_plots):
     target_image = target_images[idx]
     evidence = jnp.log(jnp.where(noisy_image[..., None] == 0, p_contour, 1 - p_contour))
     target = prototype_targets[target_image]
-    marginals = graph.get_marginals(
+    marginals = infer.get_marginals(
         bp.get_beliefs(
             bp.run_bp(
                 bp.init(
@@ -162,7 +160,7 @@ fig.tight_layout()
 def loss(noisy_image, target_image, log_potentials):
     evidence = jnp.log(jnp.where(noisy_image[..., None] == 0, p_contour, 1 - p_contour))
     target = prototype_targets[target_image]
-    marginals = graph.get_marginals(
+    marginals = infer.get_marginals(
         bp.get_beliefs(
             bp.run_bp(
                 bp.init(

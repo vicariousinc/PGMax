@@ -3,10 +3,7 @@ from itertools import product
 import jax
 import numpy as np
 
-from pgmax.factors.enumeration import EnumerationFactor
-from pgmax.fg import graph
-from pgmax.groups import logical
-from pgmax.groups import variables as vgroup
+from pgmax import factor, fgraph, fgroup, infer, vgroup
 
 
 def test_run_bp_with_ORFactors():
@@ -45,7 +42,7 @@ def test_run_bp_with_ORFactors():
             num_states=2, shape=(num_parents.sum(),)
         )
         children_variables1 = vgroup.NDVariableArray(num_states=2, shape=(num_factors,))
-        fg1 = graph.FactorGraph(
+        fg1 = fgraph.FactorGraph(
             variable_groups=[parents_variables1, children_variables1]
         )
 
@@ -54,7 +51,7 @@ def test_run_bp_with_ORFactors():
             num_states=2, shape=(num_parents.sum(),)
         )
         children_variables2 = vgroup.NDVariableArray(num_states=2, shape=(num_factors,))
-        fg2 = graph.FactorGraph(
+        fg2 = fgraph.FactorGraph(
             variable_groups=[parents_variables2, children_variables2]
         )
 
@@ -97,7 +94,7 @@ def test_run_bp_with_ORFactors():
 
             if factor_idx < num_factors // 2:
                 # Add the first half of factors to FactorGraph1
-                enum_factor = EnumerationFactor(
+                enum_factor = factor.EnumerationFactor(
                     variables=variables_for_factors1[factor_idx],
                     factor_configs=valid_configs,
                     log_potentials=np.zeros(valid_configs.shape[0]),
@@ -106,7 +103,7 @@ def test_run_bp_with_ORFactors():
             else:
                 if idx != 0:
                     # Add the second half of factors to FactorGraph2
-                    enum_factor = EnumerationFactor(
+                    enum_factor = factor.EnumerationFactor(
                         variables=variables_for_factors2[factor_idx],
                         factor_configs=valid_configs,
                         log_potentials=np.zeros(valid_configs.shape[0]),
@@ -114,7 +111,7 @@ def test_run_bp_with_ORFactors():
                     fg2.add_factors(enum_factor)
                 else:
                     # Add all the EnumerationFactors to FactorGraph1 for the first iter
-                    enum_factor = EnumerationFactor(
+                    enum_factor = factor.EnumerationFactor(
                         variables=variables_for_factors1[factor_idx],
                         factor_configs=valid_configs,
                         log_potentials=np.zeros(valid_configs.shape[0]),
@@ -142,15 +139,15 @@ def test_run_bp_with_ORFactors():
                         variables_for_factors2[factor_idx]
                     )
         if idx != 0:
-            factor_group = logical.ORFactorGroup(variables_for_ORFactors_fg1)
+            factor_group = fgroup.ORFactorGroup(variables_for_ORFactors_fg1)
             fg1.add_factors(factor_group)
 
-        factor_group = logical.ORFactorGroup(variables_for_ORFactors_fg2)
+        factor_group = fgroup.ORFactorGroup(variables_for_ORFactors_fg2)
         fg2.add_factors(factor_group)
 
         # Run inference
-        bp1 = graph.BP(fg1.bp_state, temperature=temperature)
-        bp2 = graph.BP(fg2.bp_state, temperature=temperature)
+        bp1 = infer.BP(fg1.bp_state, temperature=temperature)
+        bp2 = infer.BP(fg2.bp_state, temperature=temperature)
 
         evidence_parents = jax.device_put(np.random.gumbel(size=(sum(num_parents), 2)))
         evidence_children = jax.device_put(np.random.gumbel(size=(num_factors, 2)))
