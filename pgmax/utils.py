@@ -1,4 +1,4 @@
-"""A module containing helper functions useful while constructing Factor Graphs."""
+"""A module containing helper functions."""
 
 import functools
 from typing import Callable

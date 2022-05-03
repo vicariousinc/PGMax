@@ -1,6 +1,6 @@
-from __future__ import annotations
+"""A module containing the core class to build a factor graph."""
 
-"""A module containing the core class to specify a Factor Graph."""
+from __future__ import annotations
 
 import collections
 import copy

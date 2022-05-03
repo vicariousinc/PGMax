@@ -226,7 +226,7 @@ class ORFactor(LogicalFactor):
 @dataclass(frozen=True, eq=False)
 class ANDFactor(LogicalFactor):
     """An AND factor of the form (p1,...,pn, c)
-        where p1,...,pn are the parents variables and c is the child variable.
+    where p1,...,pn are the parents variables and c is the child variable.
 
     An AND factor is defined as:
         F(p1, p2, ..., pn, c) = 0 <=> c = AND(p1, p2, ..., pn)

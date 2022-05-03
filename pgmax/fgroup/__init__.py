@@ -1,4 +1,4 @@
-"""A sub-package defining factor groups and containing different types of factor groups."""
+"""A sub-package defining different types of groups of factors."""
 
 from .enum import EnumFactorGroup, PairwiseFactorGroup
 from .fgroup import FactorGroup, SingleFactorGroup
