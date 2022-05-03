@@ -1,5 +1,5 @@
-"""A sub-package containing different types of variable groups."""
+"""A sub-package defining variable groups and containing different types of variable groups."""
 
-from .varray import NDVariableArray
-from .vdict import VariableDict
-from .vgroup import VariableGroup
+from .varray import NDVarArray
+from .vdict import VarDict
+from .vgroup import VarGroup

@@ -7,7 +7,7 @@ from pgmax import factor, vgroup
 
 
 def test_enumeration_factor():
-    variables = vgroup.NDVariableArray(num_states=3, shape=(1,))
+    variables = vgroup.NDVarArray(num_states=3, shape=(1,))
 
     with pytest.raises(
         NotImplementedError, match="Please implement compile_wiring in for your factor"
@@ -18,21 +18,21 @@ def test_enumeration_factor():
         )
 
     with pytest.raises(ValueError, match="Configurations should be integers. Got"):
-        factor.EnumerationFactor(
+        factor.EnumFactor(
             variables=[variables[0]],
             factor_configs=np.array([[1.0]]),
             log_potentials=np.array([0.0]),
         )
 
     with pytest.raises(ValueError, match="Potential should be floats. Got"):
-        factor.EnumerationFactor(
+        factor.EnumFactor(
             variables=[variables[0]],
             factor_configs=np.array([[1]]),
             log_potentials=np.array([0]),
         )
 
     with pytest.raises(ValueError, match="factor_configs should be a 2D array"):
-        factor.EnumerationFactor(
+        factor.EnumFactor(
             variables=[variables[0]],
             factor_configs=np.array([1]),
             log_potentials=np.array([0.0]),
@@ -44,7 +44,7 @@ def test_enumeration_factor():
             "Number of variables 1 doesn't match given configurations (1, 2)"
         ),
     ):
-        factor.EnumerationFactor(
+        factor.EnumFactor(
             variables=[variables[0]],
             factor_configs=np.array([[1, 2]]),
             log_potentials=np.array([0.0]),
@@ -53,14 +53,14 @@ def test_enumeration_factor():
     with pytest.raises(
         ValueError, match=re.escape("Expected log potentials of shape (1,)")
     ):
-        factor.EnumerationFactor(
+        factor.EnumFactor(
             variables=[variables[0]],
             factor_configs=np.array([[1]]),
             log_potentials=np.array([0.0, 1.0]),
         )
 
     with pytest.raises(ValueError, match="Invalid configurations for given variables"):
-        factor.EnumerationFactor(
+        factor.EnumFactor(
             variables=[variables[0]],
             factor_configs=np.array([[10]]),
             log_potentials=np.array([0.0]),
@@ -68,9 +68,9 @@ def test_enumeration_factor():
 
 
 def test_logical_factor():
-    child = vgroup.NDVariableArray(num_states=2, shape=(1,))[0]
-    wrong_parent = vgroup.NDVariableArray(num_states=3, shape=(1,))[0]
-    parent = vgroup.NDVariableArray(num_states=2, shape=(1,))[0]
+    child = vgroup.NDVarArray(num_states=2, shape=(1,))[0]
+    wrong_parent = vgroup.NDVarArray(num_states=3, shape=(1,))[0]
+    parent = vgroup.NDVarArray(num_states=2, shape=(1,))[0]
 
     with pytest.raises(
         ValueError,

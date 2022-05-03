@@ -12,15 +12,15 @@ def test_run_bp_with_ANDFactors():
     (1) the support of ANDFactors in a FactorGraph and their specialized inference for different temperatures
     (2) the support of several factor types in a FactorGraph and during inference
 
-    To do so, observe that an ANDFactor can be defined as an equivalent EnumerationFactor
+    To do so, observe that an ANDFactor can be defined as an equivalent EnumFactor
     (which list all the valid AND configurations) and define two equivalent FactorGraphs
-    FG1: first half of factors are defined as EnumerationFactors, second half are defined as ANDFactors
-    FG2: first half of factors are defined as ANDFactors, second half are defined as EnumerationFactors
+    FG1: first half of factors are defined as EnumFactors, second half are defined as ANDFactors
+    FG2: first half of factors are defined as ANDFactors, second half are defined as EnumFactors
 
-    Inference for the EnumerationFactors will be run with pass_enum_fac_to_var_messages while
+    Inference for the EnumFactors will be run with pass_enum_fac_to_var_messages while
     inference for the ANDFactors will be run with pass_logical_fac_to_var_messages.
 
-    Note: for the first seed, add all the EnumerationFactors to FG1 and all the ANDFactors to FG2
+    Note: for the first seed, add all the EnumFactors to FG1 and all the ANDFactors to FG2
     """
     for idx in range(10):
         np.random.seed(idx)
@@ -38,24 +38,20 @@ def test_run_bp_with_ANDFactors():
             temperature = np.random.uniform(low=0.5, high=1.0)
 
         # Graph 1
-        parents_variables1 = vgroup.NDVariableArray(
-            num_states=2, shape=(num_parents.sum(),)
-        )
-        children_variables1 = vgroup.NDVariableArray(num_states=2, shape=(num_factors,))
+        parents_variables1 = vgroup.NDVarArray(num_states=2, shape=(num_parents.sum(),))
+        children_variables1 = vgroup.NDVarArray(num_states=2, shape=(num_factors,))
         fg1 = fgraph.FactorGraph(
             variable_groups=[parents_variables1, children_variables1]
         )
 
         # Graph 2
-        parents_variables2 = vgroup.NDVariableArray(
-            num_states=2, shape=(num_parents.sum(),)
-        )
-        children_variables2 = vgroup.NDVariableArray(num_states=2, shape=(num_factors,))
+        parents_variables2 = vgroup.NDVarArray(num_states=2, shape=(num_parents.sum(),))
+        children_variables2 = vgroup.NDVarArray(num_states=2, shape=(num_factors,))
         fg2 = fgraph.FactorGraph(
             variable_groups=[parents_variables2, children_variables2]
         )
 
-        # Option 1: Define EnumerationFactors equivalent to the ANDFactors
+        # Option 1: Define EnumFactors equivalent to the ANDFactors
         variables_for_factors1 = []
         variables_for_factors2 = []
         for factor_idx in range(num_factors):
@@ -77,7 +73,7 @@ def test_run_bp_with_ANDFactors():
             ] + [children_variables2[factor_idx]]
             variables_for_factors2.append(variables2)
 
-        # Option 1: Define EnumerationFactors equivalent to the ANDFactors
+        # Option 1: Define EnumFactors equivalent to the ANDFactors
         for factor_idx in range(num_factors):
             this_num_parents = num_parents[factor_idx]
 
@@ -96,7 +92,7 @@ def test_run_bp_with_ANDFactors():
 
             if factor_idx < num_factors // 2:
                 # Add the first half of factors to FactorGraph1
-                enum_factor = factor.EnumerationFactor(
+                enum_factor = factor.EnumFactor(
                     variables=variables_for_factors1[factor_idx],
                     factor_configs=valid_configs,
                     log_potentials=np.zeros(valid_configs.shape[0]),
@@ -105,15 +101,15 @@ def test_run_bp_with_ANDFactors():
             else:
                 if idx != 0:
                     # Add the second half of factors to FactorGraph2
-                    enum_factor = factor.EnumerationFactor(
+                    enum_factor = factor.EnumFactor(
                         variables=variables_for_factors2[factor_idx],
                         factor_configs=valid_configs,
                         log_potentials=np.zeros(valid_configs.shape[0]),
                     )
                     fg2.add_factors(enum_factor)
                 else:
-                    # Add all the EnumerationFactors to FactorGraph1 for the first iter
-                    enum_factor = factor.EnumerationFactor(
+                    # Add all the EnumFactors to FactorGraph1 for the first iter
+                    enum_factor = factor.EnumFactor(
                         variables=variables_for_factors1[factor_idx],
                         factor_configs=valid_configs,
                         log_potentials=np.zeros(valid_configs.shape[0]),

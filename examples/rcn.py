@@ -213,9 +213,7 @@ M = (2 * hps + 1) * (
 variables_all_models = []
 for idx in range(frcs.shape[0]):
     frc = frcs[idx]
-    variables_all_models.append(
-        vgroup.NDVariableArray(num_states=M, shape=(frc.shape[0],))
-    )
+    variables_all_models.append(vgroup.NDVarArray(num_states=M, shape=(frc.shape[0],)))
 
 end = time.time()
 print(f"Creating variables took {end-start:.3f} seconds.")
@@ -278,7 +276,7 @@ for idx in range(edges.shape[0]):
 
     for e in edge:
         i1, i2, r = e
-        factor_group = fgroup.EnumerationFactorGroup(
+        factor_group = fgroup.EnumFactorGroup(
             variables_for_factors=[
                 [variables_all_models[idx][i1], variables_all_models[idx][i2]]
             ],

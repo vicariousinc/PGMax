@@ -192,19 +192,19 @@ def test_e2e_sanity_check():
     # Now, we specify the valid configurations for all the suppression factors
     SUPPRESSION_DIAMETER = 2
     valid_configs_supp = create_valid_suppression_config_arr(SUPPRESSION_DIAMETER)
-    # We create a NDVariableArray such that the [0,i,j] entry corresponds to the vertical cut variable (i.e, the one
+    # We create a NDVarArray such that the [0,i,j] entry corresponds to the vertical cut variable (i.e, the one
     # attached horizontally to the factor) that's at that location in the image, and the [1,i,j] entry corresponds to
     # the horizontal cut variable (i.e, the one attached vertically to the factor) that's at that location
-    # We create a NDVariableArray such that the [0,i,j] entry corresponds to the vertical cut variable (i.e, the one
+    # We create a NDVarArray such that the [0,i,j] entry corresponds to the vertical cut variable (i.e, the one
     # attached horizontally to the factor) that's at that location in the image, and the [1,i,j] entry corresponds to
     # the horizontal cut variable (i.e, the one attached vertically to the factor) that's at that location
-    grid_vars = vgroup.NDVariableArray(shape=(2, M - 1, N - 1), num_states=3)
+    grid_vars = vgroup.NDVarArray(shape=(2, M - 1, N - 1), num_states=3)
 
     # Make a group of additional variables for the edges of the grid
     extra_row_names: List[Tuple[Any, ...]] = [(0, row, N - 1) for row in range(M - 1)]
     extra_col_names: List[Tuple[Any, ...]] = [(1, M - 1, col) for col in range(N - 1)]
     additional_names = tuple(extra_row_names + extra_col_names)
-    additional_vars = vgroup.VariableDict(variable_names=additional_names, num_states=3)
+    additional_vars = vgroup.VarDict(variable_names=additional_names, num_states=3)
 
     true_map_state_output = {
         (grid_vars, (0, 0, 0)): 2,
@@ -259,7 +259,7 @@ def test_e2e_sanity_check():
     # Create the factor graph
     fg = fgraph.FactorGraph(variable_groups=[grid_vars, additional_vars])
 
-    # Imperatively add EnumerationFactorGroups (each consisting of just one EnumerationFactor) to
+    # Imperatively add EnumFactorGroups (each consisting of just one EnumFactor) to
     # the graph!
     for row in range(M - 1):
         for col in range(N - 1):
@@ -294,7 +294,7 @@ def test_e2e_sanity_check():
                     additional_vars[1, row + 1, col],
                 ]
             if row % 2 == 0:
-                enum_factor = factor.EnumerationFactor(
+                enum_factor = factor.EnumFactor(
                     variables=curr_vars,
                     factor_configs=valid_configs_non_supp,
                     log_potentials=np.zeros(
@@ -303,7 +303,7 @@ def test_e2e_sanity_check():
                 )
                 fg.add_factors(enum_factor)
             else:
-                enum_factor = factor.EnumerationFactor(
+                enum_factor = factor.EnumFactor(
                     variables=curr_vars,
                     factor_configs=valid_configs_non_supp,
                     log_potentials=np.zeros(
@@ -312,7 +312,7 @@ def test_e2e_sanity_check():
                 )
                 fg.add_factors(enum_factor)
 
-    # Create an EnumerationFactorGroup for vertical suppression factors
+    # Create an EnumFactorGroup for vertical suppression factors
     vert_suppression_vars: List[List[Tuple[Any, ...]]] = []
     for col in range(N):
         for start_row in range(M - SUPPRESSION_DIAMETER):
@@ -350,13 +350,13 @@ def test_e2e_sanity_check():
                 )
 
     # Add the suppression factors to the graph via kwargs
-    factor_group = fgroup.EnumerationFactorGroup(
+    factor_group = fgroup.EnumFactorGroup(
         variables_for_factors=vert_suppression_vars,
         factor_configs=valid_configs_supp,
     )
     fg.add_factors(factor_group)
 
-    factor_group = fgroup.EnumerationFactorGroup(
+    factor_group = fgroup.EnumFactorGroup(
         variables_for_factors=horz_suppression_vars,
         factor_configs=valid_configs_supp,
         log_potentials=np.zeros(valid_configs_supp.shape[0], dtype=float),
@@ -386,9 +386,9 @@ def test_e2e_sanity_check():
 def test_e2e_heretic():
     # Define some global constants
     im_size = (30, 30)
-    # Instantiate all the Variables in the factor graph via VariableGroups
-    pixel_vars = vgroup.NDVariableArray(shape=im_size, num_states=3)
-    hidden_vars = vgroup.NDVariableArray(
+    # Instantiate all the Variables in the factor graph via VarGroups
+    pixel_vars = vgroup.NDVarArray(shape=im_size, num_states=3)
+    hidden_vars = vgroup.NDVarArray(
         shape=(im_size[0] - 2, im_size[1] - 2), num_states=17
     )  # Each hidden var is connected to a 3x3 patch of pixel vars
 

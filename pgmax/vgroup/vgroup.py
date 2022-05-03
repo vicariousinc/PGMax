@@ -1,4 +1,4 @@
-"""A module containing the base class for groups of variable in a Factor Graph."""
+"""A module containing the base class for variable groups in a Factor Graph."""
 
 from dataclasses import dataclass
 from functools import total_ordering
@@ -14,13 +14,13 @@ MAX_SIZE = 1e9
 
 @total_ordering
 @dataclass(frozen=True, eq=False)
-class VariableGroup:
+class VarGroup:
     """Class to represent a group of variables.
     Each variable is represented via a tuple of the form (variable hash, variable num_states)
 
     Arguments:
         num_states: An integer or an array specifying the number of states of the variables
-            in this VariableGroup
+            in this VarGroup
     """
 
     num_states: Union[int, np.ndarray]
@@ -52,7 +52,7 @@ class VariableGroup:
             A single variable or a list of variables
         """
         raise NotImplementedError(
-            "Please subclass the VariableGroup class and override this method"
+            "Please subclass the VarGroup class and override this method"
         )
 
     @cached_property
@@ -63,16 +63,16 @@ class VariableGroup:
             Array of variables hashes.
         """
         raise NotImplementedError(
-            "Please subclass the VariableGroup class and override this method"
+            "Please subclass the VarGroup class and override this method"
         )
 
     @cached_property
     def variables(self) -> List[Tuple[int, int]]:
-        """Function that returns the list of all variables in the VariableGroup.
+        """Function that returns the list of all variables in the VarGroup.
         Each variable is represented by a tuple of the form (variable hash, variable num_states)
 
         Returns:
-            List of variables in the VariableGroup
+            List of variables in the VarGroup
         """
         assert isinstance(self.variable_hashes, np.ndarray)
         assert isinstance(self.num_states, np.ndarray)
@@ -90,7 +90,7 @@ class VariableGroup:
             A flat jnp.array for internal use
         """
         raise NotImplementedError(
-            "Please subclass the VariableGroup class and override this method"
+            "Please subclass the VarGroup class and override this method"
         )
 
     def unflatten(self, flat_data: Union[np.ndarray, jnp.ndarray]) -> Any:
@@ -103,5 +103,5 @@ class VariableGroup:
             Meaningful structured data
         """
         raise NotImplementedError(
-            "Please subclass the VariableGroup class and override this method"
+            "Please subclass the VarGroup class and override this method"
         )

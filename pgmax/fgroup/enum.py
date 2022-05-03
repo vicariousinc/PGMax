@@ -1,4 +1,4 @@
-"""Defines EnumerationFactorGroup and PairwiseFactorGroup."""
+"""Defines EnumFactorGroup and PairwiseFactorGroup."""
 
 import collections
 from dataclasses import dataclass, field
@@ -15,8 +15,8 @@ from .fgroup import FactorGroup
 
 
 @dataclass(frozen=True, eq=False)
-class EnumerationFactorGroup(FactorGroup):
-    """Class to represent a group of EnumerationFactors.
+class EnumFactorGroup(FactorGroup):
+    """Class to represent a group of EnumFactors.
 
     All factors in the group are assumed to have the same set of valid configurations and
     the same potential function. Note that the log potential function is assumed to be
@@ -39,7 +39,7 @@ class EnumerationFactorGroup(FactorGroup):
 
     factor_configs: np.ndarray
     log_potentials: Optional[np.ndarray] = None
-    factor_type: Type = field(init=False, default=enum.EnumerationFactor)
+    factor_type: Type = field(init=False, default=enum.EnumFactor)
 
     def __post_init__(self):
         super().__post_init__()
@@ -70,7 +70,7 @@ class EnumerationFactorGroup(FactorGroup):
 
     def _get_variables_to_factors(
         self,
-    ) -> OrderedDict[FrozenSet, enum.EnumerationFactor]:
+    ) -> OrderedDict[FrozenSet, enum.EnumFactor]:
         """Function that generates a dictionary mapping set of connected variables to factors.
         This function is only called on demand when the user requires it.
 
@@ -81,7 +81,7 @@ class EnumerationFactorGroup(FactorGroup):
             [
                 (
                     frozenset(variables_for_factor),
-                    enum.EnumerationFactor(
+                    enum.EnumFactor(
                         variables=variables_for_factor,
                         factor_configs=self.factor_configs,
                         log_potentials=np.array(self.log_potentials)[ii],
@@ -172,18 +172,18 @@ class EnumerationFactorGroup(FactorGroup):
 
 @dataclass(frozen=True, eq=False)
 class PairwiseFactorGroup(FactorGroup):
-    """Class to represent a group of EnumerationFactors where each factor connects to
+    """Class to represent a group of EnumFactors where each factor connects to
     two different variables.
 
     All factors in the group are assumed to be such that all possible configuration of the two
     variable's states are valid. Additionally, all factors in the group are assumed to share
-    the same potential function and to be connected to variables from VariableGroups within
-    one CompositeVariableGroup.
+    the same potential function and to be connected to variables from VarGroups within
+    one CompositeVarGroup.
 
     Args:
         log_potential_matrix: array of shape (var1.num_states, var2.num_states),
-            where var1 and var2 are the 2 VariableGroups (that may refer to the same
-            VariableGroup) whose names are present in each sub-list from self.variables_for_factors.
+            where var1 and var2 are the 2 VarGroups (that may refer to the same
+            VarGroup) whose names are present in each sub-list from self.variables_for_factors.
         factor_type: Factor type shared by all the Factors in the FactorGroup.
 
     Raises:
@@ -197,7 +197,7 @@ class PairwiseFactorGroup(FactorGroup):
     """
 
     log_potential_matrix: Optional[np.ndarray] = None
-    factor_type: Type = field(init=False, default=enum.EnumerationFactor)
+    factor_type: Type = field(init=False, default=enum.EnumFactor)
 
     def __post_init__(self):
         super().__post_init__()
@@ -276,7 +276,7 @@ class PairwiseFactorGroup(FactorGroup):
 
     def _get_variables_to_factors(
         self,
-    ) -> OrderedDict[FrozenSet, enum.EnumerationFactor]:
+    ) -> OrderedDict[FrozenSet, enum.EnumFactor]:
         """Function that generates a dictionary mapping set of connected variables to factors.
         This function is only called on demand when the user requires it.
 
@@ -287,7 +287,7 @@ class PairwiseFactorGroup(FactorGroup):
             [
                 (
                     frozenset(variable_for_factor),
-                    enum.EnumerationFactor(
+                    enum.EnumFactor(
                         variables=variable_for_factor,
                         factor_configs=self.factor_configs,
                         log_potentials=self.log_potentials[ii],

@@ -13,7 +13,7 @@ def test_variable_dict():
     with pytest.raises(
         ValueError, match=re.escape("Expected num_states shape (3,). Got (4,).")
     ):
-        vgroup.VariableDict(variable_names=tuple([0, 1, 2]), num_states=num_states)
+        vgroup.VarDict(variable_names=tuple([0, 1, 2]), num_states=num_states)
 
     num_states = np.full((3,), fill_value=2, dtype=np.float32)
     with pytest.raises(
@@ -22,9 +22,9 @@ def test_variable_dict():
             "num_states should be an integer or a NumPy array of dtype int"
         ),
     ):
-        vgroup.VariableDict(variable_names=tuple([0, 1, 2]), num_states=num_states)
+        vgroup.VarDict(variable_names=tuple([0, 1, 2]), num_states=num_states)
 
-    variable_dict = vgroup.VariableDict(variable_names=tuple([0, 1, 2]), num_states=15)
+    variable_dict = vgroup.VarDict(variable_names=tuple([0, 1, 2]), num_states=15)
     with pytest.raises(
         ValueError, match="data is referring to a non-existent variable 3"
     ):
@@ -68,16 +68,16 @@ def test_nd_variable_array():
     with pytest.raises(
         ValueError,
         match=re.escape(
-            f"Currently only support NDVariableArray of size smaller than {max_size}. Got {max_size + 1}"
+            f"Currently only support NDVarArray of size smaller than {max_size}. Got {max_size + 1}"
         ),
     ):
-        vgroup.NDVariableArray(shape=(max_size + 1,), num_states=2)
+        vgroup.NDVarArray(shape=(max_size + 1,), num_states=2)
 
     num_states = np.full((2, 3), fill_value=2)
     with pytest.raises(
         ValueError, match=re.escape("Expected num_states shape (2, 2). Got (2, 3).")
     ):
-        vgroup.NDVariableArray(shape=(2, 2), num_states=num_states)
+        vgroup.NDVarArray(shape=(2, 2), num_states=num_states)
 
     num_states = np.full((2, 3), fill_value=2, dtype=np.float32)
     with pytest.raises(
@@ -86,12 +86,12 @@ def test_nd_variable_array():
             "num_states should be an integer or a NumPy array of dtype int"
         ),
     ):
-        vgroup.NDVariableArray(shape=(2, 2), num_states=num_states)
+        vgroup.NDVarArray(shape=(2, 2), num_states=num_states)
 
-    variable_group0 = vgroup.NDVariableArray(shape=(5, 5), num_states=2)
+    variable_group0 = vgroup.NDVarArray(shape=(5, 5), num_states=2)
     assert len(variable_group0[:3, :3]) == 9
 
-    variable_group = vgroup.NDVariableArray(
+    variable_group = vgroup.NDVarArray(
         shape=(2, 2), num_states=np.array([[1, 2], [3, 4]])
     )
     variable_group0 < variable_group

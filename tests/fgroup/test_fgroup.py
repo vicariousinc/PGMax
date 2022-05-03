@@ -11,8 +11,8 @@ def test_single_factor():
     with pytest.raises(ValueError, match="Cannot create a FactorGroup with no Factor."):
         fgroup.ORFactorGroup(variables_for_factors=[])
 
-    A = vgroup.NDVariableArray(num_states=2, shape=(10,))
-    B = vgroup.NDVariableArray(num_states=2, shape=(10,))
+    A = vgroup.NDVarArray(num_states=2, shape=(10,))
+    B = vgroup.NDVarArray(num_states=2, shape=(10,))
 
     variables0 = (A[0], B[0])
     variables1 = (A[1], B[1])
@@ -29,12 +29,12 @@ def test_single_factor():
 
 
 def test_enumeration_factor_group():
-    vg = vgroup.NDVariableArray(shape=(2, 2), num_states=3)
+    vg = vgroup.NDVarArray(shape=(2, 2), num_states=3)
     with pytest.raises(
         ValueError,
         match=re.escape("Expected log potentials shape: (1,) or (2, 1). Got (3, 2)"),
     ):
-        enumeration_factor_group = fgroup.EnumerationFactorGroup(
+        enumeration_factor_group = fgroup.EnumFactorGroup(
             variables_for_factors=[
                 [vg[0, 0], vg[0, 1], vg[1, 1]],
                 [vg[0, 1], vg[1, 0], vg[1, 1]],
@@ -44,7 +44,7 @@ def test_enumeration_factor_group():
         )
 
     with pytest.raises(ValueError, match=re.escape("Potentials should be floats")):
-        enumeration_factor_group = fgroup.EnumerationFactorGroup(
+        enumeration_factor_group = fgroup.EnumFactorGroup(
             variables_for_factors=[
                 [vg[0, 0], vg[0, 1], vg[1, 1]],
                 [vg[0, 1], vg[1, 0], vg[1, 1]],
@@ -53,7 +53,7 @@ def test_enumeration_factor_group():
             log_potentials=np.zeros((2, 1), dtype=int),
         )
 
-    enumeration_factor_group = fgroup.EnumerationFactorGroup(
+    enumeration_factor_group = fgroup.EnumFactorGroup(
         variables_for_factors=[
             [vg[0, 0], vg[0, 1], vg[1, 1]],
             [vg[0, 1], vg[1, 0], vg[1, 1]],
@@ -103,7 +103,7 @@ def test_enumeration_factor_group():
 
 
 def test_pairwise_factor_group():
-    vg = vgroup.NDVariableArray(shape=(2, 2), num_states=3)
+    vg = vgroup.NDVarArray(shape=(2, 2), num_states=3)
 
     with pytest.raises(
         ValueError, match=re.escape("log_potential_matrix should be either a 2D array")

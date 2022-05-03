@@ -1,7 +1,5 @@
 """A module containing the core message-passing functions for belief propagation"""
 
-"""A module containing the core functions to run belief propagation."""
-
 import functools
 import inspect
 from dataclasses import dataclass

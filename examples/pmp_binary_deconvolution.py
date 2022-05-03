@@ -115,21 +115,19 @@ s_height = im_height - feat_height + 1
 s_width = im_width - feat_width + 1
 
 # Binary features
-W = vgroup.NDVariableArray(
-    num_states=2, shape=(n_chan, n_feat, feat_height, feat_width)
-)
+W = vgroup.NDVarArray(num_states=2, shape=(n_chan, n_feat, feat_height, feat_width))
 
 # Binary indicators of features locations
-S = vgroup.NDVariableArray(num_states=2, shape=(n_images, n_feat, s_height, s_width))
+S = vgroup.NDVarArray(num_states=2, shape=(n_images, n_feat, s_height, s_width))
 
 # Auxiliary binary variables combining W and S
-SW = vgroup.NDVariableArray(
+SW = vgroup.NDVarArray(
     num_states=2,
     shape=(n_images, n_chan, im_height, im_width, n_feat, feat_height, feat_width),
 )
 
 # Binary images obtained by convolution
-X = vgroup.NDVariableArray(num_states=2, shape=X_gt.shape)
+X = vgroup.NDVarArray(num_states=2, shape=X_gt.shape)
 
 # %% [markdown]
 # For computation efficiency, we construct large FactorGroups instead of individual factors

@@ -26,7 +26,7 @@ from pgmax import fgraph, fgroup, infer, vgroup
 # ### Construct variable grid, initialize factor graph, and add factors
 
 # %%
-variables = vgroup.NDVariableArray(num_states=2, shape=(50, 50))
+variables = vgroup.NDVarArray(num_states=2, shape=(50, 50))
 fg = fgraph.FactorGraph(variable_groups=variables)
 
 variables_for_factors = []

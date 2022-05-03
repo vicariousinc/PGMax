@@ -1,4 +1,4 @@
-"""A module containing the base classes for variable and factor groups in a Factor Graph."""
+"""A module containing the base classes for factor groups in a Factor Graph."""
 
 import inspect
 from dataclasses import dataclass, field

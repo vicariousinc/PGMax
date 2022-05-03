@@ -52,7 +52,7 @@ prototype_targets = jax.device_put(
 # %%
 M, N = target_images.shape[-2:]
 num_states = np.sum(n_clones)
-variables = vgroup.NDVariableArray(num_states=num_states, shape=(M, N))
+variables = vgroup.NDVarArray(num_states=num_states, shape=(M, N))
 fg = fgraph.FactorGraph(variables)
 
 # %%

@@ -12,7 +12,7 @@ from jax.nn import log_sigmoid, sigmoid
 
 from pgmax.utils import NEG_INF
 
-from . import enum, factor
+from . import factor
 
 
 @jax.tree_util.register_pytree_node_class
@@ -176,7 +176,7 @@ class LogicalFactor(factor.Factor):
         # Note: all the variables in a LogicalFactorGroup are binary
         num_states_cumsum = np.arange(0, 2 * var_states.shape[0] + 2, 2)
         var_states_for_edges = np.empty(shape=(2 * var_states.shape[0],), dtype=int)
-        enum._compile_var_states_numba(
+        factor._compile_var_states_numba(
             var_states_for_edges, num_states_cumsum, var_states
         )
 

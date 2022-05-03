@@ -34,13 +34,13 @@ class FactorGraph:
     Factors in a graph are clustered in factor groups, which are grouped according to their factor types.
 
     Args:
-        variable_groups: A single VariableGroup or a list of VariableGroups.
+        variable_groups: A single VarGroup or a list of VarGroups.
     """
 
-    variable_groups: Union[vgroup.VariableGroup, Sequence[vgroup.VariableGroup]]
+    variable_groups: Union[vgroup.VarGroup, Sequence[vgroup.VarGroup]]
 
     def __post_init__(self):
-        if isinstance(self.variable_groups, vgroup.VariableGroup):
+        if isinstance(self.variable_groups, vgroup.VarGroup):
             self.variable_groups = [self.variable_groups]
 
         # Useful objects to build the FactorGraph
@@ -301,7 +301,7 @@ class FactorGraphState:
     """FactorGraphState.
 
     Args:
-        variable_groups: VariableGroups in the FactorGraph.
+        variable_groups: VarGroups in the FactorGraph.
         vars_to_starts: Maps variables to their starting indices in the flat evidence array.
             flat_evidence[vars_to_starts[variable]: vars_to_starts[variable] + variable.num_var_states]
             contains evidence to the variable.
@@ -314,7 +314,7 @@ class FactorGraphState:
         wiring: Wiring derived for each factor type.
     """
 
-    variable_groups: Sequence[vgroup.VariableGroup]
+    variable_groups: Sequence[vgroup.VarGroup]
     vars_to_starts: Mapping[Tuple[int, int], int]
     num_var_states: int
     total_factor_num_states: int

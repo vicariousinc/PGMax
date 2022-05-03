@@ -1,4 +1,4 @@
-"""A module containing the variables group classes inheriting from the base VariableGroup."""
+"""A module containing a variable dictionnary class inheriting from the base VarGroup."""
 
 from dataclasses import dataclass
 from typing import Any, Dict, Hashable, Mapping, Tuple, Union
@@ -12,12 +12,12 @@ from . import vgroup
 
 
 @dataclass(frozen=True, eq=False)
-class VariableDict(vgroup.VariableGroup):
+class VarDict(vgroup.VarGroup):
     """A variable dictionary that contains a set of variables
 
     Args:
-        num_states: The size of the variables in this VariableGroup
-        variable_names: A tuple of all the names of the variables in this VariableGroup.
+        num_states: The size of the variables in this VarGroup
+        variable_names: A tuple of all the names of the variables in this VarGroup.
     """
 
     variable_names: Tuple[Any, ...]
@@ -64,7 +64,7 @@ class VariableDict(vgroup.VariableGroup):
         """
         assert isinstance(self.num_states, np.ndarray)
         if var_name not in self.variable_names:
-            raise ValueError(f"Variable {var_name} is not in VariableDict")
+            raise ValueError(f"Variable {var_name} is not in VarDict")
 
         var_idx = self.variable_names.index(var_name)
         return (self.variable_hashes[var_idx], self.num_states[var_idx])

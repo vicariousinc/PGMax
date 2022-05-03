@@ -10,17 +10,17 @@ from pgmax import factor, fgraph, fgroup, infer, vgroup
 
 
 def test_factor_graph():
-    vg = vgroup.VariableDict(variable_names=(0,), num_states=15)
+    vg = vgroup.VarDict(variable_names=(0,), num_states=15)
     fg = fgraph.FactorGraph(vg)
 
-    enum_factor = factor.EnumerationFactor(
+    enum_factor = factor.EnumFactor(
         variables=[vg[0]],
         factor_configs=np.arange(15)[:, None],
         log_potentials=np.zeros(15),
     )
     fg.add_factors(enum_factor)
 
-    factor_group = fgroup.EnumerationFactorGroup(
+    factor_group = fgroup.EnumFactorGroup(
         variables_for_factors=[[vg[0]]],
         factor_configs=np.arange(15)[:, None],
         log_potentials=np.zeros(15),
@@ -28,16 +28,16 @@ def test_factor_graph():
     with pytest.raises(
         ValueError,
         match=re.escape(
-            f"A Factor of type {factor.EnumerationFactor} involving variables {frozenset([(vg.__hash__(), 15)])} already exists."
+            f"A Factor of type {factor.EnumFactor} involving variables {frozenset([(vg.__hash__(), 15)])} already exists."
         ),
     ):
         fg.add_factors(factor_group)
 
 
 def test_bp_state():
-    vg = vgroup.VariableDict(variable_names=(0,), num_states=15)
+    vg = vgroup.VarDict(variable_names=(0,), num_states=15)
     fg0 = fgraph.FactorGraph(vg)
-    enum_factor = factor.EnumerationFactor(
+    enum_factor = factor.EnumFactor(
         variables=[vg[0]],
         factor_configs=np.arange(15)[:, None],
         log_potentials=np.zeros(15),
@@ -59,9 +59,9 @@ def test_bp_state():
 
 
 def test_log_potentials():
-    vg = vgroup.VariableDict(variable_names=(0,), num_states=15)
+    vg = vgroup.VarDict(variable_names=(0,), num_states=15)
     fg = fgraph.FactorGraph(vg)
-    factor_group = fgroup.EnumerationFactorGroup(
+    factor_group = fgroup.EnumFactorGroup(
         variables_for_factors=[[vg[0]]],
         factor_configs=np.arange(10)[:, None],
     )
@@ -77,7 +77,7 @@ def test_log_potentials():
         ValueError,
         match=re.escape("Invalid FactorGroup for log potentials updates."),
     ):
-        factor_group2 = fgroup.EnumerationFactorGroup(
+        factor_group2 = fgroup.EnumFactorGroup(
             variables_for_factors=[[vg[0]]],
             factor_configs=np.arange(10)[:, None],
         )
@@ -99,9 +99,9 @@ def test_log_potentials():
 
 
 def test_ftov_msgs():
-    vg = vgroup.VariableDict(variable_names=(0,), num_states=15)
+    vg = vgroup.VarDict(variable_names=(0,), num_states=15)
     fg = fgraph.FactorGraph(vg)
-    factor_group = fgroup.EnumerationFactorGroup(
+    factor_group = fgroup.EnumFactorGroup(
         variables_for_factors=[[vg[0]]],
         factor_configs=np.arange(10)[:, None],
     )
@@ -134,9 +134,9 @@ def test_ftov_msgs():
 
 
 def test_evidence():
-    vg = vgroup.VariableDict(variable_names=(0,), num_states=15)
+    vg = vgroup.VarDict(variable_names=(0,), num_states=15)
     fg = fgraph.FactorGraph(vg)
-    factor_group = fgroup.EnumerationFactorGroup(
+    factor_group = fgroup.EnumFactorGroup(
         variables_for_factors=[[vg[0]]],
         factor_configs=np.arange(10)[:, None],
     )
@@ -150,11 +150,11 @@ def test_evidence():
     evidence = infer.Evidence(fg_state=fg.fg_state, value=np.zeros(15))
     assert jnp.all(evidence.value == jnp.zeros(15))
 
-    vg2 = vgroup.VariableDict(variable_names=(0,), num_states=15)
+    vg2 = vgroup.VarDict(variable_names=(0,), num_states=15)
     with pytest.raises(
         ValueError,
         match=re.escape(
-            "Got evidence for a variable or a VariableGroup not in the FactorGraph!"
+            "Got evidence for a variable or a VarGroup not in the FactorGraph!"
         ),
     ):
         infer.bp_state.update_evidence(
@@ -165,9 +165,9 @@ def test_evidence():
 
 
 def test_bp():
-    vg = vgroup.VariableDict(variable_names=(0,), num_states=15)
+    vg = vgroup.VarDict(variable_names=(0,), num_states=15)
     fg = fgraph.FactorGraph(vg)
-    factor_group = fgroup.EnumerationFactorGroup(
+    factor_group = fgroup.EnumFactorGroup(
         variables_for_factors=[[vg[0]]],
         factor_configs=np.arange(10)[:, None],
     )

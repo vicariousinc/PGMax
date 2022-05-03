@@ -1,4 +1,4 @@
-"""A module containing the variables group classes inheriting from the base VariableGroup."""
+"""A module containing a subclass of VarGroup for n-dimensional grids of variables."""
 
 from dataclasses import dataclass
 from typing import List, Tuple, Union
@@ -13,12 +13,12 @@ from . import vgroup
 
 
 @dataclass(frozen=True, eq=False)
-class NDVariableArray(vgroup.VariableGroup):
-    """Subclass of VariableGroup for n-dimensional grids of variables.
+class NDVarArray(vgroup.VarGroup):
+    """Subclass of VarGroup for n-dimensional grids of variables.
 
     Args:
         num_states: An integer or an array specifying the number of states of the
-            variables in this VariableGroup
+            variables in this VarGroup
         shape: Tuple specifying the size of each dimension of the grid (similar to
             the notion of a NumPy ndarray shape)
     """
@@ -31,7 +31,7 @@ class NDVariableArray(vgroup.VariableGroup):
         max_size = int(vgroup.MAX_SIZE)
         if np.prod(self.shape) > max_size:
             raise ValueError(
-                f"Currently only support NDVariableArray of size smaller than {max_size}. Got {np.prod(self.shape)}"
+                f"Currently only support NDVarArray of size smaller than {max_size}. Got {np.prod(self.shape)}"
             )
 
         if np.isscalar(self.num_states):

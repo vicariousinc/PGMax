@@ -1,3 +1,5 @@
+"Defines container classes for belief propagation states, and for the relevant flat arrays used in belief propagation."
+
 import functools
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, Optional, Tuple, Union, cast
@@ -277,7 +279,7 @@ def update_evidence(
             evidence = evidence.at[start_index : start_index + name[1]].set(data)
         else:
             raise ValueError(
-                "Got evidence for a variable or a VariableGroup not in the FactorGraph!"
+                "Got evidence for a variable or a VarGroup not in the FactorGraph!"
             )
     return evidence
 
