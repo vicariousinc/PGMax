@@ -1,4 +1,4 @@
-"A nodule defining container classes for belief propagation states."
+"A module defining container classes for belief propagation states."
 
 import functools
 from dataclasses import asdict, dataclass
