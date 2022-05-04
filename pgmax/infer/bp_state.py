@@ -1,4 +1,4 @@
-"Defines container classes for belief propagation states, and for the relevant flat arrays used in belief propagation."
+"A module defining container classes for belief propagation states."
 
 import functools
 from dataclasses import asdict, dataclass

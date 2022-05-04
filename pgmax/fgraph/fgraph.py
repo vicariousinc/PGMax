@@ -1,6 +1,4 @@
-from __future__ import annotations
-
-"""A module containing the core class to specify a Factor Graph."""
+"""A module containing the core class to build a factor graph."""
 
 import collections
 import copy
@@ -26,6 +24,43 @@ import numpy as np
 from pgmax import factor, fgroup, vgroup
 from pgmax.factor import FAC_TO_VAR_UPDATES
 from pgmax.utils import cached_property
+
+
+@dataclass(frozen=True, eq=False)
+class FactorGraphState:
+    """FactorGraphState.
+
+    Args:
+        variable_groups: VarGroups in the FactorGraph.
+        vars_to_starts: Maps variables to their starting indices in the flat evidence array.
+            flat_evidence[vars_to_starts[variable]: vars_to_starts[variable] + variable.num_var_states]
+            contains evidence to the variable.
+        num_var_states: Total number of variable states.
+        total_factor_num_states: Size of the flat ftov messages array.
+        factor_type_to_msgs_range: Maps factors types to their start and end indices in the flat ftov messages.
+        factor_type_to_potentials_range: Maps factor types to their start and end indices in the flat log potentials.
+        factor_group_to_potentials_starts: Maps factor groups to their starting indices in the flat log potentials.
+        log_potentials: Flat log potentials array concatenated for each factor type.
+        wiring: Wiring derived for each factor type.
+    """
+
+    variable_groups: Sequence[vgroup.VarGroup]
+    vars_to_starts: Mapping[Tuple[int, int], int]
+    num_var_states: int
+    total_factor_num_states: int
+    factor_type_to_msgs_range: OrderedDict[type, Tuple[int, int]]
+    factor_type_to_potentials_range: OrderedDict[type, Tuple[int, int]]
+    factor_group_to_potentials_starts: OrderedDict[fgroup.FactorGroup, int]
+    log_potentials: OrderedDict[type, Union[None, np.ndarray]]
+    wiring: OrderedDict[type, factor.Wiring]
+
+    def __post_init__(self):
+        for field in self.__dataclass_fields__:
+            if isinstance(getattr(self, field), np.ndarray):
+                getattr(self, field).flags.writeable = False
+
+            if isinstance(getattr(self, field), Mapping):
+                object.__setattr__(self, field, MappingProxyType(getattr(self, field)))
 
 
 @dataclass
@@ -294,40 +329,3 @@ class FactorGraph:
             ftov_msgs=bp_state.FToVMessages(fg_state=self.fg_state),
             evidence=bp_state.Evidence(fg_state=self.fg_state),
         )
-
-
-@dataclass(frozen=True, eq=False)
-class FactorGraphState:
-    """FactorGraphState.
-
-    Args:
-        variable_groups: VarGroups in the FactorGraph.
-        vars_to_starts: Maps variables to their starting indices in the flat evidence array.
-            flat_evidence[vars_to_starts[variable]: vars_to_starts[variable] + variable.num_var_states]
-            contains evidence to the variable.
-        num_var_states: Total number of variable states.
-        total_factor_num_states: Size of the flat ftov messages array.
-        factor_type_to_msgs_range: Maps factors types to their start and end indices in the flat ftov messages.
-        factor_type_to_potentials_range: Maps factor types to their start and end indices in the flat log potentials.
-        factor_group_to_potentials_starts: Maps factor groups to their starting indices in the flat log potentials.
-        log_potentials: Flat log potentials array concatenated for each factor type.
-        wiring: Wiring derived for each factor type.
-    """
-
-    variable_groups: Sequence[vgroup.VarGroup]
-    vars_to_starts: Mapping[Tuple[int, int], int]
-    num_var_states: int
-    total_factor_num_states: int
-    factor_type_to_msgs_range: OrderedDict[type, Tuple[int, int]]
-    factor_type_to_potentials_range: OrderedDict[type, Tuple[int, int]]
-    factor_group_to_potentials_starts: OrderedDict[fgroup.FactorGroup, int]
-    log_potentials: OrderedDict[type, None | np.ndarray]
-    wiring: OrderedDict[type, factor.Wiring]
-
-    def __post_init__(self):
-        for field in self.__dataclass_fields__:
-            if isinstance(getattr(self, field), np.ndarray):
-                getattr(self, field).flags.writeable = False
-
-            if isinstance(getattr(self, field), Mapping):
-                object.__setattr__(self, field, MappingProxyType(getattr(self, field)))

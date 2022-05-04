@@ -1,4 +1,4 @@
-"""A module containing classes that specify the basic components of a factor."""
+"""A module containing the base classes for factors in a factor graph."""
 
 from dataclasses import asdict, dataclass
 from typing import List, Sequence, Tuple, Union
