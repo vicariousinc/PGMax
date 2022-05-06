@@ -59,7 +59,7 @@ Here are a few self-contained Colab notebooks to help you get started on using P
 Please consider citing our [companion paper](https://arxiv.org/abs/2202.04110) if you use PGMax in your work:
 ```
 @article{zhou2022pgmax,
-  author = {Zhou, Guangyao and Kumar, Nishanth and L{\'a}zaro-Gredilla, Miguel and Kushagra, Shrinu and George, Dileep},
+  author = {Zhou, Guangyao and Kumar, Nishanth and Dedieu, Antoine and L{\'a}zaro-Gredilla, Miguel and Kushagra, Shrinu and George, Dileep},
   title = {{PGMax: Factor Graphs for Discrete Probabilistic Graphical Models and Loopy Belief Propagation in JAX}},
   journal = {arXiv preprint arXiv:2202.04110},
   year={2022}
