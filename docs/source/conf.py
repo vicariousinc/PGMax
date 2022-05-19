@@ -17,7 +17,7 @@ copyright = "2021, Vicarious FPC Inc"
 author = "Guangyao Zhou, Nishanth Kumar, Antoine Dedieu, Miguel Lazaro-Gredilla, Shrinu Kushagra, Dileep George"
 
 # The full version, including alpha/beta/rc tags
-release = "0.4.0"
+release = "0.4.1"
 
 
 # -- General configuration ---------------------------------------------------

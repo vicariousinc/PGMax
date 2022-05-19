@@ -183,3 +183,46 @@ def test_bp():
     bp_arrays = replace(bp_arrays, log_potentials=jnp.zeros((10)))
     bp_state = bp.to_bp_state(bp_arrays)
     assert bp_state.fg_state == fg.fg_state
+
+
+def test_bp_different_num_states():
+    # Build factor graph where VarDict and NDVarArray both have different number of states
+    num_states = np.array([2, 3, 4])
+    vdict = vgroup.VarDict(variable_names=tuple(["a", "b", "c"]), num_states=num_states)
+    varray = vgroup.NDVarArray(shape=(3,), num_states=num_states)
+    fg = fgraph.FactorGraph([vdict, varray])
+
+    # Add factors: we enforce the variables with same number of states to be in the same state
+    for var_dict, var_arr, num_state in zip(["a", "b", "c"], [0, 1, 2], num_states):
+        enum_factor = factor.EnumFactor(
+            variables=[vdict[var_dict], varray[var_arr]],
+            factor_configs=np.array([[idx, idx] for idx in range(num_state)]),
+            log_potentials=np.zeros(num_state),
+        )
+        fg.add_factors(enum_factor)
+
+    # BP functions
+    bp = infer.BP(fg.bp_state, temperature=0)
+
+    # Evidence for both VarDict and NDVarArray
+    vdict_evidence = {var: np.random.gumbel(size=(var[1],)) for var in vdict.variables}
+    bp_arrays = bp.init(evidence_updates=vdict_evidence)
+
+    varray_evidence = {
+        varray: np.random.gumbel(size=(num_states.shape[0], num_states.max()))
+    }
+    bp_arrays = bp.update(bp_arrays=bp_arrays, evidence_updates=varray_evidence)
+
+    assert np.all(bp_arrays.evidence != 0)
+
+    # Run BP
+    bp_arrays = bp.run_bp(bp_arrays, num_iters=50)
+    beliefs = bp.get_beliefs(bp_arrays)
+    map_states = infer.decode_map_states(beliefs)
+
+    vdict_states = map_states[vdict]
+    varray_states = map_states[varray]
+
+    # Verify that variables with same number of states are in the same state
+    for var_dict, var_arr in zip(["a", "b", "c"], [0, 1, 2]):
+        assert vdict_states[var_dict] == varray_states[var_arr]

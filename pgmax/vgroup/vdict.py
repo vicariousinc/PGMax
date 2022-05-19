@@ -33,7 +33,7 @@ class VarDict(vgroup.VarGroup):
         elif isinstance(self.num_states, np.ndarray) and np.issubdtype(
             self.num_states.dtype, int
         ):
-            if self.num_states.shape != len(self.variable_names):
+            if self.num_states.shape != (len(self.variable_names),):
                 raise ValueError(
                     f"Expected num_states shape ({len(self.variable_names)},). Got {self.num_states.shape}."
                 )
