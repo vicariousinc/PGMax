@@ -192,7 +192,7 @@ def test_bp_different_num_states():
     varray = vgroup.NDVarArray(shape=(3,), num_states=num_states)
     fg = fgraph.FactorGraph([vdict, varray])
 
-    # Add factors
+    # Add factors: we enforce the variables with same number of states to be in the same state
     for var_dict, var_arr, num_state in zip(["a", "b", "c"], [0, 1, 2], num_states):
         enum_factor = factor.EnumFactor(
             variables=[vdict[var_dict], varray[var_arr]],
@@ -223,5 +223,6 @@ def test_bp_different_num_states():
     vdict_states = map_states[vdict]
     varray_states = map_states[varray]
 
+    # Verify that variables with same number of states are in the same state
     for var_dict, var_arr in zip(["a", "b", "c"], [0, 1, 2]):
         assert vdict_states[var_dict] == varray_states[var_arr]
