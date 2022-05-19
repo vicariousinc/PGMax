@@ -138,7 +138,7 @@ class NDVarArray(vgroup.VarGroup):
             data = flat_data.reshape(self.shape)
         elif flat_data.size == self.num_states.sum():
             data = jnp.full(
-                shape=self.shape + (self.num_states.max(),), fill_value=jnp.nan
+                shape=self.shape + (self.num_states.max(),), fill_value=-jnp.inf
             )
             data = data.at[np.arange(data.shape[-1]) < self.num_states[..., None]].set(
                 flat_data
