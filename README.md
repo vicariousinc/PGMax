@@ -6,6 +6,14 @@
 
 # PGMax
 
+## PGMax is now part of DeepMind 🎉!
+
+Following the acquisition of [Vicarious by Alphabet](https://intrinsic.ai/blog/posts/mission-momentum/) in 2022, we are excited to share that we have now ported over PGMax to [DeepMind's GitHub](https://github.com/deepmind/PGMax)! Our integration within DeepMind's rapidly growing JAX ecosystem opens up new promising development for PGMax and new exciting research possibilities.
+
+Consequently, this repository will not be updated in the future, and all the new updates will be pushed to [DeepMind's repository](https://github.com/deepmind/PGMax).
+
+## Description
+
 PGMax implements general [factor graphs](https://en.wikipedia.org/wiki/Factor_graph) for discrete probabilistic graphical models (PGMs), and hardware-accelerated differentiable [loopy belief propagation (LBP)](https://en.wikipedia.org/wiki/Belief_propagation) in [JAX](https://jax.readthedocs.io/en/latest/).
 
 - **General factor graphs**: PGMax supports easy specification of general factor graphs with potentially complicated topology, factor definitions, and discrete variables with a varying number of states.
