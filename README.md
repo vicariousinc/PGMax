@@ -4,13 +4,18 @@
 [![codecov](https://codecov.io/gh/vicariousinc/PGMax/branch/master/graph/badge.svg?token=FrRlTDCFjk)](https://codecov.io/gh/vicariousinc/PGMax)
 [![Documentation Status](https://readthedocs.org/projects/pgmax/badge/?version=latest)](https://pgmax.readthedocs.io/en/latest/?badge=latest)
 
-# PGMax
 
-## PGMax is now part of DeepMind 🎉!
+# Important note: PGMax is now part of DeepMind 🎉!
 
+<body>
+<h1 align="center">
 Following the acquisition of [Vicarious by Alphabet](https://intrinsic.ai/blog/posts/mission-momentum/) in 2022, we are excited to share that we have now ported over PGMax to [DeepMind's GitHub](https://github.com/deepmind/PGMax)! Our integration within DeepMind's rapidly growing JAX ecosystem opens up new promising development for PGMax and new exciting research possibilities.
 
 Consequently, this repository will not be updated in the future, and all the new updates will be pushed to [DeepMind's repository](https://github.com/deepmind/PGMax).
+</h1>
+</body>
+
+# PGMax
 
 ## Description
 
